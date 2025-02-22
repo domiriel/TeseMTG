@@ -45,10 +45,14 @@ function createIcicleChart(data, containerId, isUpdate = false) {
 
     data.forEach(card => {
         const colors = Array.isArray(card.color_identity) ? card.color_identity : [];
-        const numColors = colors.length;
+        let numColors = colors.length;
+
+        // Merge 4-color and 5-color into a single category
+        if (numColors >= 4) numColors = 4; // Group 4 and 5 colors together
+
         let colorKey = colors.sort().join("-") || "";  
-        let colorGroupName = numColors === 0 ? "Colorless" : `${numColors} Colors`;
-    
+        let colorGroupName = numColors === 0 ? "Colorless" : numColors === 4 ? "+4 Colors" : `${numColors} Colors`;
+
         let colorGroup = groupedData.find(c => c.name === colorGroupName);
         if (!colorGroup) {
             groupedData.push({
@@ -91,43 +95,45 @@ function createIcicleChart(data, containerId, isUpdate = false) {
             let originalPercentage = (c.originalCount / c.value) * 100 || 0;
             c.color = getColorFromPercentage(originalPercentage);
         });
-    });
 
+        // Calculate average color for parent nodes
+        if (group.children.length > 0) {
+            let avgRGB = group.children.reduce((acc, c) => {
+                let rgb = hexToRgb(c.color);
+                acc.r += rgb.r;
+                acc.g += rgb.g;
+                acc.b += rgb.b;
+                return acc;
+            }, { r: 0, g: 0, b: 0 });
 
-    groupedData.forEach(group => {
-        let rgbSums = { r: 0, g: 0, b: 0 };
-        let numChildren = group.children.length;
-    
-        group.children.forEach(child => {
-            let rgb = hexToRgb(child.color);
-            rgbSums.r += rgb.r;
-            rgbSums.g += rgb.g;
-            rgbSums.b += rgb.b;
-        });
-    
-        if (numChildren > 0) {
+            let numChildren = group.children.length;
             group.color = rgbToHex(
-                Math.round(rgbSums.r / numChildren),
-                Math.round(rgbSums.g / numChildren),
-                Math.round(rgbSums.b / numChildren)
+                Math.round(avgRGB.r / numChildren),
+                Math.round(avgRGB.g / numChildren),
+                Math.round(avgRGB.b / numChildren)
             );
         } else {
             group.color = "#efefef"; // Default color if no children exist
         }
     });
 
-    // **Step 2: Sort the bars correctly**
-    groupedData.sort((a, b) => a.numColors - b.numColors); // Sort by `numColors` (ensuring Colorless -> 1 -> 2 -> 3 -> 4 -> 5)
+    // **Step 3: Sort the bars correctly**
+    groupedData.sort((a, b) => a.numColors - b.numColors); // Ensure order: Colorless → 1 → 2 → 3 → 4-5
     groupedData.forEach(group => group.children.sort((a, b) => a.name.localeCompare(b.name))); // Sort `color_identity`
 
-    // **Step 3: Convert to Hierarchical Format**
-    const hierarchy = {
-        children: groupedData
-    };
+    // Compute hierarchical structure
+    const hierarchy = { children: groupedData };
 
     // Step 4: Define chart dimensions
-    const width = 1000, height = 400;
-    const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
+    const margin = { top: 20, right: 20, bottom: 20, left: 70 };
+    const chartWidth = 1000;
+    const chartHeight = 500;
+    const legendWidth = 150;
+    const svgWidth = chartWidth + legendWidth;
+    const svgHeight = chartHeight;
+    const innerWidth = chartWidth - margin.left - margin.right;
+    const innerHeight = chartHeight - margin.top - margin.bottom;
+
 
     // Step 5: Handle updates
     if (isUpdate) {
@@ -137,67 +143,43 @@ function createIcicleChart(data, containerId, isUpdate = false) {
     // Step 6: Create SVG container
     const svg = d3.select(containerId)
         .append("svg")
-        .attr("width", width)
-        .attr("height", height);
+        .attr("width", svgWidth)
+        .attr("height", svgHeight);
+
+    // Create a group for the chart (adjust margin as needed)
+    const chartGroup = svg.append("g")
+    .attr("class", "chart")
+    .attr("transform", `translate(${margin.left}, ${margin.top})`);
+
+    // Create a clip path for the chart area
+    chartGroup.append("clipPath")
+    .attr("id", "chartClip")
+    .append("rect")
+    .attr("width", innerWidth)
+    .attr("height", innerHeight);
+
+// Create a zoomGroup that is clipped to the chart area
+    const zoomGroup = chartGroup.append("g")
+    .attr("clip-path", "url(#chartClip)");
 
     // Step 7: Create a hierarchical root node
     const root = d3.hierarchy(hierarchy)
         .sum(d => d.value)
-        .sort((a, b) => a.data.numColors - b.data.numColors); // Sort by numColors to maintain order
+        .sort((a, b) => a.data.numColors - b.data.numColors);
 
     // Step 8: Define partition layout
-    const partition = d3.partition().size([width, height]).padding(1);
+    const partition = d3.partition().size([innerWidth, innerHeight]);
     partition(root);
 
-    // Step 9: Draw rectangles
-    const rects = svg.selectAll("rect")
-        .data(root.descendants().slice(1)) // Skip artificial root
-        .enter()
-        .append("rect")
-        .attr("x", d => d.x0)
-        .attr("y", d => d.y0)
-        .attr("width", d => d.x1 - d.x0)
-        .attr("height", d => d.y1 - d.y0)
-        .attr("fill", d => d.data.color) // Use calculated color
-        .style("stroke", "#fff")
-        .style("cursor", "pointer")
-        .on("mouseover", function(event, d) {
-            d3.select("#tooltip")
-                .style("display", "block")
-                .style("left", event.pageX + "px")
-                .style("top", event.pageY + "px")
-                .html(`
-                    <strong>${d.data.name}</strong><br>
-                    Total: ${d.value} cards<br>
-                    Original: ${d.data.originalCount || 0} cards (${((d.data.originalCount / d.value) * 100).toFixed(2)}%)<br>
-                    Reprint: ${d.data.reprintCount || 0} cards<br>
-                    Functional Reprint: ${d.data.functionalReprintCount || 0} cards
-                `);
-        })
-        .on("mouseout", function() {
-            d3.select("#tooltip").style("display", "none");
-        });
+    // Step 9: Define scales for zooming
+    let xScale = d3.scaleLinear().domain([0, innerWidth]).range([0, innerWidth]);
+    let yScale = d3.scaleLinear().domain([0, innerHeight]).range([0, innerHeight]);
 
-    // Step 10: Add text labels (Hides if the block is too small)
-    svg.selectAll("text")
-        .data(root.descendants().slice(1)) // Skip root node
-        .enter()
-        .append("text")
-        .attr("x", d => (d.x0 + d.x1) / 2)
-        .attr("y", d => (d.y0 + d.y1) / 2)
-        .attr("dy", "0.35em")
-        .attr("text-anchor", "middle")
-        .attr("fill", "white")
-        .attr("font-size", "12px")
-        .text(d => {
-            if (d.parent && d.parent.data.name === "Colorless") {
-                return d.data.name === "None" ? "None" : d.data.name;
-            }
-            return d.parent && d.parent.data.name === "5 Colors" ? "" : d.data.name;
-        })
-        .style("opacity", d => (d.x1 - d.x0) > 50 ? 1 : 0); // Hide if small
+    let focus = root; // Track current focus node
 
-    // Step 11: Tooltip setup
+   
+
+    // **Step 11: Tooltip Setup**
     if (!d3.select("#tooltip").node()) {
         d3.select("body").append("div")
             .attr("id", "tooltip")
@@ -210,4 +192,112 @@ function createIcicleChart(data, containerId, isUpdate = false) {
             .style("pointer-events", "none")
             .style("display", "none");
     }
+    const tooltip = d3.select("#tooltip");
+
+    // Step 12: Draw rectangles
+    const rects = zoomGroup.selectAll("rect")
+        .data(root.descendants().slice(1)) // Skip root node
+        .enter()
+        .append("rect")
+        .attr("x", d => xScale(d.x0))
+        .attr("y", d => yScale(d.y0))
+        .attr("width", d => xScale(d.x1) - xScale(d.x0))
+        .attr("height", d => yScale(d.y1) - yScale(d.y0))
+        .attr("fill", d => d.data.color) // Use calculated color
+        .style("stroke", "#fff")
+        .style("cursor", "pointer")
+        .on("click", clicked)
+        .on("mouseover", function(event, d) {
+            tooltip
+                .style("display", "block")
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 10) + "px")
+                .html(`
+                    <strong>${d.data.name}</strong><br>
+                    Total: ${d.value} cards<br>
+                    Original: ${d.data.originalCount || 0} cards (${((d.data.originalCount / d.value) * 100).toFixed(2)}%)<br>
+                    Reprint: ${d.data.reprintCount || 0} cards<br>
+                    Functional Reprint: ${d.data.functionalReprintCount || 0} cards
+                `);
+        })
+        .on("mouseout", function() {
+            tooltip.style("display", "none");
+        });
+
+
+     /// Step 12: Add text labels
+    const labels = zoomGroup.selectAll("text")
+        .data(root.descendants().slice(1)) // Skip root node
+        .enter()
+        .append("text")
+        .attr("x", d => (xScale(d.x0) + xScale(d.x1)) / 2)
+        .attr("y", d => (yScale(d.y0) + yScale(d.y1)) / 2)
+        .attr("dy", "0.35em")
+        .attr("text-anchor", "middle")
+        .attr("fill", "white")
+        .attr("font-size", "15px")
+        .text(d => d.data.name)
+        .style("opacity", d => (xScale(d.x1) - xScale(d.x0)) > 50 ? 1 : 0);
+
+    // Step 13: Click function for semantic zoom
+    function clicked(event, p) {
+        if (focus === p) {
+            focus = root; // Reset to original view
+        } else {
+            focus = p;
+        }
+    
+        // Update scales
+        xScale.domain([focus.x0, focus.x1]);
+        yScale.domain([focus.y0, innerHeight]).range([focus.depth ? 20 : 0, innerHeight]);
+    
+        const t = zoomGroup.transition().duration(750);
+    
+        rects.transition(t)
+            .attr("x", d => xScale(d.x0))
+            .attr("y", d => yScale(d.y0))
+            .attr("width", d => xScale(d.x1) - xScale(d.x0))
+            .attr("height", d => yScale(d.y1) - yScale(d.y0));
+    
+        labels.transition(t)
+            .attr("x", d => (xScale(d.x0) + xScale(d.x1)) / 2)
+            .attr("y", d => (yScale(d.y0) + yScale(d.y1)) / 2)
+            .style("opacity", d => (xScale(d.x1) - xScale(d.x0)) > 50 ? 1 : 0);
+    }
+
+    // ... your existing code and the clicked function
+
+    // Calculate legend position relative to the chart area:
+const legendX = margin.left - 30 ; // 10px padding from the chart
+const legendY = margin.top + 155; // you can adjust this as needed
+
+// Append a group element for the legend to the outer SVG (outside the zoomable chartGroup)
+const legend = svg.append("g")
+    .attr("class", "legend")
+    .attr("transform", `translate(${legendX}, ${legendY})`);
+
+// Use a proper vertical spacing (using rectangle height plus extra spacing)
+const rectHeight = 20;
+const extraSpacing = 0
+
+colorScale.slice().reverse().forEach((interval, i) => {
+    const legendEntry = legend.append("g")
+        .attr("transform", `translate(0, ${i * (rectHeight + extraSpacing)})`);
+
+    legendEntry.append("rect")
+        .attr("width", 20)
+        .attr("height", rectHeight)
+        .attr("fill", interval.color)
+        .attr("stroke", "#000");
+
+    legendEntry.append("text")
+        .attr("x", - 30)
+        .attr("y", 5)
+        .text(`${interval.range[1]}%`)
+        .attr("fill", "#000")
+        .style("font-size", "12px");
+});
+
+    
 }
+
