@@ -118,7 +118,9 @@ with open(output_file, 'w') as outfile:
             "rarity": card.get('rarity', 'unknown'),
             "release_date": card.get('released_at', ''),
             "originality": originality,
-            "complexity": calculate_complexity(card)
+            "complexity": calculate_complexity(card),
+            "price_usd": card.get('prices', {}).get('usd'),
+            "price_eur": card.get('prices', {}).get('eur')
         }
 
         if index > 0:

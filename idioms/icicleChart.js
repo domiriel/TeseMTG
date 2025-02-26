@@ -247,15 +247,15 @@ function createIcicleChart(data, containerId, isUpdate = false) {
             focus = p;
         }
     
-        // Update scales
+        // Update xScale only
         xScale.domain([focus.x0, focus.x1]);
-        yScale.domain([focus.y0, innerHeight]).range([focus.depth ? 20 : 0, innerHeight]);
+        yScale.domain([0, innerHeight]); // Keep Y scale unchanged
     
         const t = zoomGroup.transition().duration(750);
     
         rects.transition(t)
             .attr("x", d => xScale(d.x0))
-            .attr("y", d => yScale(d.y0))
+            .attr("y", d => yScale(d.y0)) // Keeps Y unchanged
             .attr("width", d => xScale(d.x1) - xScale(d.x0))
             .attr("height", d => yScale(d.y1) - yScale(d.y0));
     
@@ -264,6 +264,7 @@ function createIcicleChart(data, containerId, isUpdate = false) {
             .attr("y", d => (yScale(d.y0) + yScale(d.y1)) / 2)
             .style("opacity", d => (xScale(d.x1) - xScale(d.x0)) > 50 ? 1 : 0);
     }
+    
 
     // ... your existing code and the clicked function
 
