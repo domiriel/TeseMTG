@@ -1,7 +1,34 @@
 const nodeColorScale = d3.scaleSequential()
     .interpolator(d3.interpolateRgb("#EDF8E9", "#006D2C")); // Soft to dark green
 
+  function applyFisheyeEffect(rects, xScale, yScale, event) {
+    const [mouseX, mouseY] = d3.pointer(event);
 
+    rects.each(function (d) {
+        // Get the original position
+        let x = xScale(d.x0);
+        let y = yScale(d.y0);
+        let width = xScale(d.x1) - xScale(d.x0);
+        let height = yScale(d.y1) - yScale(d.y0);
+
+        // Compute distance from mouse
+        let dx = Math.abs(mouseX - (x + width / 2));
+        let dy = Math.abs(mouseY - (y + height / 2));
+        let distance = Math.sqrt(dx * dx + dy * dy);
+
+        // Apply fisheye effect (distort closer elements)
+        let scale = Math.max(1.2, 3 - (distance / 150)); // Adjust 150 for intensity
+
+        d3.select(this)
+            .transition()
+            .duration(100)
+            .attr("x", x - (width * (scale - 1)) / 2)
+            .attr("y", y - (height * (scale - 1)) / 2)
+            .attr("width", width * scale)
+            .attr("height", height * scale);
+    });
+}
+  
 
 function getDiscreteColor(percentage) {
   if (percentage < 20) return "#edf8e9";

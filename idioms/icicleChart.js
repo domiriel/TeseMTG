@@ -224,6 +224,78 @@ function createIcicleChart(data, containerId, isUpdate = false) {
             tooltip.style("display", "none");
         });
 
+        
+
+// Initialize Fisheye Effect
+/*const fisheye = d3.fisheye.circular()
+    .radius(50)  // Smaller magnifying glass
+    .distortion(3); // Controls zoom intensity
+
+// Create a circular lens (magnifying glass)
+const lens = svg.append("circle")
+    .attr("r", 50)  // Match radius with fisheye
+    .attr("fill", "none")
+    .attr("stroke", "black") // Lens outline
+    .attr("stroke-width", 2)
+    .style("pointer-events", "none")  // Ignore mouse interactions
+    .style("display", "none"); // Hidden initially
+
+// Mouseover: Show the lens when hovering over the Icicle Chart
+zoomGroup.on("mouseover", function () {
+    lens.style("display", "block"); // Show the magnifying glass
+});
+
+// Mouseout: Hide the lens when leaving the Icicle Chart
+zoomGroup.on("mouseout", function () {
+    lens.style("display", "none"); // Hide the magnifying glass
+    rects.transition().duration(200)
+        .attr("x", d => xScale(d.x0))
+        .attr("y", d => yScale(d.y0))
+        .attr("width", d => xScale(d.x1) - xScale(d.x0))
+        .attr("height", d => yScale(d.y1) - yScale(d.y0)); // Reset rectangles
+});
+
+// Apply Fisheye Effect on Mouse Move
+zoomGroup.on("mousemove", function (event) {
+    const [mx, my] = d3.pointer(event);
+
+    // Update fisheye focus based on mouse position
+    fisheye.focus([mx, my]);
+
+    // Move the magnifying glass to follow the cursor
+    lens.attr("cx", mx).attr("cy", my);
+
+    rects.each(function (d) {
+        let originalX = xScale(d.x0);
+        let originalY = yScale(d.y0);
+        let originalWidth = xScale(d.x1) - xScale(d.x0);
+        let originalHeight = yScale(d.y1) - yScale(d.y0);
+
+        // Apply fisheye transformation only if inside the lens
+        let distance = Math.sqrt((mx - originalX) ** 2 + (my - originalY) ** 2);
+        if (distance < 50) { // Only apply effect inside the lens
+            let distorted = fisheye({ x: originalX, y: originalY });
+
+            d3.select(this)
+                .transition().duration(50) // Smooth effect
+                .attr("x", distorted.x)
+                .attr("y", distorted.y)
+                .attr("width", originalWidth * fisheye.distortion())
+                .attr("height", originalHeight); // Keep height unchanged
+        } else {
+            // Reset to original size if outside lens
+            d3.select(this)
+                .transition().duration(100)
+                .attr("x", originalX)
+                .attr("y", originalY)
+                .attr("width", originalWidth)
+                .attr("height", originalHeight);
+        }
+    });
+});*/
+
+
+  
 
      /// Step 12: Add text labels
     const labels = zoomGroup.selectAll("text")
