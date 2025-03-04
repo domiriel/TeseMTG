@@ -1,51 +1,68 @@
 body {
   font-family: sans-serif;
 }
-.parent {
+.container {
   display: grid;
   grid-template-columns: 0.76fr repeat(2, 1fr) repeat(2, 1.12fr);
   grid-template-rows: 0.81fr repeat(4, 1.0475fr) 1fr;
   grid-column-gap: 0px;
   grid-row-gap: 0px;
+  width: 100vw;
+  height: 100vh;
   }
   
   .FilterPanel { 
     grid-area: 2 / 1 / 6 / 2; 
+    width: 100%; /* Ensure it has a width */
+    min-height: 30px; /* Ensure it has a height */
+
+    
     background-image: url('images/FilterPanel.png');
-    background-color: red;
+    
+    background-size: contain;  /* Adjust to fit */
+    background-repeat: no-repeat; /* Prevents tiling */
+    background-position: center;
+    
+
+  }
+  .TimelineView { grid-area: 6 / 2 / 7 / 6; }
+  .Title { grid-area: 1 / 2 / 2 / 4; }
+  .ISTLogo { grid-area: 1 / 1 / 2 / 2; 
+    background-image: url('images/IST logo.jpg');
+    
     background-size: contain;  /* Adjust to fit */
     background-repeat: no-repeat; /* Prevents tiling */
     background-position: center;
     width: 100%; /* Ensure it has a width */
     height: 100%; /* Ensure it has a height */
-
+  
   }
-  .TimelineView { grid-area: 6 / 2 / 7 / 6; }
-  .Title { grid-area: 1 / 2 / 2 / 4; }
-  .ISTLogo { grid-area: 1 / 1 / 2 / 2; }
   .IcicleChart { 
     grid-area: 4 / 2 / 6 / 4; 
     width: 100%; /* Ensure it takes full width of its grid cell */
-    height: 100%; /* Fill the assigned grid area */
+    height: 100%; /* Ensure it takes full height */
     display: flex;
-    flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
-    overflow: visible; /* Ensure content is visible */
-  }
+    justify-content: center; /* Center alignment */
+    overflow: hidden; /* Prevents any unwanted overflow */
+}
   .LineChart { grid-area: 4 / 4 / 6 / 6; }
   .AlluvialChart { 
     grid-area: 2 / 2 / 4 / 4; 
     width: 100%;
     height: 100%;
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: flex-start;
     overflow: visible;
+    position: relative;
   }
   .Scatterplot { grid-area: 1 / 4 / 4 / 6; }
 
 
-
-
+  .FilterPanel, .TimelineView, .Title, .ISTLogo, 
+  .IcicleChart, .LineChart, .AlluvialChart, .Scatterplot {
+    border: 1px solid black; /* Thin black border for visibility */
+  }
+  
+  

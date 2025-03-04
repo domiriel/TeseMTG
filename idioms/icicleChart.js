@@ -40,9 +40,10 @@ function rgbToHex(r, g, b) {
     return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase()}`;
 }
 function createIcicleChart(data, containerId, isUpdate = false) {
+    
     // Step 1: Aggregate Data (Tracking original, reprints, and functional reprints)
     let groupedData = [];
-
+  
     data.forEach(card => {
         const colors = Array.isArray(card.color_identity) ? card.color_identity : [];
         let numColors = colors.length;
@@ -84,7 +85,7 @@ function createIcicleChart(data, containerId, isUpdate = false) {
         }
     });
 
-    // Step 2: Sum up originality counts from children to parent nodes
+    // **Step 2: Sum up originality counts from children to parent nodes**
     groupedData.forEach(group => {
         group.originalCount = group.children.reduce((sum, c) => sum + (c.originalCount || 0), 0);
         group.reprintCount = group.children.reduce((sum, c) => sum + (c.reprintCount || 0), 0);
@@ -118,259 +119,162 @@ function createIcicleChart(data, containerId, isUpdate = false) {
     });
 
     // **Step 3: Sort the bars correctly**
-    groupedData.sort((a, b) => a.numColors - b.numColors); // Ensure order: Colorless → 1 → 2 → 3 → 4-5
-    groupedData.forEach(group => group.children.sort((a, b) => a.name.localeCompare(b.name))); // Sort `color_identity`
+    // Sort parent groups based on the number of colors (Colorless -> 1 -> 2 -> 3 -> 4+)
+    groupedData.sort((a, b) => a.numColors - b.numColors);
+
+    // Sort child nodes (color identities) alphabetically
+    groupedData.forEach(group => {
+        group.children.sort((a, b) => a.name.localeCompare(b.name));
+    });
 
     // Compute hierarchical structure
     const hierarchy = { children: groupedData };
 
-    // Step 4: Define chart dimensions
+    // Step 4: Define chart dimensions dynamically
+  
+
+    const container = d3.select(containerId);
+    const containerWidth = container.node().getBoundingClientRect().width;
+    const containerHeight = container.node().getBoundingClientRect().height;
+    
+    console.log("Container Dimensions:", { width: containerWidth, height: containerHeight });
+    
     const margin = { top: 20, right: 20, bottom: 20, left: 70 };
-    const chartWidth = 1000;
-    const chartHeight = 500;
-    const legendWidth = 150;
-    const svgWidth = chartWidth + legendWidth;
-    const svgHeight = chartHeight;
-    const innerWidth = chartWidth - margin.left - margin.right;
-    const innerHeight = chartHeight - margin.top - margin.bottom;
+    const chartWidth = containerWidth - margin.left - margin.right;
+    const chartHeight = containerHeight - margin.top - margin.bottom;
+    
+   
+    
+
+// Handle updates
+if (isUpdate) {
+    d3.select(containerId).select("svg").remove(); // Clear previous chart
+}
+
+// Create SVG container with `viewBox` for proper scaling
+const svg = container.append("svg")
+    .attr("width", "100%")
+    .attr("height", containerHeight)
+    .attr("viewBox", `0 0 ${containerWidth} ${containerHeight}`)
+    .attr("preserveAspectRatio", "xMidYMid slice");
 
 
-    // Step 5: Handle updates
-    if (isUpdate) {
-        d3.select(containerId).select("svg").remove(); // Clear previous chart
-    }
+console.log("SVG Element Created with size:", { width: svg.attr("width"), height: svg.attr("height") });
 
-    // Step 6: Create SVG container
-    const svg = d3.select(containerId)
-        .append("svg")
-        .attr("width", svgWidth)
-        .attr("height", svgHeight);
+const chartGroup = svg.append("g")
+    
 
-    // Create a group for the chart (adjust margin as needed)
-    const chartGroup = svg.append("g")
-    .attr("class", "chart")
-    .attr("transform", `translate(${margin.left}, ${margin.top})`);
 
-    // Create a clip path for the chart area
-    chartGroup.append("clipPath")
-    .attr("id", "chartClip")
-    .append("rect")
-    .attr("width", innerWidth)
-    .attr("height", innerHeight);
 
-// Create a zoomGroup that is clipped to the chart area
-    const zoomGroup = chartGroup.append("g")
-    .attr("clip-path", "url(#chartClip)");
+
 
     // Step 7: Create a hierarchical root node
     const root = d3.hierarchy(hierarchy)
-        .sum(d => d.value)
-        .sort((a, b) => a.data.numColors - b.data.numColors);
+    .sum(d => d.value)
+    .sort((a, b) => a.data.numColors - b.data.numColors);
 
-    // Step 8: Define partition layout
-    const partition = d3.partition().size([innerWidth, innerHeight]);
-    partition(root);
+console.log("Root Hierarchy:", root);
 
-    // Step 9: Define scales for zooming
-    let xScale = d3.scaleLinear().domain([0, innerWidth]).range([0, innerWidth]);
-    let yScale = d3.scaleLinear().domain([0, innerHeight]).range([0, innerHeight]);
+const depth = root.height + 1; // Maximum depth of hierarchy
+console.log("Depth of Hierarchy:", depth);
+const partition = d3.partition().size([containerWidth, containerHeight]); // Multiply height by depth
+partition(root);
+
+const levelHeight = containerHeight / depth;
+
+root.descendants().forEach((node, index) => {
+    console.log(`Node ${index}:`, { name: node.data.name, x0: node.x0, x1: node.x1, y0: node.y0, y1: node.y1, height: node.y1 - node.y0 });
+});
+
+
+    // Step 9: Define scales
+    let xScale = d3.scaleLinear().domain([0, containerWidth]).range([0, containerWidth]);
+    let yScale = d3.scaleLinear().domain([0, depth]).range([0, containerHeight]);
+
 
     let focus = root; // Track current focus node
 
-   
-
-    // **Step 11: Tooltip Setup**
-    if (!d3.select("#tooltip").node()) {
-        d3.select("body").append("div")
-            .attr("id", "tooltip")
-            .style("position", "absolute")
-            .style("background", "rgba(0, 0, 0, 0.7)")
-            .style("color", "white")
-            .style("padding", "5px")
-            .style("border-radius", "3px")
-            .style("font-size", "12px")
-            .style("pointer-events", "none")
-            .style("display", "none");
-    }
-    const tooltip = d3.select("#tooltip");
-
-    // Step 12: Draw rectangles
-    const rects = zoomGroup.selectAll("rect")
+    // Draw rectangles
+    const rects = chartGroup.selectAll("rect")
         .data(root.descendants().slice(1)) // Skip root node
         .enter()
         .append("rect")
         .attr("x", d => xScale(d.x0))
-        .attr("y", d => yScale(d.y0))
+        .attr("y", d => d.depth * levelHeight)
         .attr("width", d => xScale(d.x1) - xScale(d.x0))
-        .attr("height", d => yScale(d.y1) - yScale(d.y0))
-        .attr("fill", d => d.data.color) // Use calculated color
+        .attr("height", levelHeight-1)
+        .attr("fill", d => d.data.color)
         .style("stroke", "#fff")
         .style("cursor", "pointer")
         .on("click", clicked)
         .on("mouseover", function(event, d) {
-            tooltip
+            d3.select("#tooltip")
                 .style("display", "block")
-                .style("left", (event.pageX + 10) + "px")
-                .style("top", (event.pageY - 10) + "px")
+                .style("left", `${event.pageX + 10}px`)
+                .style("top", `${event.pageY - 10}px`)
                 .html(`
                     <strong>${d.data.name}</strong><br>
                     Total: ${d.value} cards<br>
-                    Original: ${d.data.originalCount || 0} cards (${((d.data.originalCount / d.value) * 100).toFixed(2)}%)<br>
+                    Original: ${d.data.originalCount || 0} (${((d.data.originalCount / d.value) * 100).toFixed(2)}%)<br>
                     Reprint: ${d.data.reprintCount || 0} cards<br>
                     Functional Reprint: ${d.data.functionalReprintCount || 0} cards
                 `);
         })
         .on("mouseout", function() {
-            tooltip.style("display", "none");
+            d3.select("#tooltip").style("display", "none");
         });
-
+        const labels = chartGroup.selectAll("text")
+    .data(root.descendants().slice(1)) // Skip root node
+    .enter()
+    .append("text")
+    .attr("x", d => xScale(d.x0) + (xScale(d.x1) - xScale(d.x0)) / 2)
+    .attr("y", d => d.depth * levelHeight + levelHeight / 2)
+    .attr("dy", "0.35em")
+    .attr("text-anchor", "middle")
+    .attr("fill", d => (d.depth % 2 === 0 ? "#000" : "#fff"))
+    .attr("font-size", "12px")
+    .attr("pointer-events", "none")
+    .style("opacity", d => {
+        const rectWidth = xScale(d.x1) - xScale(d.x0);
+        const rectHeight = levelHeight - 1;
+        const textLength = d.data.name.length * 7;
         
-
-// Initialize Fisheye Effect
-/*const fisheye = d3.fisheye.circular()
-    .radius(50)  // Smaller magnifying glass
-    .distortion(3); // Controls zoom intensity
-
-// Create a circular lens (magnifying glass)
-const lens = svg.append("circle")
-    .attr("r", 50)  // Match radius with fisheye
-    .attr("fill", "none")
-    .attr("stroke", "black") // Lens outline
-    .attr("stroke-width", 2)
-    .style("pointer-events", "none")  // Ignore mouse interactions
-    .style("display", "none"); // Hidden initially
-
-// Mouseover: Show the lens when hovering over the Icicle Chart
-zoomGroup.on("mouseover", function () {
-    lens.style("display", "block"); // Show the magnifying glass
-});
-
-// Mouseout: Hide the lens when leaving the Icicle Chart
-zoomGroup.on("mouseout", function () {
-    lens.style("display", "none"); // Hide the magnifying glass
-    rects.transition().duration(200)
-        .attr("x", d => xScale(d.x0))
-        .attr("y", d => yScale(d.y0))
-        .attr("width", d => xScale(d.x1) - xScale(d.x0))
-        .attr("height", d => yScale(d.y1) - yScale(d.y0)); // Reset rectangles
-});
-
-// Apply Fisheye Effect on Mouse Move
-zoomGroup.on("mousemove", function (event) {
-    const [mx, my] = d3.pointer(event);
-
-    // Update fisheye focus based on mouse position
-    fisheye.focus([mx, my]);
-
-    // Move the magnifying glass to follow the cursor
-    lens.attr("cx", mx).attr("cy", my);
-
-    rects.each(function (d) {
-        let originalX = xScale(d.x0);
-        let originalY = yScale(d.y0);
-        let originalWidth = xScale(d.x1) - xScale(d.x0);
-        let originalHeight = yScale(d.y1) - yScale(d.y0);
-
-        // Apply fisheye transformation only if inside the lens
-        let distance = Math.sqrt((mx - originalX) ** 2 + (my - originalY) ** 2);
-        if (distance < 50) { // Only apply effect inside the lens
-            let distorted = fisheye({ x: originalX, y: originalY });
-
-            d3.select(this)
-                .transition().duration(50) // Smooth effect
-                .attr("x", distorted.x)
-                .attr("y", distorted.y)
-                .attr("width", originalWidth * fisheye.distortion())
-                .attr("height", originalHeight); // Keep height unchanged
-        } else {
-            // Reset to original size if outside lens
-            d3.select(this)
-                .transition().duration(100)
-                .attr("x", originalX)
-                .attr("y", originalY)
-                .attr("width", originalWidth)
-                .attr("height", originalHeight);
-        }
-    });
-});*/
+        return (rectWidth > textLength && rectHeight > 12) ? 1 : 0;
+    })
+    .text(d => d.data.name);
 
 
-  
+    console.log("Container size:", containerWidth, containerHeight);
+    console.log("SVG size before drawing:", chartWidth, chartHeight);
+    
 
-     /// Step 12: Add text labels
-    const labels = zoomGroup.selectAll("text")
-        .data(root.descendants().slice(1)) // Skip root node
-        .enter()
-        .append("text")
-        .attr("x", d => (xScale(d.x0) + xScale(d.x1)) / 2)
-        .attr("y", d => (yScale(d.y0) + yScale(d.y1)) / 2)
-        .attr("dy", "0.35em")
-        .attr("text-anchor", "middle")
-        .attr("fill", "white")
-        .attr("font-size", "15px")
-        .text(d => d.data.name)
-        .style("opacity", d => (xScale(d.x1) - xScale(d.x0)) > 50 ? 1 : 0);
 
     // Step 13: Click function for semantic zoom
     function clicked(event, p) {
-        if (focus === p) {
-            focus = root; // Reset to original view
-        } else {
-            focus = p;
-        }
-    
-        // Update xScale only
+        focus = (focus === p) ? root : p;
+
         xScale.domain([focus.x0, focus.x1]);
-        yScale.domain([0, innerHeight]); // Keep Y scale unchanged
-    
-        const t = zoomGroup.transition().duration(750);
-    
+        yScale.domain([0, containerHeight]); // Keep Y scale unchanged
+
+        const t = chartGroup.transition().duration(750);
+
         rects.transition(t)
             .attr("x", d => xScale(d.x0))
-            .attr("y", d => yScale(d.y0)) // Keeps Y unchanged
+            .attr("y", d => yScale(d.y0))
             .attr("width", d => xScale(d.x1) - xScale(d.x0))
             .attr("height", d => yScale(d.y1) - yScale(d.y0));
-    
+        
         labels.transition(t)
             .attr("x", d => (xScale(d.x0) + xScale(d.x1)) / 2)
             .attr("y", d => (yScale(d.y0) + yScale(d.y1)) / 2)
-            .style("opacity", d => (xScale(d.x1) - xScale(d.x0)) > 50 ? 1 : 0);
+            .style("opacity", d => {
+                const rectWidth = xScale(d.x1) - xScale(d.x0);
+                const rectHeight = yScale(d.y1) - yScale(d.y0);
+                const textLength = d.data.name.length * 7;
+    
+                return (rectWidth > textLength && rectHeight > 12) ? 1 : 0;
+            });
     }
-    
-
-    // ... your existing code and the clicked function
-
-    // Calculate legend position relative to the chart area:
-const legendX = margin.left - 30 ; // 10px padding from the chart
-const legendY = margin.top + 155; // you can adjust this as needed
-
-// Append a group element for the legend to the outer SVG (outside the zoomable chartGroup)
-const legend = svg.append("g")
-    .attr("class", "legend")
-    .attr("transform", `translate(${legendX}, ${legendY})`);
-
-// Use a proper vertical spacing (using rectangle height plus extra spacing)
-const rectHeight = 20;
-const extraSpacing = 0
-
-colorScale.slice().reverse().forEach((interval, i) => {
-    const legendEntry = legend.append("g")
-        .attr("transform", `translate(0, ${i * (rectHeight + extraSpacing)})`);
-
-    legendEntry.append("rect")
-        .attr("width", 20)
-        .attr("height", rectHeight)
-        .attr("fill", interval.color)
-        .attr("stroke", "#000");
-
-    legendEntry.append("text")
-        .attr("x", - 30)
-        .attr("y", 5)
-        .text(`${interval.range[1]}%`)
-        .attr("fill", "#000")
-        .style("font-size", "12px");
-});
-
-    
 }
+
 

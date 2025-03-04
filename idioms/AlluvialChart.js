@@ -52,7 +52,9 @@ function getNodeColor(price, minPrice, maxPrice) {
 }
 
 function createAlluvialChart(data, containerId, isUpdate = false) {
+  
   // Dynamically extract categories from data
+ 
   const originalitySet = new Set();
   const raritySet = new Set();
   
@@ -159,31 +161,35 @@ function createAlluvialChart(data, containerId, isUpdate = false) {
   });
   
   // Define chart dimensions
+  const container = d3.select(containerId).node();
+  const{width, height} = container.getBoundingClientRect();
   const margin = { top: 20, right: 50, bottom: 20, left: 50 }; // Swap left and right margins
-
-  const width = 800;
-  const height = 400;
+  const svgWidth = width;
+  const svgHeight = height;
   
   // Remove any existing SVG if updating
   if (isUpdate) {
     d3.select(containerId).select("svg").remove();
   }
   
-  const legendWidth = 120; // Extra space for the legend
-  const svgWidth = width + margin.left + margin.right;
 
+const chartHeight = svgHeight *0.8
+const chartWidth = svgWidth * 0.8
 
+const chartXOffset = (svgWidth - chartWidth) / 2; // Center horizontally
+const chartYOffset = (svgHeight - chartHeight) / 2; // Center vertically
   // Create the SVG container
   const svg = d3.select(containerId)
   .append("svg")
   .attr("width", svgWidth)
-  .attr("height", height);
+  .attr("height", svgHeight)
+  .append("g")
+  .attr("transform", `translate(${chartXOffset}, ${chartYOffset})`); // Move the whole chart to the center
+ ;
 
 
-  
-const chartOffset = legendWidth + margin.left; // Shift everything to the right
-const chartGroup = svg.append("g")
-  .attr("transform", `translate(${width +chartOffset}, 0)`); // Move chart to the right, keeping space on the left
+ const sankeyGroup = svg.append("g");
+ 
 
   
   
@@ -192,7 +198,7 @@ const chartGroup = svg.append("g")
   const sankeyGenerator = d3.sankey()
     .nodeWidth(20)
     .nodePadding(10)
-    .extent([[1, 1], [width - 1, height - 5]]);
+    .extent([[0, 0], [chartWidth, chartHeight]]);
   
   const sankeyData = sankeyGenerator({
     nodes: nodes.map(d => Object.assign({}, d)),
@@ -225,7 +231,7 @@ const chartGroup = svg.append("g")
     max: d3.max(allPrices)
 };
   // Draw the links with tooltip behavior
-  svg.append("g")
+  sankeyGroup.append("g")
     .attr("class", "links")
     .selectAll("path")
     .data(sankeyData.links)
@@ -239,20 +245,33 @@ const chartGroup = svg.append("g")
       .on("mouseover", function(event, d) {
         tooltip.style("display", "block")
                .html(`From: ${d.source.name}<br>To: ${d.target.name}<br>Cards: ${d.value}<br>Avg Price: $${d.avgPrice.toFixed(2)}`);
-        d3.select(this).attr("stroke-opacity", 0.8);
-       
-      })
-      .on("mousemove", function(event) {
+    
+        // Select the source and target nodes and increase their size
+        d3.selectAll(".nodes rect")
+          .filter(node => node.name === d.source.name || node.name === d.target.name)
+          .transition()
+          .duration(200)
+          .attr("transform", d => `translate(${d.x0 + (d.x1 - d.x0) / 2}, ${d.y0 + (d.y1 - d.y0) / 2}) scale(1.2) translate(${- (d.x0 + (d.x1 - d.x0) / 2)}, ${- (d.y0 + (d.y1 - d.y0) / 2)})`)
+          .attr("stroke-width", 3); // Make border thicker for emphasis
+    })
+    .on("mousemove", function(event) {
         tooltip.style("left", (event.pageX + 10) + "px")
                .style("top", (event.pageY + 10) + "px");
-      })
-      .on("mouseout", function() {
+    })
+    .on("mouseout", function(event, d) {
         tooltip.style("display", "none");
-        d3.select(this).attr("stroke-opacity", 0.5);
-      });
+    
+        // Restore the node size back to normal
+        d3.selectAll(".nodes rect")
+          .filter(node => node.name === d.source.name || node.name === d.target.name)
+          .transition()
+          .duration(200)
+          .attr("transform", "scale(1)") // Reset scale
+          .attr("stroke-width", 1); // Reset border thickness
+    });
   
   // Draw the nodes with tooltip behavior
-  const node = svg.append("g")
+  const node = sankeyGroup.append("g")
     .attr("class", "nodes")
     .selectAll("g")
     .data(sankeyData.nodes)
