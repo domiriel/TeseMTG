@@ -52,7 +52,6 @@ function getNodeColor(price, minPrice, maxPrice) {
 }
 
 function createAlluvialChart(data, containerId, isUpdate = false) {
-  
   // Dynamically extract categories from data
  
   const originalitySet = new Set();
@@ -163,7 +162,9 @@ function createAlluvialChart(data, containerId, isUpdate = false) {
   // Define chart dimensions
   const container = d3.select(containerId).node();
   const{width, height} = container.getBoundingClientRect();
-  const margin = { top: 20, right: 50, bottom: 20, left: 50 }; // Swap left and right margins
+
+  console.log("Alluvial", container.getBoundingClientRect())
+  const margin = { top: 20, right: 50, bottom: 20, left: 10 }; // Swap left and right margins
   const svgWidth = width;
   const svgHeight = height;
   
@@ -174,9 +175,9 @@ function createAlluvialChart(data, containerId, isUpdate = false) {
   
 
 const chartHeight = svgHeight *0.8
-const chartWidth = svgWidth * 0.8
+const chartWidth = svgWidth * 0.85
 
-const chartXOffset = (svgWidth - chartWidth) / 2; // Center horizontally
+const chartXOffset = (svgWidth - chartWidth) / 2 - 50; // Center horizontally
 const chartYOffset = (svgHeight - chartHeight) / 2; // Center vertically
   // Create the SVG container
   const svg = d3.select(containerId)
@@ -324,8 +325,8 @@ const chartYOffset = (svgHeight - chartHeight) / 2; // Center vertically
 
     
   // Remove the old colorLegendData and use dynamicLegendData
-const legendX = margin.left + 770;  // Adjust based on layout
-const legendY = 20;  // Adjust vertical position
+const legendX = margin.left + chartWidth;  // Adjust based on layout
+const legendY = margin.top - 20  // Adjust vertical position
 const rectHeight = 20;
 const extraSpacing = 0;
 

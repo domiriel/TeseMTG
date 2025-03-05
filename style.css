@@ -3,8 +3,8 @@ body {
 }
 .container {
   display: grid;
-  grid-template-columns: 0.76fr repeat(2, 1fr) repeat(2, 1.12fr);
-  grid-template-rows: 0.81fr repeat(4, 1.0475fr) 1fr;
+  grid-template-columns: 0.56fr repeat(2, 1fr) repeat(2, 1fr);
+  grid-template-rows: 0.51fr repeat(4, 1fr) 0.8fr;
   grid-column-gap: 0px;
   grid-row-gap: 0px;
   width: 100vw;
@@ -25,7 +25,13 @@ body {
     
 
   }
-  .TimelineView { grid-area: 6 / 2 / 7 / 6; }
+  .TimelineView { grid-area: 6 / 2 / 7 / 6; 
+    background-image: url('images/Timeline View.png');
+    
+    background-size: contain;  /* Adjust to fit */
+    background-repeat: no-repeat; /* Prevents tiling */
+    background-position: center;
+  }
   .Title { grid-area: 1 / 2 / 2 / 4; }
   .ISTLogo { grid-area: 1 / 1 / 2 / 2; 
     background-image: url('images/IST logo.jpg');
@@ -39,14 +45,23 @@ body {
   }
   .IcicleChart { 
     grid-area: 4 / 2 / 6 / 4; 
-    width: 100%; /* Ensure it takes full width of its grid cell */
-    height: 100%; /* Ensure it takes full height */
+    width: 100%; 
+    height: 100%; 
     display: flex;
     align-items: center;
-    justify-content: center; /* Center alignment */
-    overflow: hidden; /* Prevents any unwanted overflow */
+    justify-content: flex-start;
+    overflow: visible;
+    position: relative;
 }
-  .LineChart { grid-area: 4 / 4 / 6 / 6; }
+
+  .LineChart { grid-area: 4 / 4 / 6 / 6; 
+    background-image: url('images/Line Chart.png');
+    
+    background-size: contain;  /* Adjust to fit */
+    background-repeat: no-repeat; /* Prevents tiling */
+    background-position: center;
+  }
+  
   .AlluvialChart { 
     grid-area: 2 / 2 / 4 / 4; 
     width: 100%;
@@ -57,7 +72,13 @@ body {
     overflow: visible;
     position: relative;
   }
-  .Scatterplot { grid-area: 1 / 4 / 4 / 6; }
+  .Scatterplot { grid-area: 1 / 4 / 4 / 6; 
+    background-image: url('images/Scatterplot.png');
+    
+    background-size: contain;  /* Adjust to fit */
+    background-repeat: no-repeat; /* Prevents tiling */
+    background-position: center;
+  }
 
 
   .FilterPanel, .TimelineView, .Title, .ISTLogo, 
