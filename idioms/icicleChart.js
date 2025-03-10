@@ -148,11 +148,11 @@ function createIcicleChart(data, containerId, isUpdate = false) {
     
     console.log("[3] Computed Chart Width:", chartWidth);
 
-    const xOffset = (containerWidth - chartWidth)/2 -50; // Calculate the left margin to center it
+    const xOffset = (containerWidth - chartWidth)/2 - 40; // Calculate the left margin to center it
     const yOffset = -(containerHeight - chartHeight)/2; // Calculate the top margin to center it
 
 
-    const margin = { top: 20, right: 50, bottom: 20, left: 10 }; // Swap left and right margins
+    const margin = { top: (containerHeight - chartHeight)/2 + 1 , right: 50, bottom: 20, left: (containerWidth - chartWidth)/2 - 40 }; // Swap left and right margins
 // Handle updates
 if (isUpdate) {
     d3.select(containerId).select("svg").remove(); // Clear previous chart
@@ -344,34 +344,34 @@ const levelHeight = chartHeight / depth;
     }
     
     const legendX = margin.left + chartWidth + 15;
-    const legendY = margin.top + 54; // you can adjust this as needed
+    const legendY = margin.top; // you can adjust this as needed
 
 // Append a group element for the legend to the outer SVG (outside the zoomable chartGroup)
-const legend = svg.append("g")
-    .attr("class", "legend")
-    .attr("transform", `translate(${legendX}, ${legendY})`);
+    const legend = svg.append("g")
+        .attr("class", "legend")
+        .attr("transform", `translate(${legendX}, ${legendY})`);
 
 // Use a proper vertical spacing (using rectangle height plus extra spacing)
-const rectHeight = 20;
-const extraSpacing = 0
+    const rectHeight = 20;
+    const extraSpacing = 0
 
-colorScale.slice().reverse().forEach((interval, i) => {
-    const legendEntry = legend.append("g")
-        .attr("transform", `translate(0, ${i * (rectHeight + extraSpacing)})`);
+    colorScale.slice().reverse().forEach((interval, i) => {
+        const legendEntry = legend.append("g")
+            .attr("transform", `translate(0, ${i * (rectHeight + extraSpacing)})`);
 
-    legendEntry.append("rect")
-        .attr("width", 20)
-        .attr("height", rectHeight)
-        .attr("fill", interval.color)
-        .attr("stroke", "#000");
+        legendEntry.append("rect")
+            .attr("width", 20)
+            .attr("height", rectHeight)
+            .attr("fill", interval.color)
+            .attr("stroke", "#000");
 
-    legendEntry.append("text")
-        .attr("x", 30)
-        .attr("y", 5)
-        .text(`${interval.range[1]}%`)
-        .attr("fill", "#000")
-        .style("font-size", "12px");
-});
+        legendEntry.append("text")
+            .attr("x", 30)
+            .attr("y", 5)
+            .text(`${interval.range[1]}%`)
+            .attr("fill", "#000")
+            .style("font-size", "12px");
+    });
 
     
 }

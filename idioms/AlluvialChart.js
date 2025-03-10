@@ -1,6 +1,9 @@
 const nodeColorScale = d3.scaleSequential()
-    .interpolator(d3.interpolateRgb("#EDF8E9", "#006D2C")); // Soft to dark green
+    .interpolator(d3.interpolateRgb("#F0F0F0", "#373737")); // Soft to dark green
 
+
+
+  
   function applyFisheyeEffect(rects, xScale, yScale, event) {
     const [mouseX, mouseY] = d3.pointer(event);
 
@@ -30,13 +33,23 @@ const nodeColorScale = d3.scaleSequential()
 }
   
 
+/*function getDiscreteColor(percentage) {
+  if (percentage < 20) return "#f0f0f0";
+  if (percentage < 40) return "#cbcbcb";
+  if (percentage < 60) return "#9c9c9c";
+  if (percentage < 80) return "#6a6a6a";
+  return "#373737"; // 81-100%
+}*/
+
 function getDiscreteColor(percentage) {
-  if (percentage < 20) return "#edf8e9";
-  if (percentage < 40) return "#bae4b3";
-  if (percentage < 60) return "#74c475";
-  if (percentage < 80) return "#31a343";
-  return "#006d2c"; // 81-100%
+  if (percentage < 20) return "#efefef";
+  if (percentage < 40) return "#dadada";
+  if (percentage < 60) return "#c3c3c3";
+  if (percentage < 80) return "#a9a9a9";
+  return "#787878"; // 81-100%
 }
+
+
 
 function getPriceRange(data) {
   const prices = data.map(d => d.avgPrice).filter(price => !isNaN(price));
@@ -45,6 +58,14 @@ function getPriceRange(data) {
       max: d3.max(prices)
   };
 }
+
+function getMarginLeftOfFset(width) {
+  if(width > 1503.2000732421875) {
+    return 50;
+}
+  return 35;
+}
+
 
 function getNodeColor(price, minPrice, maxPrice) {
   let percentage = ((price - minPrice) / (maxPrice - minPrice)) * 100;
@@ -143,41 +164,62 @@ function createAlluvialChart(data, containerId, isUpdate = false) {
     avgPrice: rarityPriceCounts[rarity] > 0 ? rarityPriceSums[rarity] / rarityPriceCounts[rarity] : 0
   }));
   
-  const nodes = origNodes.concat(rarityNodes);
+  const customOrder = [
+    "original", "reprint", "functional reprint",
+    "common", "uncommon", "rare", "mythic", "special", "bonus"];
+
+
+
+    const nodes = origNodes.concat(rarityNodes).sort((a, b) => {
+      return customOrder.indexOf(a.name) - customOrder.indexOf(b.name);
+  });
   
+  const nodeIndexMap = {};
+nodes.forEach((node, index) => {
+    nodeIndexMap[node.name] = index;
+});
+
+
   // Build the links array using indices based on node order, including average price
   const links = [];
-  originalityCategories.forEach((orig, i) => {
-    rarityCategories.forEach((rarity, j) => {
-      const key = `${orig}|${rarity}`;
-      links.push({
-        source: i, // originality nodes come first
-        target: origNodes.length + j, // rarity nodes follow
-        value: linkCounts[key],
-        avgPrice: linkPriceCounts[key] > 0 ? linkPriceSums[key] / linkPriceCounts[key] : 0
-      });
+originalityCategories.forEach(orig => {
+    rarityCategories.forEach(rarity => {
+        const key = `${orig}|${rarity}`;
+        links.push({
+            source: nodeIndexMap[orig], // Use new indices
+            target: nodeIndexMap[rarity], // Use new indices
+            value: linkCounts[key],
+            avgPrice: linkPriceCounts[key] > 0 ? linkPriceSums[key] / linkPriceCounts[key] : 0
+        });
     });
-  });
+});
   
   // Define chart dimensions
   const container = d3.select(containerId).node();
   const{width, height} = container.getBoundingClientRect();
 
   console.log("Alluvial", container.getBoundingClientRect())
-  const margin = { top: 20, right: 50, bottom: 20, left: 10 }; // Swap left and right margins
+  
   const svgWidth = width;
   const svgHeight = height;
-  
+
   // Remove any existing SVG if updating
   if (isUpdate) {
     d3.select(containerId).select("svg").remove();
   }
   
-
-const chartHeight = svgHeight *0.8
+  const screenSize = d3.select("body").node().getBoundingClientRect();
+  console.log("Screen Width:", screenSize.width);
+  console.log("Screen Height:", screenSize.height);
+  
+ const marginLeftOffset = getMarginLeftOfFset(screenSize.width);
+const chartHeight = svgHeight *0.75
 const chartWidth = svgWidth * 0.85
 
-const chartXOffset = (svgWidth - chartWidth) / 2 - 50; // Center horizontally
+const margin = { top: 20, right: 50, bottom: 20, left: (svgWidth - chartWidth)/2 - marginLeftOffset }; // Swap left and right margins
+
+
+const chartXOffset = (svgWidth - chartWidth) / 2 - 40; // Center horizontally
 const chartYOffset = (svgHeight - chartHeight) / 2; // Center vertically
   // Create the SVG container
   const svg = d3.select(containerId)

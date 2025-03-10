@@ -3,12 +3,12 @@ body {
 }
 .container {
   display: grid;
-  grid-template-columns: 0.56fr repeat(2, 1fr) repeat(2, 1fr);
-  grid-template-rows: 0.51fr repeat(4, 1fr) 0.8fr;
+  grid-template-columns: 0.35fr repeat(2, 0.70fr) repeat(2, .75fr);
+  grid-template-rows: 0.51fr repeat(4, 1fr) 0.75fr;
   grid-column-gap: 0px;
   grid-row-gap: 0px;
-  width: 100vw;
-  height: 100vh;
+  width: 98.5vw;
+  height: 98vh;
   }
   
   .FilterPanel { 
@@ -26,11 +26,13 @@ body {
 
   }
   .TimelineView { grid-area: 6 / 2 / 7 / 6; 
-    background-image: url('images/Timeline View.png');
-    
-    background-size: contain;  /* Adjust to fit */
-    background-repeat: no-repeat; /* Prevents tiling */
-    background-position: center;
+    width: 100%; 
+    height: 100%; 
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    overflow: visible;
+    position: relative;
   }
   .Title { grid-area: 1 / 2 / 2 / 4; }
   .ISTLogo { grid-area: 1 / 1 / 2 / 2; 
