@@ -16,8 +16,13 @@ function createTimelineView(data, containerId, isUpdate = false) {
     // Convert Map to an array and sort by **full release date**
     let uniqueSets = Array.from(setMap.values()).sort((a, b) => a.releaseDate - b.releaseDate);
 
-    // Identify unique set types
-    let setTypes = Array.from(new Set(uniqueSets.map(set => set.setType))).sort();
+    // Identify unique set types and filter only 5
+    let allSetTypes = Array.from(new Set(uniqueSets.map(set => set.setType))).sort();
+    
+    let selectedSetTypes = allSetTypes.slice(0, 5); // **Choose the first 5 for now (modify as needed)**
+
+    // Filter uniqueSets to include only those from selected set types
+    uniqueSets = uniqueSets.filter(set => selectedSetTypes.includes(set.setType));
 
     /*** STEP 2: GET CONTAINER SIZE ***/
     const container = d3.select(containerId);
@@ -27,12 +32,12 @@ function createTimelineView(data, containerId, isUpdate = false) {
     const containerHeight = containerBounds.height;
 
     const chartWidth = containerWidth * 0.9;
-    const chartHeight = containerHeight * 0.9; // Adjusted to leave space for the X-axis on top
+    const chartHeight = containerHeight * 0.9; 
 
     const margin = { 
-        top: 60,  // Increased to fit the X-axis above the timeline
+        top: 60,  
         right: 50, 
-        bottom: 30, // Reduced since X-axis is now at the top
+        bottom: 30, 
         left: 100 
     };
 
@@ -56,25 +61,25 @@ function createTimelineView(data, containerId, isUpdate = false) {
         .range([0, chartWidth]);
 
     let yScale = d3.scaleBand()
-        .domain(setTypes)
+        .domain(selectedSetTypes)  // **Use the selected 5 set types**
         .range([-15, chartHeight + 40])
         .padding(0.9);
         
 
     /*** STEP 5: DRAW YEAR AXIS (X-AXIS) ON TOP ***/
-    const xAxis = d3.axisTop(xScale) // <-- CHANGED FROM `axisBottom` TO `axisTop`
+    const xAxis = d3.axisTop(xScale)
         .ticks(d3.timeYear.every(1))
         .tickFormat(d3.timeFormat("%Y"));
 
     chartGroup.append("g")
         .attr("class", "x-axis")
-        .attr("transform", `translate(0, -20)`) // <-- MOVED UP
+        .attr("transform", `translate(0, -20)`)
         .call(xAxis)
         .selectAll("text")
         .style("text-anchor", "middle");
 
     /*** STEP 6: DRAW TIMELINE LINES ***/
-    setTypes.forEach(setType => {
+    selectedSetTypes.forEach(setType => {
         chartGroup.append("line")
             .attr("x1", 0)
             .attr("y1", yScale(setType))
@@ -90,11 +95,11 @@ function createTimelineView(data, containerId, isUpdate = false) {
         .enter()
         .append("rect")
         .attr("class", "set-square")
-        .attr("x", d => xScale(d.releaseDate) - 2.5) // Adjust for proper spacing
-        .attr("y", d => yScale(d.setType) - 5) // Align per set type
+        .attr("x", d => xScale(d.releaseDate) - 2.5)
+        .attr("y", d => yScale(d.setType) - 5)
         .attr("width", 10)
         .attr("height", 10)
-        .attr("fill", "#4285F4") // Default Blue Color for all sets
+        .attr("fill", "#4285F4") 
         .attr("stroke", "black")
         .on("mouseover", function (event, d) {
             d3.select("#tooltip")
@@ -110,38 +115,45 @@ function createTimelineView(data, containerId, isUpdate = false) {
 
     /*** STEP 8: ADD LEGENDS (Set Type Labels) ***/
     chartGroup.selectAll(".set-type-label")
-        .data(setTypes)
+        .data(selectedSetTypes)
         .enter()
         .append("text")
         .attr("class", "set-type-label")
-        .attr("x", -10) // Position before the Y-axis
+        .attr("x", -10)
         .attr("y", d => yScale(d) + 5)
         .attr("text-anchor", "end")
-        .attr("font-size", "10px")
+        .attr("font-size", "12px")
         .attr("fill", "black")
         .text(d => d);
 
     /*** STEP 9: INTERACTIVITY - CLICK TO ZOOM ***/
     function clicked(selectedSet) {
-        // Define zoomed domain around the selected year
-        const zoomStart = new Date(selectedSet.releaseDate.getFullYear(), 0, 1);
-        const zoomEnd = new Date(selectedSet.releaseDate.getFullYear(), 11, 31);
-
-        // Update the scale
+        // Define zoomed domain around the selected set's year
+        const selectedYear = selectedSet.releaseDate.getFullYear();
+        const zoomStart = new Date(selectedYear, 0, 1);
+        const zoomEnd = new Date(selectedYear + 1, 11, 31); // Show two years
+    
+        // Update the xScale domain
         xScale.domain([zoomStart, zoomEnd]);
-
+    
+        // Adjust x-axis ticks to **always show two years**
+        xAxis.ticks(d3.timeYear.every(1)); // Ensure yearly ticks still appear
+    
         const t = chartGroup.transition().duration(750);
-
-        // Update positions
+    
+        // Filter only squares within the zoomed interval
         chartGroup.selectAll(".set-square")
             .transition(t)
+            .style("opacity", d => (d.releaseDate >= zoomStart && d.releaseDate <= zoomEnd) ? 1 : 0) // Hide out-of-range squares
             .attr("x", d => xScale(d.releaseDate) - 2.5);
-
+    
+        // Update the x-axis
         chartGroup.select(".x-axis")
             .transition(t)
             .call(xAxis.scale(xScale));
     }
-
+    
+    
     /*** STEP 10: RESET ZOOM ON DOUBLE CLICK ***/
     svg.on("dblclick", () => {
         xScale.domain([d3.min(uniqueSets, d => d.releaseDate), d3.max(uniqueSets, d => d.releaseDate)]);

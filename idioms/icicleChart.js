@@ -135,18 +135,17 @@ function createIcicleChart(data, containerId, isUpdate = false) {
     const container = d3.select(containerId);
     
     const containerBounds = container.node().getBoundingClientRect();
-    console.log("[1] Initial Icicle Container:", containerBounds);
+ 
 
     const containerWidth = container.node().getBoundingClientRect().width;
     const containerHeight = container.node().getBoundingClientRect().height;
     
-    console.log("[2] Derived Container Width:", containerWidth);
+
     
     
     const chartWidth = containerWidth * 0.85;
     const chartHeight = containerHeight * 0.80;
     
-    console.log("[3] Computed Chart Width:", chartWidth);
 
     const xOffset = (containerWidth - chartWidth)/2 - 40; // Calculate the left margin to center it
     const yOffset = -(containerHeight - chartHeight)/2; // Calculate the top margin to center it
@@ -193,13 +192,7 @@ chartGroup.append("clipPath")
     .sum(d => d.value)
     .sort((a, b) => a.data.numColors - b.data.numColors);
 
-    console.log("[4] Root Before Partition:", {
-        x0: root.x0,
-        x1: root.x1,
-        width: root.x1 - root.x0
-    });
-
-
+    
 
 const depth = Math.max(...root.descendants().map(d => d.depth)) ;
 
@@ -207,23 +200,11 @@ const depth = Math.max(...root.descendants().map(d => d.depth)) ;
 const partition = d3.partition().size([chartWidth, chartHeight]);
 partition(root);
 
-console.log("[5] Root After Partition:", {
-    x0: root.x0,
-    x1: root.x1,
-    width: root.x1 - root.x0,
-    expectedWidth: chartWidth
-});
 
 
 
-root.descendants().forEach((node, index) => {
-    console.log(`[6] Node ${index} Partition Width:`, {
-        name: node.data.name,
-        x0: node.x0,
-        x1: node.x1,
-        width: node.x1 - node.x0
-    });
-});
+
+
 
 
 
@@ -236,7 +217,7 @@ const levelHeight = chartHeight / depth;
     let xScale = d3.scaleLinear().domain([0, chartWidth]).range([0, chartWidth]);
     let yScale = d3.scaleLinear().domain([0, depth]).range([0, chartHeight]);
 
-    console.log("[7] Initial xScale Domain:", xScale.domain());
+
 
     let focus = root; // Track current focus node
 
@@ -300,18 +281,12 @@ const levelHeight = chartHeight / depth;
     function clicked(event, p) {
         focus = (focus === p) ? root : p;
   
-        console.log("[8] Before Zoom - Focus Node:", {
-            name: focus.data.name,
-            x0: focus.x0,
-            x1: focus.x1,
-            width: focus.x1 - focus.x0
-        });
     
 
         // Update X scale for zooming horizontally
         xScale.domain([focus.x0, focus.x1]);
     
-        console.log("[9] After Zoom - New xScale Domain:", xScale.domain());
+
         
 
         // Keep Y scale unchanged to preserve hierarchy

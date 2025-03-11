@@ -198,7 +198,6 @@ originalityCategories.forEach(orig => {
   const container = d3.select(containerId).node();
   const{width, height} = container.getBoundingClientRect();
 
-  console.log("Alluvial", container.getBoundingClientRect())
   
   const svgWidth = width;
   const svgHeight = height;
@@ -209,8 +208,7 @@ originalityCategories.forEach(orig => {
   }
   
   const screenSize = d3.select("body").node().getBoundingClientRect();
-  console.log("Screen Width:", screenSize.width);
-  console.log("Screen Height:", screenSize.height);
+
   
  const marginLeftOffset = getMarginLeftOfFset(screenSize.width);
 const chartHeight = svgHeight *0.75
