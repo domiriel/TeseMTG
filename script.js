@@ -5,5 +5,8 @@ function init() {
         createIcicleChart(data, ".IcicleChart");  // Initial render
         createAlluvialChart(data, ".AlluvialChart");
         createTimelineView(data, ".TimelineView");
+
+
+        createScatterPlot(data, ".Scatterplot");
     });
   }
