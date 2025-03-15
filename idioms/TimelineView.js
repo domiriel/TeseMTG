@@ -8,9 +8,11 @@ function createTimelineView(data, containerId, isUpdate = false) {
             setMap.set(setName, {
                 name: setName,
                 releaseDate: new Date(card.release_date),
-                setType: card.set_type
+                setType: card.set_type,
+                cardCount: 0 // Initialize card count
             });
         }
+        setMap.get(setName).cardCount += 1;
     });
 
  
@@ -27,16 +29,16 @@ function createTimelineView(data, containerId, isUpdate = false) {
     const container = d3.select(containerId);
     const containerBounds = container.node().getBoundingClientRect();
 
-    const containerWidth = containerBounds.width;
+    const containerWidth = containerBounds.width * 0.9;
     const containerHeight = containerBounds.height;
 
     const chartWidth = containerWidth * 0.9;
-    const chartHeight = containerHeight;
+    const chartHeight = containerHeight ;
 
     const margin = { 
         top: 50, 
         right: 50, 
-        bottom: 30, 
+        bottom: 10, 
         left: 120 
     };
 
@@ -84,19 +86,23 @@ function createTimelineView(data, containerId, isUpdate = false) {
         .style("overflow-x", "hidden") 
         .style("border", "1px solid #ccc");
 
-    
+    const lineSpacingFactor = 0.5;  // Adjust this factor to increase spacing between lines
+
+    const adjustedChartHeight = selectedSetTypes.length * lineSpacingFactor * 30;
+
     const svg = scrollContainer.append("svg")
         .attr("width", containerWidth)
-        .attr("height", chartHeight + margin.top + margin.bottom + 70);
-
+        .attr("height", adjustedChartHeight + 20);
+    
     const chartGroup = svg.append("g")
-        .attr("transform", `translate(${margin.left}, ${margin.top})`);
+        .attr("transform", `translate(${margin.left}, 10)`);
 
+       
 
-    let yScale = d3.scaleBand()
-        .domain(selectedSetTypes)
-        .range([-40, chartHeight + 100]) 
-        .padding(0.5);
+        let yScale = d3.scalePoint()
+            .domain(selectedSetTypes)
+            .range([0, selectedSetTypes.length * lineSpacingFactor * 30]); // More space for each set type
+        
 
     selectedSetTypes.forEach(setType => {
         chartGroup.append("line")
@@ -121,11 +127,37 @@ function createTimelineView(data, containerId, isUpdate = false) {
         .attr("fill", "#C3C3C3")
         .attr("stroke", "black")
         .on("mouseover", function (event, d) {
-            d3.select("#tooltip")
-                .style("display", "block")
-                .style("left", `${event.pageX + 10}px`)
-                .style("top", `${event.pageY - 10}px`)
-                .html(`<strong>${d.name}</strong><br>${d.releaseDate.toDateString()}<br>Type: ${d.setType}`);
+            const tooltip = d3.select("#tooltip");
+    
+    // Get viewport height and tooltip dimensions
+    const tooltipWidth = 200; // Adjust as needed
+    const tooltipHeight = 50; // Approximate height of tooltip
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    let left = event.pageX + 10; // Default X position
+    let top = event.pageY - 10; // Default Y position
+
+    // Prevent tooltip from going off the right side of the screen
+    if (left + tooltipWidth > viewportWidth) {
+        left = event.pageX - tooltipWidth - 10;
+    }
+
+    // Prevent tooltip from clipping below the viewport
+    if (top + tooltipHeight > viewportHeight) {
+        top = event.pageY - tooltipHeight - 10;
+    }
+
+    tooltip
+        .style("display", "block")
+        .style("left", `${left}px`)
+        .style("top", `${top}px`)
+        .html(`
+            <strong>${d.name}</strong><br>
+            ${d.releaseDate.toDateString()}<br>
+            Type: ${d.setType}<br>
+            Cards in Set: ${d.cardCount}
+        `);
         })
         .on("mouseout", function () {
             d3.select("#tooltip").style("display", "none");
