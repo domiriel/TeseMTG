@@ -1,17 +1,72 @@
+const colorGroups = [
+    { range: [1, 5691], color: "#efefef" },  // Most popular (lower rank)
+    { range: [5692, 11382], color: "#dadada" },
+    { range: [11383, 17074], color: "#c3c3c3" },
+    { range: [17075, 22765], color: "#a9a9a9" },
+    { range: [0, Infinity], color: "#787878" }  // Least popular (higher rank)
+];
+
+
+// Function to determine color based on `edhrec_rank`
+function getGroupColor(rank) {
+    for (let group of colorGroups) {
+        if (rank >= group.range[0] && rank <= group.range[1]) {
+            return group.color;
+        }
+    }
+    return colorGroups[colorGroups.length - 1].color; // Default to last color if out of range
+}
+
+
+
 function createScatterPlot(data, containerId, isUpdate = false) {
     // Ensure unique cards by name, prioritizing price_usd > 0
-    const uniqueCards = new Map();
+    const excludedSetTypes = new Set(["promo", "funny", "memorabilia", "alchemy", "token", "minigame"]); // Add the set types to exclude
+    const excludedSetNames = ["Arena", "Alchemy", "Digital"]; // Add keywords to exclude certain sets
+    data = data.filter(card => 
+        !excludedSetTypes.has(card.set_type) && 
+        !excludedSetNames.some(keyword => card.set_name && card.set_name.includes(keyword)) &&
+        !card.digital
+    );
+
+    const cardMap = new Map();
+
     data.forEach(card => {
-        if (!isNaN(card.price_usd) && !isNaN(card.complexity)) {
-            if (!uniqueCards.has(card.name) || (card.price_usd > 0 && uniqueCards.get(card.name).price_usd === 0)) {
-                uniqueCards.set(card.name, card);
+        let price = isNaN(card.price_usd) || card.price_usd === null ? 0 : card.price_usd; // Treat null as 0
+        
+        if (!isNaN(card.complexity)) {
+            if (!cardMap.has(card.name)) {
+                cardMap.set(card.name, {
+                    ...card, 
+                    prices: [],  // Store all price values
+                    avg_price: 0 // Initialize average price
+                });
             }
+            cardMap.get(card.name).prices.push(price);
+        }
+        if (card.name === "Zenkidar") {
+            console.log(`Price Type`, typeof(cardMap.get(card.name).prices[0]));
+            console.log(`Card Info Before Calcs:`, cardMap.get(card.name));
         }
     });
-    const filteredData = Array.from(uniqueCards.values());
+
+    // Compute average price for each card
+    cardMap.forEach(card => {
+        if (card.prices.length > 0) {
+            const total = card.prices.reduce((sum, p) => sum + p, 0);
+            card.avg_price = total / card.prices.length;
+        } else {
+            card.avg_price = 0; // Ensure avg_price is never NaN
+        }
+        if (card.name === "Willow Elf") {
+            console.log(`Card Info After Calcs:`, cardMap.get(card.name));
+        }
+    });
+
+    const filteredData = Array.from(cardMap.values());
 
     // Sample data for performance
-    const sampledData = filteredData.length > 1000 ? d3.shuffle(filteredData).slice(0, 1000) : filteredData;
+    const sampledData = filteredData.length > 1000 ? d3.shuffle(filteredData).slice(0, 7000) : filteredData;
     console.log(`Scatterplot data size: ${sampledData.length}`);
 
     // Define chart dimensions
@@ -36,26 +91,31 @@ function createScatterPlot(data, containerId, isUpdate = false) {
 
     // Define scales
     const xScale = d3.scaleLog()
-        .domain([
-            Math.max(0, d3.min(sampledData, d => d.price_usd || 0.01)), // Ensure min is at least 0.01
-            d3.max(sampledData, d => d.price_usd)
-        ])
-        .range([0, chartWidth]);
+    .domain([
+        Math.max(0, d3.min(sampledData, d => d.avg_price || 0.01)), // Ensure min is at least 0.01
+        d3.max(sampledData, d => d.avg_price)
+    ])
+    .range([0.01, chartWidth]);
 
     const yScale = d3.scaleLinear()
         .domain([d3.min(sampledData, d => d.complexity), d3.max(sampledData, d => d.complexity)])
         .range([chartHeight, 0]);
 
     // Define color scale based on EDH rank
-    const edhRanks = sampledData.map(d => d.edh_rank).filter(r => r !== null);
+    const edhRanks = sampledData.map(d => d.edhrec_rank).filter(r => r !== null);
     const colorScale = d3.scaleSequential(d3.interpolateCool)
         .domain([d3.min(edhRanks), d3.max(edhRanks)]);
 
+    const formatPrice = d3.format("$,.2f");
+    
     // Create axes
+    // Create axes with custom tick formatter
     const xAxis = svg.append("g")
         .attr("class", "x-axis")
         .attr("transform", `translate(0, ${chartHeight})`)
-        .call(d3.axisBottom(xScale).ticks(10, ",.2f"));
+        .call(d3.axisBottom(xScale).tickFormat(formatPrice)  // Reduce the number of tick marks  // Format large numbers like 10k, 100k
+    
+    );
 
     const yAxis = svg.append("g")
         .attr("class", "y-axis")
@@ -82,6 +142,12 @@ function createScatterPlot(data, containerId, isUpdate = false) {
         .style("font-weight", "bold")
         .text("Complexity");
 
+
+        svg.append("defs").append("clipPath")
+        .attr("id", "clip")
+        .append("rect")
+        .attr("width", chartWidth)
+        .attr("height", chartHeight);
     // 🔹 Add zoomable background (transparent)
     const zoomArea = svg.append("rect")
         .attr("width", chartWidth)
@@ -89,18 +155,35 @@ function createScatterPlot(data, containerId, isUpdate = false) {
         .attr("fill", "transparent") // Invisible but captures zoom events
         .attr("pointer-events", "all"); // Ensures all interactions work
 
-    // Create scatter plot group
-    const gDot = svg.append("g").attr("class", "dots");
+    
+    const gDot = svg.append("g").attr("class", "dots").attr("clip-path", "url(#clip)");
 
-    // Append circles
+    
     const circles = gDot.selectAll("circle")
         .data(sampledData)
         .join("circle")
-        .attr("cx", d => xScale(d.price_usd))
+        .attr("cx", d => xScale(d.avg_price))
         .attr("cy", d => yScale(d.complexity))
-        .attr("r", 3)  // Adjust point size
-        .attr("fill", d => colorScale(d.edh_rank || d3.max(edhRanks))) // Default color if no EDH rank
-        .attr("opacity", 0.8);
+        .attr("r", 1)  // Adjust point size
+        .attr("fill", d => getGroupColor(d.edhrec_rank || 0)) // Default color if no EDH rank
+        .attr("opacity", 0.8)
+        .on("mouseover", function (event, d) {
+            tooltip.style("display", "block")
+                .html(`
+                    <strong>${d.name}</strong><br>
+                    Complexity: ${d.complexity}<br>
+                    EDH Rank: ${d.edhrec_rank || "N/A"}<br>
+                    Avg Price: $${d.avg_price.toFixed(2)}<br>
+                `);
+        })
+        .on("mousemove", function (event) {
+            tooltip.style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY + 10) + "px");
+        })
+        .on("mouseout", function () {
+            tooltip.style("display", "none");
+        });
+    ;
 
     // Tooltip setup
     if (!d3.select("#scatter-tooltip").node()) {
@@ -118,24 +201,9 @@ function createScatterPlot(data, containerId, isUpdate = false) {
     }
     const tooltip = d3.select("#scatter-tooltip");
 
-    // Tooltip events
-    circles.on("mouseover", function (event, d) {
-        tooltip.style("display", "block")
-            .html(`
-                <strong>${d.name}</strong><br>
-                Complexity: ${d.complexity}<br>
-                EDH Rank: ${d.edh_rank || "N/A"}<br>
-                Price: $${d.price_usd}
-            `);
-    })
-    .on("mousemove", function (event) {
-        tooltip.style("left", (event.pageX + 10) + "px")
-            .style("top", (event.pageY + 10) + "px");
-    })
-    .on("mouseout", function () {
-        tooltip.style("display", "none");
-    });
 
+    
+    // Tooltip events
     // Zoom functionality
     const zoom = d3.zoom()
         .scaleExtent([0.5, 32]) // Allow zooming from 50% to 32x
@@ -150,12 +218,12 @@ function createScatterPlot(data, containerId, isUpdate = false) {
         const newY = transform.rescaleY(yScale);
 
         // Update scatter points (Apply transform on cx, cy)
-        circles.attr("cx", d => newX(d.price_usd))
+        circles.attr("cx", d => newX(d.avg_price))
                .attr("cy", d => newY(d.complexity))
-               .attr("r", 3 * transform.k); // Adjust size dynamically
+               .attr("r", 3 * transform.k/3); // Adjust size dynamically
 
         // Update axes
-        xAxis.call(d3.axisBottom(newX));
+        xAxis.call(d3.axisBottom(newX).tickFormat(formatPrice));
         yAxis.call(d3.axisLeft(newY));
     }
 

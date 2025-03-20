@@ -95,8 +95,10 @@ with open(output_file, 'w') as outfile:
             "release_date": card.get('released_at', ''),
             "originality": originality,
             "complexity": calculate_complexity(card),
-            "price_usd": card.get('prices', {}).get('usd'),
-            "price_eur": card.get('prices', {}).get('eur'),
+            "digital": card.get('digital', False),
+            "edhrec_rank": card.get('edhrec_rank', 0),
+            "price_usd": float(card.get('prices', {}).get('usd', 0) or 0),
+            "price_eur": float(card.get('prices', {}).get('eur', 0) or 0),
             "set_name": card.get('set_name', 'Unknown'),
             "set_type": card.get('set_type', 'Unknown'),
         }
