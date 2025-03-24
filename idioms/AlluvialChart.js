@@ -8,19 +8,19 @@ const nodeColorScale = d3.scaleSequential()
     const [mouseX, mouseY] = d3.pointer(event);
 
     rects.each(function (d) {
-        // Get the original position
+        
         let x = xScale(d.x0);
         let y = yScale(d.y0);
         let width = xScale(d.x1) - xScale(d.x0);
         let height = yScale(d.y1) - yScale(d.y0);
 
-        // Compute distance from mouse
+        
         let dx = Math.abs(mouseX - (x + width / 2));
         let dy = Math.abs(mouseY - (y + height / 2));
         let distance = Math.sqrt(dx * dx + dy * dy);
 
-        // Apply fisheye effect (distort closer elements)
-        let scale = Math.max(1.2, 3 - (distance / 150)); // Adjust 150 for intensity
+        
+        let scale = Math.max(1.2, 3 - (distance / 150)); 
 
         d3.select(this)
             .transition()
@@ -38,7 +38,7 @@ const nodeColorScale = d3.scaleSequential()
   if (percentage < 40) return "#cbcbcb";
   if (percentage < 60) return "#9c9c9c";
   if (percentage < 80) return "#6a6a6a";
-  return "#373737"; // 81-100%
+  return "#373737"; 
 }*/
 
 function getDiscreteColor(percentage) {
@@ -46,7 +46,7 @@ function getDiscreteColor(percentage) {
   if (percentage < 40) return "#dadada";
   if (percentage < 60) return "#c3c3c3";
   if (percentage < 80) return "#a9a9a9";
-  return "#787878"; // 81-100%
+  return "#787878"; 
 }
 
 
@@ -69,11 +69,11 @@ function getMarginLeftOfFset(width) {
 
 function getNodeColor(price, minPrice, maxPrice) {
   let percentage = ((price - minPrice) / (maxPrice - minPrice)) * 100;
-  return getDiscreteColor(percentage); // Now using discrete colors
+  return getDiscreteColor(percentage); 
 }
 
 function createAlluvialChart(data, containerId, isUpdate = false) {
-  // Dynamically extract categories from data
+  
  
   const originalitySet = new Set();
   const raritySet = new Set();
@@ -89,11 +89,11 @@ function createAlluvialChart(data, containerId, isUpdate = false) {
     }
   });
   
-  // Convert sets to sorted arrays (sorting is optional)
+  
   const originalityCategories = Array.from(originalitySet).sort();
   const rarityCategories = Array.from(raritySet).sort();
   
-  // Prepare aggregates for nodes (average price)
+  
   const origPriceSums = {};
   const origPriceCounts = {};
   originalityCategories.forEach(orig => {
@@ -108,7 +108,7 @@ function createAlluvialChart(data, containerId, isUpdate = false) {
     rarityPriceCounts[rarity] = 0;
   });
   
-  // Prepare aggregates for links (price sums/counts) and count links
+  
   let linkCounts = {};
   const linkPriceSums = {};
   const linkPriceCounts = {};
@@ -116,7 +116,7 @@ function createAlluvialChart(data, containerId, isUpdate = false) {
   data.forEach(card => {
     const orig = card.originality ? card.originality.toLowerCase() : "";
     const rarity = card.rarity ? card.rarity.toLowerCase() : "";
-    // Update link counts and price aggregates if categories exist
+    
     if (originalitySet.has(orig) && raritySet.has(rarity)) {
       const key = `${orig}|${rarity}`;
       linkCounts[key] = (linkCounts[key] || 0) + 1;
@@ -127,7 +127,7 @@ function createAlluvialChart(data, containerId, isUpdate = false) {
       }
     }
     
-    // Update node aggregates for originality and rarity
+    
     let price = parseFloat(card.price_usd);
     if (!isNaN(price)) {
       if (origPriceSums.hasOwnProperty(orig)) {
@@ -141,7 +141,7 @@ function createAlluvialChart(data, containerId, isUpdate = false) {
     }
   });
   
-  // Ensure every combination exists (even if 0)
+  
   originalityCategories.forEach(orig => {
     rarityCategories.forEach(rarity => {
       const key = `${orig}|${rarity}`;
@@ -153,7 +153,7 @@ function createAlluvialChart(data, containerId, isUpdate = false) {
     });
   });
   
-  // Create nodes for originality and rarity with average price values
+  
   const origNodes = originalityCategories.map(orig => ({
     name: orig,
     avgPrice: origPriceCounts[orig] > 0 ? origPriceSums[orig] / origPriceCounts[orig] : 0
@@ -180,21 +180,21 @@ nodes.forEach((node, index) => {
 });
 
 
-  // Build the links array using indices based on node order, including average price
+  
   const links = [];
 originalityCategories.forEach(orig => {
     rarityCategories.forEach(rarity => {
         const key = `${orig}|${rarity}`;
         links.push({
-            source: nodeIndexMap[orig], // Use new indices
-            target: nodeIndexMap[rarity], // Use new indices
+            source: nodeIndexMap[orig], 
+            target: nodeIndexMap[rarity], 
             value: linkCounts[key],
             avgPrice: linkPriceCounts[key] > 0 ? linkPriceSums[key] / linkPriceCounts[key] : 0
         });
     });
 });
   
-  // Define chart dimensions
+ 
   const container = d3.select(containerId).node();
   const{width, height} = container.getBoundingClientRect();
 
@@ -202,7 +202,7 @@ originalityCategories.forEach(orig => {
   const svgWidth = width;
   const svgHeight = height;
 
-  // Remove any existing SVG if updating
+ 
   if (isUpdate) {
     d3.select(containerId).select("svg").remove();
   }
@@ -214,18 +214,18 @@ originalityCategories.forEach(orig => {
 const chartHeight = svgHeight *0.75
 const chartWidth = svgWidth * 0.85
 
-const margin = { top: 20, right: 50, bottom: 20, left: (svgWidth - chartWidth)/2 - marginLeftOffset }; // Swap left and right margins
+const margin = { top: 20, right: 50, bottom: 20, left: (svgWidth - chartWidth)/2 - marginLeftOffset }; 
 
 
-const chartXOffset = (svgWidth - chartWidth) / 2 - 40; // Center horizontally
-const chartYOffset = (svgHeight - chartHeight) / 2; // Center vertically
-  // Create the SVG container
+const chartXOffset = (svgWidth - chartWidth) / 2 - 40; 
+const chartYOffset = (svgHeight - chartHeight) / 2; 
+  
   const svg = d3.select(containerId)
   .append("svg")
   .attr("width", svgWidth)
   .attr("height", svgHeight)
   .append("g")
-  .attr("transform", `translate(${chartXOffset}, ${chartYOffset})`); // Move the whole chart to the center
+  .attr("transform", `translate(${chartXOffset}, ${chartYOffset})`); 
  ;
 
 
@@ -235,7 +235,7 @@ const chartYOffset = (svgHeight - chartHeight) / 2; // Center vertically
   
   
   
-  // Setup the Sankey layout using d3-sankey
+ 
   const sankeyGenerator = d3.sankey()
     .nodeWidth(20)
     .nodePadding(10)
@@ -246,7 +246,7 @@ const chartYOffset = (svgHeight - chartHeight) / 2; // Center vertically
     links: links.map(d => Object.assign({}, d))
   });
   
-  // Create tooltip if it doesn't exist
+ 
   if (!d3.select("#tooltip").node()) {
     d3.select("body")
       .append("div")
@@ -271,7 +271,7 @@ const chartYOffset = (svgHeight - chartHeight) / 2; // Center vertically
     min: d3.min(allPrices),
     max: d3.max(allPrices)
 };
-  // Draw the links with tooltip behavior
+ 
   sankeyGroup.append("g")
     .attr("class", "links")
     .selectAll("path")
@@ -287,13 +287,13 @@ const chartYOffset = (svgHeight - chartHeight) / 2; // Center vertically
         tooltip.style("display", "block")
                .html(`From: ${d.source.name}<br>To: ${d.target.name}<br>Cards: ${d.value}<br>Avg Price: $${d.avgPrice.toFixed(2)}`);
     
-        // Select the source and target nodes and increase their size
+        
         d3.selectAll(".nodes rect")
           .filter(node => node.name === d.source.name || node.name === d.target.name)
           .transition()
           .duration(200)
           .attr("transform", d => `translate(${d.x0 + (d.x1 - d.x0) / 2}, ${d.y0 + (d.y1 - d.y0) / 2}) scale(1.2) translate(${- (d.x0 + (d.x1 - d.x0) / 2)}, ${- (d.y0 + (d.y1 - d.y0) / 2)})`)
-          .attr("stroke-width", 3); // Make border thicker for emphasis
+          .attr("stroke-width", 3); 
     })
     .on("mousemove", function(event) {
         tooltip.style("left", (event.pageX + 10) + "px")
@@ -302,16 +302,16 @@ const chartYOffset = (svgHeight - chartHeight) / 2; // Center vertically
     .on("mouseout", function(event, d) {
         tooltip.style("display", "none");
     
-        // Restore the node size back to normal
+        
         d3.selectAll(".nodes rect")
           .filter(node => node.name === d.source.name || node.name === d.target.name)
           .transition()
           .duration(200)
-          .attr("transform", "scale(1)") // Reset scale
-          .attr("stroke-width", 1); // Reset border thickness
+          .attr("transform", "scale(1)") 
+          .attr("stroke-width", 1); 
     });
   
-  // Draw the nodes with tooltip behavior
+  
   const node = sankeyGroup.append("g")
     .attr("class", "nodes")
     .selectAll("g")
@@ -339,7 +339,7 @@ const chartYOffset = (svgHeight - chartHeight) / 2; // Center vertically
       tooltip.style("display", "none");
     });
   
-  // Add text labels to the nodes
+  
   node.append("text")
     .attr("x", d => d.x0 < width / 2 ? d.x1 + 6 : d.x0 - 6)
     .attr("y", d => (d.y0 + d.y1) / 2)
@@ -351,22 +351,22 @@ const chartYOffset = (svgHeight - chartHeight) / 2; // Center vertically
 
 
 
-  // Define number of bins for price intervals (matching the color scale)
+  
   const numBins = 5; 
 
-  // Compute price step based on the range
+  
   const priceStep = (sharedPriceRange.max - sharedPriceRange.min) / numBins;
 
-  // Generate dynamic intervals based on min/max price
+  
   const dynamicLegendData = Array.from({ length: numBins }, (_, i) => ({
     label: `$${(sharedPriceRange.min + (i+1) * priceStep).toFixed(2)}`,
-      color: getDiscreteColor(i * (100 / numBins)) // Map percentage to color
-  })).reverse(); // Reverse so the highest value is at the top
+      color: getDiscreteColor(i * (100 / numBins)) 
+  })).reverse(); 
 
     
-  // Remove the old colorLegendData and use dynamicLegendData
-const legendX = margin.left + chartWidth;  // Adjust based on layout
-const legendY = margin.top - 20  // Adjust vertical position
+  
+const legendX = margin.left + chartWidth;  
+const legendY = margin.top - 20  
 const rectHeight = 20;
 const extraSpacing = 0;
 
@@ -374,7 +374,7 @@ const legend = svg.append("g")
     .attr("class", "legend")
     .attr("transform", `translate(${legendX}, ${legendY})`);
 
-// Loop through each color range and add a legend entry
+
 dynamicLegendData.forEach((interval, i) => {
     const legendEntry = legend.append("g")
       .attr("transform", `translate(0, ${i * (rectHeight + extraSpacing)})`);
@@ -386,9 +386,9 @@ dynamicLegendData.forEach((interval, i) => {
         .attr("stroke", "#000");
 
     legendEntry.append("text")
-        .attr("x", 30) // Align text to the right of the rectangle
+        .attr("x", 30) 
         .attr("y",rectHeight-16)
-        .text(interval.label) // Use dynamically computed price range
+        .text(interval.label) 
         .attr("fill", "#000")
         .style("font-size", "12px");
 });

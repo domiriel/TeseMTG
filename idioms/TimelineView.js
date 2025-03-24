@@ -1,5 +1,5 @@
 function createTimelineView(data, containerId, isUpdate = false) {
-    /*** STEP 1: EXTRACT UNIQUE SETS ***/
+    
     let setMap = new Map();
 
     data.forEach(card => {
@@ -9,7 +9,7 @@ function createTimelineView(data, containerId, isUpdate = false) {
                 name: setName,
                 releaseDate: new Date(card.release_date),
                 setType: card.set_type,
-                cardCount: 0 // Initialize card count
+                cardCount: 0 
             });
         }
         setMap.get(setName).cardCount += 1;
@@ -42,7 +42,7 @@ function createTimelineView(data, containerId, isUpdate = false) {
         left: 120 
     };
 
-    // Handle updates
+
     if (isUpdate) {
         d3.select(containerId).select(".chart-wrapper").remove();
     }
@@ -86,7 +86,7 @@ function createTimelineView(data, containerId, isUpdate = false) {
         .style("overflow-x", "hidden") 
         .style("border", "1px solid #ccc");
 
-    const lineSpacingFactor = 0.5;  // Adjust this factor to increase spacing between lines
+    const lineSpacingFactor = 0.5;  
 
     const adjustedChartHeight = selectedSetTypes.length * lineSpacingFactor * 30;
 
@@ -101,7 +101,7 @@ function createTimelineView(data, containerId, isUpdate = false) {
 
         let yScale = d3.scalePoint()
             .domain(selectedSetTypes)
-            .range([0, selectedSetTypes.length * lineSpacingFactor * 30]); // More space for each set type
+            .range([0, selectedSetTypes.length * lineSpacingFactor * 30]); 
         
 
     selectedSetTypes.forEach(setType => {
@@ -129,21 +129,21 @@ function createTimelineView(data, containerId, isUpdate = false) {
         .on("mouseover", function (event, d) {
             const tooltip = d3.select("#tooltip");
     
-    // Get viewport height and tooltip dimensions
-    const tooltipWidth = 200; // Adjust as needed
-    const tooltipHeight = 50; // Approximate height of tooltip
+    
+    const tooltipWidth = 200; 
+    const tooltipHeight = 50; 
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
 
-    let left = event.pageX + 10; // Default X position
-    let top = event.pageY - 10; // Default Y position
+    let left = event.pageX + 10; 
+    let top = event.pageY - 10; 
 
-    // Prevent tooltip from going off the right side of the screen
+    
     if (left + tooltipWidth > viewportWidth) {
         left = event.pageX - tooltipWidth - 10;
     }
 
-    // Prevent tooltip from clipping below the viewport
+    
     if (top + tooltipHeight > viewportHeight) {
         top = event.pageY - tooltipHeight - 10;
     }
@@ -162,7 +162,7 @@ function createTimelineView(data, containerId, isUpdate = false) {
         .on("mouseout", function () {
             d3.select("#tooltip").style("display", "none");
         })
-        .on("click", (event, d) => clicked(d));
+        
     
  
     chartGroup.selectAll(".set-type-label")
@@ -205,18 +205,36 @@ function clicked(selectedSet) {
     
 
 
-    svg.on("dblclick", () => {
+svg.on("wheel", (event) => {
+    event.preventDefault(); 
+
+    if (event.deltaY < 0) {
+        
+        const [mouseX] = d3.pointer(event);
+        const dateUnderMouse = xScale.invert(mouseX - margin.left);
+        const selectedYear = dateUnderMouse.getFullYear();
+        const zoomStart = new Date(selectedYear, 0, 1);
+        const zoomEnd = new Date(selectedYear + 1, 0, 0);
+
+        xScale.domain([zoomStart, zoomEnd]);
+
+        const t = d3.transition().duration(750);
+        fixedXAxis.transition(t).select(".x-axis").call(xAxis.scale(xScale));
+
+        squares.transition(t)
+            .style("opacity", d => (d.releaseDate >= zoomStart && d.releaseDate <= zoomEnd) ? 1 : 0)
+            .attr("x", d => xScale(d.releaseDate) - 2.5);
+    } else {
+        
         xScale.domain([d3.min(uniqueSets, d => d.releaseDate), d3.max(uniqueSets, d => d.releaseDate)]);
 
         const t = d3.transition().duration(750);
-
-        fixedXAxis.transition(t).select("g.x-axis")
-        .call(xAxis.scale(xScale));
+        fixedXAxis.transition(t).select("g.x-axis").call(xAxis.scale(xScale));
 
         squares.transition(t)
             .style("opacity", 1)
             .attr("x", d => xScale(d.releaseDate) - 2.5);
+    }
+});
 
-        
-    });
 }
