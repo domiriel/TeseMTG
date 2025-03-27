@@ -49,10 +49,10 @@ function createScatterPlot(data, containerId, isUpdate = false) {
             }
             cardMap.get(card.name).prices.push(price);
         }
-        if (card.name === "Zenkidar") {
+        /*if (card.name === "Zenkidar") {
             console.log(`Price Type`, typeof(cardMap.get(card.name).prices[0]));
             console.log(`Card Info Before Calcs:`, cardMap.get(card.name));
-        }
+        }*/
     });
 
   
@@ -63,9 +63,9 @@ function createScatterPlot(data, containerId, isUpdate = false) {
         } else {
             card.avg_price = 0; 
         }
-        if (card.name === "Willow Elf") {
+        /*if (card.name === "Willow Elf") {
             console.log(`Card Info After Calcs:`, cardMap.get(card.name));
-        }
+        }*/
     });
 
     
@@ -168,7 +168,7 @@ const gClip = gDot.append("g").attr("class", "clip-group");
                 .attr("opacity", 0.8)
                 .attr("cx", d => {
                     const x = xScale(d.avg_price);
-                    if (isNaN(x)) console.log(`NaN cx for card:`, d.name, `avg_price:`, d.avg_price);
+                    //if (isNaN(x)) console.log(`NaN cx for card:`, d.name, `avg_price:`, d.avg_price);
                     return x;
                 })
                 .attr("cy", d => yScale(d.complexity)),

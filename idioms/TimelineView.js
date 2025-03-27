@@ -33,7 +33,7 @@ function createTimelineView(data, containerId, isUpdate = false) {
     const containerHeight = containerBounds.height;
 
     const chartWidth = containerWidth * 0.9;
-    const chartHeight = containerHeight ;
+    const chartHeight = containerHeight;
 
     const margin = { 
         top: 50, 
@@ -81,7 +81,7 @@ function createTimelineView(data, containerId, isUpdate = false) {
     const scrollContainer = wrapper.append("div")
         .attr("class", "chart-container")
         .style("width", `${containerWidth}px`)
-        .style("height", `${containerHeight}px`) 
+        .style("height", `${containerHeight*0.75}px`) 
         .style("overflow-y", "scroll") 
         .style("overflow-x", "hidden") 
         .style("border", "1px solid #ccc");
@@ -93,6 +93,14 @@ function createTimelineView(data, containerId, isUpdate = false) {
     const svg = scrollContainer.append("svg")
         .attr("width", containerWidth)
         .attr("height", adjustedChartHeight + 20);
+    
+
+    const zoom = d3.zoom()
+        .scaleExtent([1, 10]) // limit the zoom levels
+        .translateExtent([[0, 0], [chartWidth, adjustedChartHeight]])
+        .on("zoom", zoomed);
+    
+    svg.call(zoom);
     
     const chartGroup = svg.append("g")
         .attr("transform", `translate(${margin.left}, 10)`);
@@ -205,36 +213,26 @@ function clicked(selectedSet) {
     
 
 
-svg.on("wheel", (event) => {
-    event.preventDefault(); 
+function zoomed(event) {
+    const transform = event.transform;
 
-    if (event.deltaY < 0) {
-        
-        const [mouseX] = d3.pointer(event);
-        const dateUnderMouse = xScale.invert(mouseX - margin.left);
-        const selectedYear = dateUnderMouse.getFullYear();
-        const zoomStart = new Date(selectedYear, 0, 1);
-        const zoomEnd = new Date(selectedYear + 1, 0, 0);
+    // Update xScale using transform
+    const newXScale = transform.rescaleX(xScale);
 
-        xScale.domain([zoomStart, zoomEnd]);
+    // Update axis with smooth transition
+    fixedXAxis.select(".x-axis")
+        .transition().duration(100)
+        .call(xAxis.scale(newXScale));
 
-        const t = d3.transition().duration(750);
-        fixedXAxis.transition(t).select(".x-axis").call(xAxis.scale(xScale));
+    // Update positions of squares with smooth transition
+    squares.transition().duration(100)
+    .attr("x", d => newXScale(d.releaseDate) - 2.5)
+    .style("opacity", d => {
+        const date = d.releaseDate;
+        return (date >= newXScale.domain()[0] && date <= newXScale.domain()[1]) ? 1 : 0;
+    });
 
-        squares.transition(t)
-            .style("opacity", d => (d.releaseDate >= zoomStart && d.releaseDate <= zoomEnd) ? 1 : 0)
-            .attr("x", d => xScale(d.releaseDate) - 2.5);
-    } else {
-        
-        xScale.domain([d3.min(uniqueSets, d => d.releaseDate), d3.max(uniqueSets, d => d.releaseDate)]);
+}
 
-        const t = d3.transition().duration(750);
-        fixedXAxis.transition(t).select("g.x-axis").call(xAxis.scale(xScale));
-
-        squares.transition(t)
-            .style("opacity", 1)
-            .attr("x", d => xScale(d.releaseDate) - 2.5);
-    }
-});
 
 }
