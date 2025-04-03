@@ -232,10 +232,6 @@ const chartYOffset = (svgHeight - chartHeight) / 2;
  const sankeyGroup = svg.append("g");
  
 
-  
-  
-  
- 
   const sankeyGenerator = d3.sankey()
     .nodeWidth(20)
     .nodePadding(10)
@@ -246,7 +242,24 @@ const chartYOffset = (svgHeight - chartHeight) / 2;
     links: links.map(d => Object.assign({}, d))
   });
   
- 
+
+const leftNodes = sankeyData.nodes.filter(n => n.x0 === d3.min(sankeyData.nodes, d => d.x0));
+
+
+const totalLeftHeight = d3.max(leftNodes, d => d.y1) - d3.min(leftNodes, d => d.y0);
+
+
+const offset = (chartHeight - totalLeftHeight) / 2;
+
+
+leftNodes.forEach(node => {
+  node.y0 += offset;
+  node.y1 += offset;
+});
+sankeyGenerator.update(sankeyData);
+
+
+
   if (!d3.select("#tooltip").node()) {
     d3.select("body")
       .append("div")

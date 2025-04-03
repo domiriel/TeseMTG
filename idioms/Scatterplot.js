@@ -6,6 +6,73 @@ const colorGroups = [
     { range: [22766, 28456], color: "#efefef" }  
 ];
 
+function generateLogTicks2(min, max) {
+    const ticks = [];
+
+    
+    const rangeSpan = Math.log10(max) - Math.log10(min);
+
+    
+    const bases = rangeSpan < 1
+        ? [1, 2, 3, 4, 5, 6, 7, 8, 9] 
+        : [1, 2, 3, 5];              
+
+    const minExp = Math.floor(Math.log10(min));
+    const maxExp = Math.ceil(Math.log10(max));
+
+    for (let e = minExp; e <= maxExp; e++) {
+        for (let base of bases) {
+            const value = base * Math.pow(10, e);
+            if (value >= min && value <= max) {
+                ticks.push(value);
+            }
+        }
+    }
+
+    return ticks;
+}
+
+function generateLogTicks(min, max) {
+    const ticks = [];
+    const logSpan = Math.log10(max) - Math.log10(min);
+
+    if (logSpan < 0.5) {
+        
+        const step = (max - min) / 10;
+        for (let i = min; i <= max; i += step) {
+            ticks.push(i);
+        }
+    } else if (logSpan < 1) {
+        
+        const bases = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+        const minExp = Math.floor(Math.log10(min));
+        const maxExp = Math.ceil(Math.log10(max));
+        for (let e = minExp; e <= maxExp; e++) {
+            for (let base of bases) {
+                const value = base * Math.pow(10, e);
+                if (value >= min && value <= max) {
+                    ticks.push(value);
+                }
+            }
+        }
+    } else {
+        
+        const bases = [1, 2, 3, 5];
+        const minExp = Math.floor(Math.log10(min));
+        const maxExp = Math.ceil(Math.log10(max));
+        for (let e = minExp; e <= maxExp; e++) {
+            for (let base of bases) {
+                const value = base * Math.pow(10, e);
+                if (value >= min && value <= max) {
+                    ticks.push(value);
+                }
+            }
+        }
+    }
+
+    return ticks;
+}
+
 
 
 function getGroupColor(rank) {
@@ -71,10 +138,7 @@ function createScatterPlot(data, containerId, isUpdate = false) {
     
 
     const filteredData = Array.from(cardMap.values());
-
- 
     const sampledData = filteredData.length > 1000 ? d3.shuffle(filteredData).slice(0, 30000) : filteredData;
-    console.log(`Scatterplot data size: ${sampledData.length}`);
 
   
     const container = d3.select(containerId).node();
@@ -109,10 +173,14 @@ function createScatterPlot(data, containerId, isUpdate = false) {
     const formatPrice = d3.format("$,.2f");
 
     
+    const initialTicks = generateLogTicks(xScale.domain()[0], xScale.domain()[1]);
+
     const xAxis = g.append("g")
         .attr("class", "x-axis")
         .attr("transform", `translate(0, ${chartHeight})`)
-        .call(d3.axisBottom(xScale).tickFormat(formatPrice));
+        .call(d3.axisBottom(xScale)
+            .tickValues(initialTicks)
+            .tickFormat(formatPrice));
 
     const yAxis = g.append("g")
         .attr("class", "y-axis")
@@ -224,10 +292,19 @@ const gClip = gDot.append("g").attr("class", "clip-group");
     function zoomed(event) {
         if (!isZooming) {
             requestAnimationFrame(() => {
-                
                 gClip.attr("transform", event.transform);
-                xAxis.call(d3.axisBottom(event.transform.rescaleX(xScale)).tickFormat(formatPrice));
-                yAxis.call(d3.axisLeft(event.transform.rescaleY(yScale)));
+
+                const newX = event.transform.rescaleX(xScale);
+                const newY = event.transform.rescaleY(yScale);
+
+                const zoomTicks = generateLogTicks(newX.domain()[0], newX.domain()[1]);
+
+                xAxis.call(d3.axisBottom(newX)
+                    .tickValues(zoomTicks)
+                    .tickFormat(formatPrice));
+
+                yAxis.call(d3.axisLeft(newY));
+
                 isZooming = false;
             });
             isZooming = true;

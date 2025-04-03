@@ -84,7 +84,7 @@ with open(output_file, 'w') as outfile:
         # Extract set name and set type
         card_details = {
             "name": card.get('name'),
-            "cmc": card.get('cmc', 0),
+            "cmc": float(card.get('cmc', 0)),
             "keywords": card.get('keywords', []),
             "color_identity": color_identity,
             "number_of_colours": len(color_identity),
