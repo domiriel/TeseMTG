@@ -8,20 +8,18 @@ body {
   grid-column-gap: 0px;
   grid-row-gap: 0px;
   width: 98.5vw;
-  height: 98vh;
+  height: 97vh;
   }
   
   .FilterPanel { 
     grid-area: 2 / 1 / 6 / 2; 
-    width: 100%; /* Ensure it has a width */
-    min-height: 30px; /* Ensure it has a height */
-
-    
-    background-image: url('images/FilterPanel.png');
-    
-    background-size: contain;  /* Adjust to fit */
-    background-repeat: no-repeat; /* Prevents tiling */
-    background-position: center;
+    width: 100%; 
+    height: 100%; 
+    display: flex;
+    align-items: top;
+    justify-content: flex-start;
+    overflow: visible;
+    position: relative;
     
 
   }

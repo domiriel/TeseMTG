@@ -7,5 +7,6 @@ function init() {
         createTimelineView(data, ".TimelineView");
         createScatterPlot(data, ".Scatterplot");
         createStackedLineChart(data, ".LineChart");
+        createFilterPanel(data, ".FilterPanel");  // Initial render
     });
   }

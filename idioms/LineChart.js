@@ -64,7 +64,7 @@ function createStackedLineChart(data, containerId, isUpdate = false) {
     const width = containerWidth - margin.left - margin.right;
     const chartHeight = containerHeight / 4; 
     const chartSpacing = 10;
-const height = (chartHeight + chartSpacing) * metrics.length - chartSpacing; 
+    const height = (chartHeight + chartSpacing) * metrics.length - chartSpacing; 
 
 
     if (isUpdate) {
@@ -129,11 +129,13 @@ const tooltip = d3.select("body")
 .append("div")
 .attr("class", "chart-tooltip")
 .style("position", "absolute")
-.style("background", "#fff")
-.style("border", "1px solid #ccc")
+.style("background", "rgba(0, 0, 0, 0.7)")
+.style("color", "white")
 .style("padding", "5px")
+.style("border-radius", "3px")
 .style("pointer-events", "none")
 .style("display", "none");
+
 
 
 g.selectAll("circle")
@@ -144,8 +146,8 @@ g.selectAll("circle")
     .attr("cy", d => y(d[metric.key]))
     .attr("r", 4)
     .attr("fill", metric.color)
-    .attr("data-year", d => d.year.getFullYear()) // NEW
-    .attr("class", "data-point") // ADD A CLASS FOR EASIER SELECTION
+    .attr("data-year", d => d.year.getFullYear()) 
+    .attr("class", "data-point") 
     .on("mouseover", (event, d) => {
         tooltip
             .style("display", "block")
@@ -154,7 +156,7 @@ g.selectAll("circle")
                 <strong>${metric.label}:</strong> ${d[metric.key].toFixed(2)}<br/>
             `);
 
-        // Highlight all circles with the same year
+        
         d3.selectAll(`circle.data-point[data-year='${d.year.getFullYear()}']`)
             
             .attr("stroke", "#000")
@@ -168,7 +170,7 @@ g.selectAll("circle")
     .on("mouseout", () => {
         tooltip.style("display", "none");
 
-        // Remove highlights
+       
         d3.selectAll("circle.data-point")
             .attr("r", 4)
             .attr("stroke", "none");
