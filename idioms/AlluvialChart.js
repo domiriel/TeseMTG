@@ -59,13 +59,15 @@ function getPriceRange(data) {
   };
 }
 
-function getMarginLeftOfFset(width) {
-  if(width > 1503.2000732421875) {
-    return 50;
-}
-  return 35;
-}
 
+function getMarginLeftOffset(screenWidth) {
+  const baseOffset = 35;
+  const maxOffset = 50;
+  const maxScreenWidth = 1600;
+
+  if (screenWidth < maxScreenWidth) return baseOffset;
+  if (screenWidth >= maxScreenWidth) return maxOffset;
+}
 
 function getNodeColor(price, minPrice, maxPrice) {
   let percentage = ((price - minPrice) / (maxPrice - minPrice)) * 100;
@@ -210,7 +212,7 @@ originalityCategories.forEach(orig => {
   const screenSize = d3.select("body").node().getBoundingClientRect();
 
   
- const marginLeftOffset = getMarginLeftOfFset(screenSize.width);
+ const marginLeftOffset = getMarginLeftOffset(screenSize.width);
 const chartHeight = svgHeight *0.75
 const chartWidth = svgWidth * 0.85
 
