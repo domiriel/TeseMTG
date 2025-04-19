@@ -1,3 +1,5 @@
+//Issues fixed: 4
+
 const nodeColorScale = d3.scaleSequential()
     .interpolator(d3.interpolateRgb("#F0F0F0", "#373737")); // Soft to dark green
 
@@ -407,5 +409,16 @@ dynamicLegendData.forEach((interval, i) => {
         .attr("fill", "#000")
         .style("font-size", "12px");
 });
+
+
+const zeroEntry = legend.append("g")
+    .attr("transform", `translate(0, ${numBins * (rectHeight + extraSpacing)})`);
+
+zeroEntry.append("text")
+    .attr("x", 30)
+    .attr("y", rectHeight - 16)
+    .text("$0.00")
+    .attr("fill", "#000")
+    .style("font-size", "12px");
 
 }

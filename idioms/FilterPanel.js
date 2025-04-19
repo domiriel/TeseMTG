@@ -1,3 +1,14 @@
+//Issues fixed: 18, 22
+
+
+function addToMap(map, key) {
+    if (!key) return;
+    const trimmed = key.trim();
+    if (!trimmed) return;
+    map.set(trimmed, (map.get(trimmed) || 0) + 1);
+}
+
+
 function createFilterPanel(data, containerId, isUpdate = false) {
     const container = d3.select(containerId)
         .style("position", "relative")
@@ -17,38 +28,44 @@ function createFilterPanel(data, containerId, isUpdate = false) {
         .style("box-sizing", "border-box");
 
     
-    const filters = {
-        "Keywords": new Set(),
-        "Supertypes": new Set(),
-        "Types": new Set(),
-        "Subtypes": new Set(),
-        "Set Types": new Set()
-    };
+        const filters = {
+            "Keywords": new Map(),
+            "Supertypes": new Map(),
+            "Types": new Map(),
+            "Subtypes": new Map(),
+            "Set Types": new Map()
+        };
+        
     
     const cardNameSet = new Set();
     
     data.forEach(card => {
         if (card.name) cardNameSet.add(card.name);
+    
         if (Array.isArray(card.keywords)) {
-            card.keywords.forEach(k => filters["Keywords"].add(k));
+            card.keywords.forEach(k => addToMap(filters["Keywords"], k));
         }
         if (card.supertype) {
-            card.supertype.split(/[\s/]+/).forEach(su => filters["Supertypes"].add(su.trim()));
+            card.supertype.split(/[\s/]+/).forEach(su => addToMap(filters["Supertypes"], su));
         }
         if (card.type) {
-            card.type.split(/[\s/]+/).forEach(t => filters["Types"].add(t.trim()));
+            card.type.split(/[\s/]+/).forEach(t => addToMap(filters["Types"], t));
         }
         if (card.subtype) {
-            card.subtype.split(/[\s/]+/).forEach(s => filters["Subtypes"].add(s.trim()));
+            card.subtype.split(/[\s/]+/).forEach(s => addToMap(filters["Subtypes"], s));
         }
-        
-        if (card.set_type) filters["Set Types"].add(card.set_type);
+        if (card.set_type) {
+            addToMap(filters["Set Types"], card.set_type);
+        }
     });
+    
     
 
     for (const key in filters) {
-        filters[key] = Array.from(filters[key]).sort();
+        filters[key] = Array.from(filters[key].entries())
+            .sort((a, b) => a[0].localeCompare(b[0])); // entries() returns [key, count]
     }
+    
 
     const uniqueCardNames = Array.from(cardNameSet).sort();
 
@@ -94,7 +111,7 @@ function createFilterPanel(data, containerId, isUpdate = false) {
             });
 
         
-        const content = section.append("div")
+            const content = section.append("div")
             .attr("class", "dropdown-content")
             .style("display", "none")
             .style("max-height", "160px")
@@ -104,29 +121,56 @@ function createFilterPanel(data, containerId, isUpdate = false) {
             .style("border-radius", "6px")
             .style("padding", "6px")
             .style("background", "#fff");
-
+        
+        
+        const searchBox = section.append("input")
+            .attr("type", "text")
+            .attr("placeholder", `Search ${category}...`)
+            .style("display", "none")
+            .style("width", "90%")
+            .style("padding", "4px")
+            .style("margin-top", "4px")
+            .style("font-size", "0.9em")
+            .on("input", function () {
+                const query = this.value.toLowerCase();
+                content.selectAll(".filter-option").style("display", d => 
+                    d.value.toLowerCase().includes(query) ? "flex" : "none"
+                );
+                
+            });
+        
+        
+        section.select(".dropdown-header")
+            .on("click", function () {
+                const isVisible = content.style("display") === "block";
+                content.style("display", isVisible ? "none" : "block");
+                searchBox.style("display", isVisible ? "none" : "block");
+            });
+        
         
         const option = content.selectAll("div")
-            .data(values)
+            .data(values.map(([value, count]) => ({ value, count })))
             .enter()
             .append("div")
+            .attr("class", "filter-option")
             .style("display", "flex")
             .style("justify-content", "space-between")
             .style("align-items", "center")
             .style("padding", "4px 2px")
             .style("font-size", "0.9em");
-
-        option.append("span")
-            .text(d => d)
+        
+            option.append("span")
+            .text(d => `${d.value}. ${d.count}`)
             .style("margin-right", "10px");
-
-        option.append("input")
+        
+            option.append("input")
             .attr("type", "checkbox")
-            .attr("value", d => d)
+            .attr("value", d => d.value)
             .on("change", (event, d) => {
                 const checked = event.target.checked;
-                console.log(`${checked ? "Selected" : "Unselected"}: ${d}`);
-                // TODO
+                console.log(`${checked ? "Selected" : "Unselected"}: ${d.value}`);
+                // TODO: Trigger filter logic
             });
+        
     });
 }

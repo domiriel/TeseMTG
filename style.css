@@ -36,7 +36,8 @@ body {
   .ISTLogo { grid-area: 1 / 1 / 2 / 2; 
     background-image: url('images/IST logo.jpg');
     
-    background-size: contain;  /* Adjust to fit */
+    background-size: 90%; /* Makes image 50% of the container */
+  /* Adjust to fit */
     background-repeat: no-repeat; /* Prevents tiling */
     background-position: center;
     width: 100%; /* Ensure it has a width */

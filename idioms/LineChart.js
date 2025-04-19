@@ -1,3 +1,5 @@
+//Issues fixed: 3, 6, 8, 13
+
 function createStackedLineChart(data, containerId, isUpdate = false) {
     
     data = data.filter(card => card.name !== "Gleemax");
@@ -57,7 +59,7 @@ function createStackedLineChart(data, containerId, isUpdate = false) {
     const container = d3.select(containerId);
 
     const containerBounds = container.node().getBoundingClientRect();
-    const containerWidth = containerBounds.width * 0.9;
+    const containerWidth = containerBounds.width;
     const containerHeight = containerBounds.height;
 
     const margin = { top: 20, right: 50, bottom: 30, left: 60 };
@@ -83,9 +85,15 @@ function createStackedLineChart(data, containerId, isUpdate = false) {
     const chartGroup = svg.append("g")
         .attr("transform", `translate(${margin.left}, ${margin.top})`);
 
-    const xScale = d3.scaleTime()
-        .domain(d3.extent(groupedData, d => d.year))
-        .range([0, width]);
+        const xExtent = d3.extent(groupedData, d => d.year);
+
+        
+        const xPadding = (xExtent[1] - xExtent[0]) / 50;
+        
+        const xScale = d3.scaleTime()
+            .domain([new Date(xExtent[0].getTime() - xPadding), new Date(xExtent[1].getTime() + xPadding)])
+            .range([0, width]);
+        
 
     const allYears = groupedData.map(d => d.year);
 
@@ -192,13 +200,22 @@ g.selectAll("circle")
             .attr("font-size", "12px");
 
        
-        if (i === metrics.length - 1) {
-            g.append("g")
-                .attr("transform", `translate(0, ${chartHeight})`)
-                .call(xAxis)
-                .selectAll("text")
-                .attr("transform", "rotate(-45)")
-                .style("text-anchor", "end");
-        }
+        
+    
+            const xAxisG = g.append("g")
+    .attr("transform", `translate(0, ${chartHeight})`)
+    .call(xAxis);
+
+xAxisG.selectAll("text")
+    .attr("transform", "rotate(-45)")
+    .style("text-anchor", "end");
+
+
+if (i !== metrics.length - 1) {
+    xAxisG.selectAll("text").remove();
+    xAxisG.selectAll("line").attr("stroke-opacity", 0.3); // optional: lighter tick marks
+}
+
+        
     });
 }

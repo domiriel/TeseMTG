@@ -1,3 +1,5 @@
+//Issues fixed: 1, 2, 4
+
 
 const colorScale = [
     { range: [0, 20], color: "#efefef" },
@@ -51,7 +53,7 @@ function createIcicleChart(data, containerId, isUpdate = false) {
       
         if (numColors >= 4) numColors = 4; 
 
-        let colorKey = colors.sort().join("-") || "";  
+        let colorKey = colors.sort().join("-") || "Colorless";  
         let colorGroupName = numColors === 0 ? "Colorless" : numColors === 4 ? "+4 Colors" : `${numColors} Colors`;
 
         let colorGroup = groupedData.find(c => c.name === colorGroupName);
@@ -139,8 +141,6 @@ function createIcicleChart(data, containerId, isUpdate = false) {
     const containerHeight = container.node().getBoundingClientRect().height;
     
 
-    
-    
     const chartWidth = containerWidth * 0.85;
     const chartHeight = containerHeight * 0.80;
     
@@ -181,11 +181,6 @@ chartGroup.append("clipPath")
     .attr("clip-path", "url(#chartClip)");    
 
 
-
-
-
-
-    
     const root = d3.hierarchy(hierarchy)
     .sum(d => d.value)
     .sort((a, b) => a.data.numColors - b.data.numColors);
@@ -198,20 +193,8 @@ const depth = Math.max(...root.descendants().map(d => d.depth)) ;
 const partition = d3.partition().size([chartWidth, chartHeight]);
 partition(root);
 
-
-
-
-
-
-
-
-
 const levelHeight = chartHeight / depth;
 
-
-
-
- 
     let xScale = d3.scaleLinear().domain([0, chartWidth]).range([0, chartWidth]);
     let yScale = d3.scaleLinear().domain([0, depth]).range([0, chartHeight]);
 
@@ -260,7 +243,7 @@ const levelHeight = chartHeight / depth;
     .attr("y", d => d.depth * levelHeight )
     .attr("dy", "0.35em")
     .attr("text-anchor", "middle")
-    .attr("fill", d => (d.depth % 2 === 0 ? "#000" : "#fff"))
+    .attr("fill", "#000")
     .attr("font-size", "15px")
     .attr("pointer-events", "none")
     .style("opacity", d => {
@@ -345,6 +328,18 @@ const levelHeight = chartHeight / depth;
             .attr("fill", "#000")
             .style("font-size", "12px");
     });
+
+    
+const zeroLabel = legend.append("g")
+.attr("transform", `translate(0, ${colorScale.length * rectHeight})`);
+
+
+zeroLabel.append("text")
+.attr("x", 30)
+.attr("y", 5)
+.text(`0%`)
+.attr("fill", "#000")
+.style("font-size", "12px");
 
     
 }

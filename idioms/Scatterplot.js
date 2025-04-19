@@ -1,3 +1,5 @@
+//Issues fixed: 13
+
 const colorGroups = [
     { range: [1, 5691], color: "#787878" },  
     { range: [5692, 11382], color:  "#a9a9a9" },
@@ -158,7 +160,7 @@ function createScatterPlot(data, containerId, isUpdate = false) {
         .attr("width", width)
         .attr("height", height);
 
-    const g = svg.append("g").attr("transform", `translate(${margin.left}, ${margin.top})`);
+    const g = svg.append("g").attr("transform", `translate(${margin.left - 8.5}, ${margin.top})`);
     
 
     

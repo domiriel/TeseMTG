@@ -1,3 +1,5 @@
+//Issues fixed: 3, 9
+
 function createTimelineView(data, containerId, isUpdate = false) {
     
     let setMap = new Map();
@@ -29,17 +31,17 @@ function createTimelineView(data, containerId, isUpdate = false) {
     const container = d3.select(containerId);
     const containerBounds = container.node().getBoundingClientRect();
 
-    const containerWidth = containerBounds.width * 0.9;
+    const containerWidth = containerBounds.width * 0.98;
     const containerHeight = containerBounds.height;
 
-    const chartWidth = containerWidth * 0.9;
+    const chartWidth = containerWidth * 0.90;
     const chartHeight = containerHeight;
 
     const margin = { 
         top: 50, 
         right: 50, 
         bottom: 10, 
-        left: 120 
+        left: 100 
     };
 
 
@@ -47,13 +49,13 @@ function createTimelineView(data, containerId, isUpdate = false) {
         d3.select(containerId).select(".chart-wrapper").remove();
     }
 
-    /*** STEP 3: CREATE A WRAPPER FOR SCROLLABLE CHART & FIXED AXIS ***/
+    
     const wrapper = container.append("div")
         .attr("class", "chart-wrapper")
         .style("position", "relative")
         .style("width", `${containerWidth}px`);
 
-    /*** STEP 4: CREATE FIXED YEAR AXIS ***/
+    
     const fixedXAxis = wrapper.append("svg")
         .attr("width", containerWidth)
         .attr("height", margin.top - 10)
@@ -84,7 +86,7 @@ function createTimelineView(data, containerId, isUpdate = false) {
         .style("height", `${containerHeight*0.75}px`) 
         .style("overflow-y", "scroll") 
         .style("overflow-x", "hidden") 
-        .style("border", "1px solid #ccc");
+        .style("border", "none");
 
     const lineSpacingFactor = 0.5;  
 
@@ -130,8 +132,8 @@ function createTimelineView(data, containerId, isUpdate = false) {
         .attr("class", "set-square")
         .attr("x", d => xScale(d.releaseDate) - 2.5)
         .attr("y", d => yScale(d.setType) - 5)
-        .attr("width", 10)
-        .attr("height", 10)
+        .attr("width", 8)
+        .attr("height", 8)
         .attr("fill", "#C3C3C3")
         .attr("stroke", "black")
         .on("mouseover", function (event, d) {
@@ -216,15 +218,15 @@ function clicked(selectedSet) {
 function zoomed(event) {
     const transform = event.transform;
 
-    // Update xScale using transform
+    
     const newXScale = transform.rescaleX(xScale);
 
-    // Update axis with smooth transition
+    
     fixedXAxis.select(".x-axis")
         .transition().duration(100)
         .call(xAxis.scale(newXScale));
 
-    // Update positions of squares with smooth transition
+    
     squares.transition().duration(100)
     .attr("x", d => newXScale(d.releaseDate) - 2.5)
     .style("opacity", d => {
