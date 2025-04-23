@@ -10,6 +10,8 @@ function addToMap(map, key) {
 
 
 function createFilterPanel(data, containerId, isUpdate = false) {
+    d3.select(containerId).selectAll("*").remove();
+
     const container = d3.select(containerId)
         .style("position", "relative")
         .style("width", "100%")
@@ -27,49 +29,47 @@ function createFilterPanel(data, containerId, isUpdate = false) {
         .style("padding", "10px")
         .style("box-sizing", "border-box");
 
-    
-        const filters = {
-            "Keywords": new Map(),
-            "Supertypes": new Map(),
-            "Types": new Map(),
-            "Subtypes": new Map(),
-            "Set Types": new Map()
-        };
-        
-    
+    const filters = {
+        "Keywords": new Map(),
+        "Supertypes": new Map(),
+        "Types": new Map(),
+        "Subtypes": new Map(),
+        "Set Types": new Map()
+    };
+
+    const selectedFilters = {
+        "Keywords": new Set(),
+        "Supertypes": new Set(),
+        "Types": new Set(),
+        "Subtypes": new Set(),
+        "Set Types": new Set()
+    };
+
     const cardNameSet = new Set();
-    
+
     data.forEach(card => {
         if (card.name) cardNameSet.add(card.name);
-    
-        if (Array.isArray(card.keywords)) {
-            card.keywords.forEach(k => addToMap(filters["Keywords"], k));
-        }
+        if (Array.isArray(card.keywords)) card.keywords.forEach(k => addToMap(filters["Keywords"], k));
         if (card.supertype) {
-            card.supertype.split(/[\s/]+/).forEach(su => addToMap(filters["Supertypes"], su));
+            if (card.supertype.toLowerCase() === "no supertype") {
+                addToMap(filters["Supertypes"], "No supertype");
+            } else {
+                card.supertype.split(/[\s/]+/).forEach(su => addToMap(filters["Supertypes"], su));
+            }
         }
-        if (card.type) {
-            card.type.split(/[\s/]+/).forEach(t => addToMap(filters["Types"], t));
-        }
-        if (card.subtype) {
-            card.subtype.split(/[\s/]+/).forEach(s => addToMap(filters["Subtypes"], s));
-        }
-        if (card.set_type) {
-            addToMap(filters["Set Types"], card.set_type);
-        }
+        
+        if (card.type) card.type.split(/[\s/]+/).forEach(t => addToMap(filters["Types"], t));
+        if (card.subtype) card.subtype.split(/[\s/]+/).forEach(s => addToMap(filters["Subtypes"], s));
+        if (card.set_type) addToMap(filters["Set Types"], card.set_type);
     });
-    
-    
 
     for (const key in filters) {
         filters[key] = Array.from(filters[key].entries())
-            .sort((a, b) => a[0].localeCompare(b[0])); // entries() returns [key, count]
+            .sort((a, b) => a[0].localeCompare(b[0]));
     }
-    
 
     const uniqueCardNames = Array.from(cardNameSet).sort();
 
-    
     const inputId = "searchInput_" + Math.random().toString(36).substring(2);
     wrapper.append("input")
         .attr("type", "text")
@@ -88,13 +88,11 @@ function createFilterPanel(data, containerId, isUpdate = false) {
         .append("option")
         .attr("value", d => d);
 
-    
     Object.entries(filters).forEach(([category, values]) => {
         const section = wrapper.append("div")
             .attr("class", "filter-section")
             .style("margin-top", "12px");
 
-        
         section.append("div")
             .attr("class", "dropdown-header")
             .text(category)
@@ -103,17 +101,14 @@ function createFilterPanel(data, containerId, isUpdate = false) {
             .style("border", "1px solid #ccc")
             .style("border-radius", "6px")
             .style("cursor", "pointer")
-            .style("font-weight", "bold")
-            .on("click", function () {
-                const content = d3.select(this.nextSibling);
-                const visible = content.style("display") === "block";
-                content.style("display", visible ? "none" : "block");
-            });
+            .style("font-weight", "bold");
 
-        
             const content = section.append("div")
             .attr("class", "dropdown-content")
             .style("display", "none")
+            .style("width", "100%")
+            .style("box-sizing", "border-box")
+            .style("overflow-x", "hidden")  
             .style("max-height", "160px")
             .style("overflow-y", "auto")
             .style("margin-top", "4px")
@@ -122,7 +117,7 @@ function createFilterPanel(data, containerId, isUpdate = false) {
             .style("padding", "6px")
             .style("background", "#fff");
         
-        
+
         const searchBox = section.append("input")
             .attr("type", "text")
             .attr("placeholder", `Search ${category}...`)
@@ -133,21 +128,25 @@ function createFilterPanel(data, containerId, isUpdate = false) {
             .style("font-size", "0.9em")
             .on("input", function () {
                 const query = this.value.toLowerCase();
-                content.selectAll(".filter-option").style("display", d => 
+                content.selectAll(".filter-option").style("display", d =>
                     d.value.toLowerCase().includes(query) ? "flex" : "none"
                 );
-                
             });
-        
-        
+
         section.select(".dropdown-header")
             .on("click", function () {
                 const isVisible = content.style("display") === "block";
                 content.style("display", isVisible ? "none" : "block");
                 searchBox.style("display", isVisible ? "none" : "block");
             });
-        
-        
+
+        const pillContainer = section.append("div")
+            .attr("class", "pill-container")
+            .style("margin-top", "6px")
+            .style("display", "flex")
+            .style("flex-wrap", "wrap")
+            .style("gap", "4px");
+
         const option = content.selectAll("div")
             .data(values.map(([value, count]) => ({ value, count })))
             .enter()
@@ -157,20 +156,57 @@ function createFilterPanel(data, containerId, isUpdate = false) {
             .style("justify-content", "space-between")
             .style("align-items", "center")
             .style("padding", "4px 2px")
-            .style("font-size", "0.9em");
-        
-            option.append("span")
-            .text(d => `${d.value}. ${d.count}`)
+            .style("font-size", "0.9em")
+            .style("width", "100%")  // lock width
+            .style("box-sizing", "border-box")
+            .style("overflow", "hidden");
+
+        option.append("span")
+            .text(d => `${d.value}. (${d.count})`)
             .style("margin-right", "10px");
-        
-            option.append("input")
+
+        option.append("input")
             .attr("type", "checkbox")
             .attr("value", d => d.value)
-            .on("change", (event, d) => {
+            .on("change", function (event, d) {
                 const checked = event.target.checked;
+                const set = selectedFilters[category];
+                if (checked) {
+                    set.add(d.value);
+                } else {
+                    set.delete(d.value);
+                }
+                updatePills(category);
                 console.log(`${checked ? "Selected" : "Unselected"}: ${d.value}`);
-                // TODO: Trigger filter logic
             });
-        
+
+        function updatePills(cat) {
+            const set = selectedFilters[cat];
+            const pills = pillContainer.selectAll(".pill")
+                .data(Array.from(set), d => d);
+
+            pills.enter()
+                .append("div")
+                .attr("class", "pill")
+                .style("background", "#007bff")
+                .style("color", "white")
+                .style("padding", "2px 8px")
+                .style("border-radius", "12px")
+                .style("font-size", "0.8em")
+                .text(d => d)
+                .append("span")
+                .style("margin-left", "6px")
+                .style("cursor", "pointer")
+                .text("✕")
+                .on("click", function (event, value) {
+                    selectedFilters[cat].delete(value);
+                    content.selectAll("input[type='checkbox']")
+                        .filter(d => d.value === value)
+                        .property("checked", false);
+                    updatePills(cat);
+                });
+
+            pills.exit().remove();
+        }
     });
 }

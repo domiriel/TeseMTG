@@ -9,4 +9,9 @@ function init() {
         createStackedLineChart(data, ".LineChart");
         createFilterPanel(data, ".FilterPanel");  // Initial render
     });
+    window.addEventListener("resize", () => {
+        init();
+    });
+    
+
   }

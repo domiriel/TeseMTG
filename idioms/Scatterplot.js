@@ -90,7 +90,8 @@ function getGroupColor(rank) {
 
 
 function createScatterPlot(data, containerId, isUpdate = false) {
-    
+    d3.select(containerId).selectAll("*").remove();
+
     const excludedSetTypes = new Set(["promo", "funny", "memorabilia", "alchemy", "token", "minigame"]); 
     const excludedSetNames = ["Arena", "Alchemy", "Digital"]; 
     const excludedTypes =  ["Emblem", "Token"]

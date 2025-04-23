@@ -1,6 +1,8 @@
 //Issues fixed: 3, 6, 8, 13
 
 function createStackedLineChart(data, containerId, isUpdate = false) {
+    d3.select(containerId).selectAll("*").remove();
+
     
     data = data.filter(card => card.name !== "Gleemax");
 
@@ -64,8 +66,8 @@ function createStackedLineChart(data, containerId, isUpdate = false) {
 
     const margin = { top: 20, right: 50, bottom: 30, left: 60 };
     const width = containerWidth - margin.left - margin.right;
-    const chartHeight = containerHeight / 4; 
-    const chartSpacing = 10;
+    const chartHeight = containerHeight*0.9 / 4; 
+    const chartSpacing = 20;
     const height = (chartHeight + chartSpacing) * metrics.length - chartSpacing; 
 
 
@@ -91,8 +93,8 @@ function createStackedLineChart(data, containerId, isUpdate = false) {
         const xPadding = (xExtent[1] - xExtent[0]) / 50;
         
         const xScale = d3.scaleTime()
-            .domain([new Date(xExtent[0].getTime() - xPadding), new Date(xExtent[1].getTime() + xPadding)])
-            .range([0, width]);
+            .domain([new Date(xExtent[0].getTime()), new Date(xExtent[1].getTime())])
+            .range([10, width]);
         
 
     const allYears = groupedData.map(d => d.year);
@@ -191,13 +193,13 @@ g.selectAll("circle")
 
        
         g.append("text")
-        .attr("transform", `rotate(-90)`)
-        .attr("x", -chartHeight / 2)
-        .attr("y", -margin.left + 30)
-        .attr("text-anchor", "middle")
-            .text(metric.label)
-            .attr("fill", "#000")
-            .attr("font-size", "12px");
+    .attr("x", 0)
+    .attr("y",-6)
+    .attr("text-anchor", "middle")
+    .text(metric.label)
+    .attr("fill", "#000")
+    .attr("font-size", "11px")
+    .style("font-weight", "bold");
 
        
         
@@ -208,7 +210,8 @@ g.selectAll("circle")
 
 xAxisG.selectAll("text")
     .attr("transform", "rotate(-45)")
-    .style("text-anchor", "end");
+    .style("text-anchor", "end")
+    .attr("font-size", "10px");
 
 
 if (i !== metrics.length - 1) {

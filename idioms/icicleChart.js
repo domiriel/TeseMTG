@@ -43,7 +43,8 @@ function rgbToHex(r, g, b) {
 }
 function createIcicleChart(data, containerId, isUpdate = false) {
     
-    
+    d3.select(containerId).selectAll("*").remove();
+
     let groupedData = [];
   
     data.forEach(card => {

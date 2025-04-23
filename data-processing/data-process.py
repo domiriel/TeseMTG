@@ -3,6 +3,32 @@ import json
 from decimal import Decimal
 from collections import Counter, defaultdict
 
+MTG_SUPERTYPES = {"Basic", "Legendary", "Ongoing", "Snow", "World", "Host", "Elite"}
+MTG_CARD_TYPES = {
+    "Artifact", "Conspiracy", "Creature","Dungeon", "Emblem", "Enchantment","Hero", "Instant","Kindred", "Land", "Phenomenon",
+    "Plane", "Planeswalker", "Scheme", "Sorcery", "Vanguard", "Battle"
+}
+
+def parse_type_line(type_line):
+    # Handle double-faced/split/meld cards — we only parse the front face
+    front_type_line = type_line.split("//")[0].strip()
+
+    # Split into subtypes (if any)
+    if '—' in front_type_line:
+        type_part, subtype = map(str.strip, front_type_line.split('—', 1))
+    else:
+        type_part, subtype = front_type_line.strip(), ''
+
+    words = type_part.split()
+    supertypes = [w for w in words if w in MTG_SUPERTYPES]
+    types = [w for w in words if w in MTG_CARD_TYPES]
+
+    return {
+        "supertype": ' '.join(supertypes) if supertypes else '',
+        "type": ' '.join(types) if types else '',
+        "subtype": subtype
+    }
+
 # Custom encoder to handle Decimal types
 class DecimalEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -52,6 +78,10 @@ color_count = Counter()
 color_identity_count = Counter()
 rarity_count = Counter()
 originality_count = Counter()
+supertype_count = Counter()
+type_count = Counter()
+subtype_count = Counter()
+
 
 # Process dataset
 with open(output_file, 'w') as outfile:
@@ -62,16 +92,13 @@ with open(output_file, 'w') as outfile:
         type_line = card.get('type_line', '')
 
         # Extract supertype, type, and subtype
-        supertype, type_, subtype = '', '', ''
-        if '—' in type_line:
-            parts = type_line.split('—')
-            type_part = parts[0].strip()
-            subtype = parts[1].strip() if len(parts) > 1 else ''
-            type_parts = type_part.split(' ')
-            supertype = ' '.join(type_parts[:-1]) if len(type_parts) > 1 else ''
-            type_ = type_parts[-1]
-        else:
-            type_ = type_line
+        parsed = parse_type_line(type_line)
+        supertype = parsed['supertype'] if parsed['supertype'] else 'Basic'
+        type_ = parsed['type']
+        subtype = parsed['subtype']
+        supertype_count[supertype] += 1
+        type_count[type_] += 1
+        subtype_count[subtype] += 1
 
         # Update counters
         color_count[len(color_identity)] += 1
@@ -110,9 +137,17 @@ with open(output_file, 'w') as outfile:
 
     outfile.write('\n]')  # End of JSON array
 
-# Display statistics
-print("Color Count:", dict(color_count))
-print("Color Identity Count:", dict(color_identity_count))
-print("Rarity Count:", dict(rarity_count))
-print("Originality Count:", dict(originality_count))
+total_cards = len(all_cards)
+supertype_total = sum(supertype_count.values())
+type_total = sum(type_count.values())
+subtype_total = sum(subtype_count.values())
+
+
+print("Supertype Count:", dict(supertype_count))
+print("Type Count:", dict(type_count))
+print(f"Total cards processed: {total_cards}")
+print(f"Sum of all supertypes counted: {supertype_total}")
+print(f"Sum of all types counted: {type_total}")
+print(f"Sum of all subtypes counted: {subtype_total}")
 print(f"All card details have been saved to '{output_file}'")
+

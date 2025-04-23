@@ -1,7 +1,8 @@
 //Issues fixed: 3, 9
 
 function createTimelineView(data, containerId, isUpdate = false) {
-    
+    d3.select(containerId).selectAll("*").remove();
+
     let setMap = new Map();
 
     data.forEach(card => {

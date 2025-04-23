@@ -77,7 +77,8 @@ function getNodeColor(price, minPrice, maxPrice) {
 }
 
 function createAlluvialChart(data, containerId, isUpdate = false) {
-  
+  d3.select(containerId).selectAll("*").remove();
+
  
   const originalitySet = new Set();
   const raritySet = new Set();
