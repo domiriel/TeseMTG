@@ -290,12 +290,12 @@ sankeyGenerator.update(sankeyData);
     max: d3.max(allPrices)
 };
  
-  sankeyGroup.append("g")
-    .attr("class", "links")
-    .selectAll("path")
-    .data(sankeyData.links)
-    .enter()
-    .append("path")
+      sankeyGroup.append("g")
+      .attr("class", "links")
+      .selectAll("path")
+      .data(sankeyData.links.sort((a, b) => b.width - a.width)) 
+      .enter()
+      .append("path")
       .attr("d", d3.sankeyLinkHorizontal())
       .attr("stroke", d => getNodeColor(d.avgPrice, sharedPriceRange.min, sharedPriceRange.max))
       .attr("stroke-opacity", 0.5)
@@ -391,6 +391,22 @@ const extraSpacing = 0;
 const legend = svg.append("g")
     .attr("class", "legend")
     .attr("transform", `translate(${legendX}, ${legendY})`);
+
+    legend.append("text")
+    .attr("x", 0)
+    .attr("y", 120)
+    .text("Avg Price")
+    .attr("fill", "#000")
+    .style("font-size", "12px")
+    .style("font-weight", "bold");
+
+legend.append("text")
+    .attr("x", 0)
+    .attr("y", 135)
+    .text("(USD)")
+    .attr("fill", "#000")
+    .style("font-size", "12px")
+    .style("font-weight", "bold");
 
 
 dynamicLegendData.forEach((interval, i) => {

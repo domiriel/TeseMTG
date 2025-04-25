@@ -175,40 +175,53 @@ function createScatterPlot(data, containerId, isUpdate = false) {
 
     const formatPrice = d3.format("$,.2f");
 
-    
-    const initialTicks = generateLogTicks(xScale.domain()[0], xScale.domain()[1]);
+
+    const numTicks = 12; 
+
+const logMin = Math.log10(xScale.domain()[0]);
+const logMax = Math.log10(xScale.domain()[1]);
+
+const initialTicks = d3.range(numTicks).map(i => {
+    const t = i / (numTicks - 1);
+    return Math.pow(10, logMin + t * (logMax - logMin));
+});
+
 
     const xAxis = g.append("g")
         .attr("class", "x-axis")
         .attr("transform", `translate(0, ${chartHeight})`)
         .call(d3.axisBottom(xScale)
-            .tickValues(initialTicks)
+        .tickValues(initialTicks.slice(0, numTicks))
             .tickFormat(formatPrice));
 
     const yAxis = g.append("g")
         .attr("class", "y-axis")
-        .call(d3.axisLeft(yScale));
+        .call(d3.axisLeft(yScale).ticks(numTicks));
 
     
-    svg.append("text")
-        .attr("class", "x-axis-label")
-        .attr("x", chartWidth / 2)
-        .attr("y", chartHeight + margin.bottom +5)
-        .attr("text-anchor", "middle")
-        .style("font-size", "14px")
-        .style("font-weight", "bold")
-        .text("Price (USD)");
+    
 
     
-    svg.append("text")
-        .attr("class", "y-axis-label")
-        .attr("x", -chartHeight / 2)
-        .attr("y", 40)
-        .attr("transform", "rotate(-90)")
-        .attr("text-anchor", "middle")
-        .style("font-size", "14px")
-        .style("font-weight", "bold")
-        .text("Complexity");
+svg.append("text")
+.attr("class", "x-axis-label")
+.attr("x", margin.left + chartWidth / 2)
+.attr("y", height - 15)
+.attr("text-anchor", "middle")
+.style("font-size", "14px")
+.style("font-weight", "bold")
+.text("Price (USD)");
+
+
+svg.append("text")
+.attr("class", "y-axis-label")
+.attr("x", -margin.top - chartHeight / 2)
+.attr("y", 30)
+.attr("transform", "rotate(-90)")
+.attr("text-anchor", "middle")
+.style("font-size", "14px")
+.style("font-weight", "bold")
+.text("Complexity");
+
 
  
 svg.append("defs")
@@ -300,13 +313,22 @@ const gClip = gDot.append("g").attr("class", "clip-group");
                 const newX = event.transform.rescaleX(xScale);
                 const newY = event.transform.rescaleY(yScale);
 
-                const zoomTicks = generateLogTicks(newX.domain()[0], newX.domain()[1]);
+                const numTicks = 12;
 
-                xAxis.call(d3.axisBottom(newX)
-                    .tickValues(zoomTicks)
-                    .tickFormat(formatPrice));
+                const zoomLogMin = Math.log10(newX.domain()[0]);
+                const zoomLogMax = Math.log10(newX.domain()[1]);
 
-                yAxis.call(d3.axisLeft(newY));
+                const zoomTicks = d3.range(numTicks).map(i => {
+                const t = i / (numTicks - 1);
+                return Math.pow(10, zoomLogMin + t * (zoomLogMax - zoomLogMin));
+});
+
+xAxis.call(d3.axisBottom(newX)
+    .tickValues(zoomTicks)
+    .tickFormat(formatPrice));
+
+
+                yAxis.call(d3.axisLeft(newY).ticks(numTicks));
 
                 isZooming = false;
             });

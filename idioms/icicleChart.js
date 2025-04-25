@@ -312,6 +312,23 @@ const levelHeight = chartHeight / depth;
     const rectHeight = 20;
     const extraSpacing = 0
 
+    legend.append("text")
+    .attr("x", 0)
+    .attr("y", 120)
+    .text("Original")
+    .attr("fill", "#000")
+    .style("font-size", "12px")
+    .style("font-weight", "bold");
+
+legend.append("text")
+    .attr("x", 0)
+    .attr("y", 135)
+    .text("Cards (%)")
+    .attr("fill", "#000")
+    .style("font-size", "12px")
+    .style("font-weight", "bold");
+
+
     colorScale.slice().reverse().forEach((interval, i) => {
         const legendEntry = legend.append("g")
             .attr("transform", `translate(0, ${i * (rectHeight + extraSpacing)})`);
