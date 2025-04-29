@@ -34,7 +34,9 @@ function createFilterPanel(data, containerId, isUpdate = false) {
         "Supertypes": new Map(),
         "Types": new Map(),
         "Subtypes": new Map(),
-        "Set Types": new Map()
+        "Set Types": new Map(),
+        "Originality": new Map(),
+        "Rarity": new Map()
     };
 
     const selectedFilters = {
@@ -42,7 +44,9 @@ function createFilterPanel(data, containerId, isUpdate = false) {
         "Supertypes": new Set(),
         "Types": new Set(),
         "Subtypes": new Set(),
-        "Set Types": new Set()
+        "Set Types": new Set(),
+        "Originality": new Set(),
+        "Rarity": new Set()
     };
 
     const cardNameSet = new Set();
@@ -61,6 +65,9 @@ function createFilterPanel(data, containerId, isUpdate = false) {
         if (card.type) card.type.split(/[\s/]+/).forEach(t => addToMap(filters["Types"], t));
         if (card.subtype) card.subtype.split(/[\s/]+/).forEach(s => addToMap(filters["Subtypes"], s));
         if (card.set_type) addToMap(filters["Set Types"], card.set_type);
+        if (card.originality) addToMap(filters["Originality"], card.originality);
+        if (card.rarity) addToMap(filters["Rarity"], card.rarity);
+
     });
 
     for (const key in filters) {
@@ -78,7 +85,7 @@ function createFilterPanel(data, containerId, isUpdate = false) {
         .style("width", "90%")
         .style("margin-bottom", "12px")
         .style("padding", "6px")
-        .style("font-size", "1em");
+        .style("font-size", "16px");
 
     wrapper.append("datalist")
         .attr("id", inputId)
@@ -91,7 +98,8 @@ function createFilterPanel(data, containerId, isUpdate = false) {
     Object.entries(filters).forEach(([category, values]) => {
         const section = wrapper.append("div")
             .attr("class", "filter-section")
-            .style("margin-top", "12px");
+            .style("margin-top", "12px")
+            .style("width", "100%"); // <- ensure this is here;
 
         section.append("div")
             .attr("class", "dropdown-header")
@@ -117,6 +125,16 @@ function createFilterPanel(data, containerId, isUpdate = false) {
             .style("padding", "6px")
             .style("background", "#fff");
         
+            setTimeout(() => {
+                const sectionNode = section.node();
+                const contentNode = content.node();
+            
+                if (sectionNode && contentNode) {
+                    const width = sectionNode.getBoundingClientRect().width;
+                    content.style("width", `${width-2}px`);
+                }
+            }, 0); // wait for render
+            
 
         const searchBox = section.append("input")
             .attr("type", "text")
@@ -125,7 +143,7 @@ function createFilterPanel(data, containerId, isUpdate = false) {
             .style("width", "90%")
             .style("padding", "4px")
             .style("margin-top", "4px")
-            .style("font-size", "0.9em")
+            .style("font-size", "14px")
             .on("input", function () {
                 const query = this.value.toLowerCase();
                 content.selectAll(".filter-option").style("display", d =>
@@ -156,7 +174,7 @@ function createFilterPanel(data, containerId, isUpdate = false) {
             .style("justify-content", "space-between")
             .style("align-items", "center")
             .style("padding", "4px 2px")
-            .style("font-size", "0.9em")
+            .style("font-size", "14px")
             .style("width", "100%")  // lock width
             .style("box-sizing", "border-box")
             .style("overflow", "hidden");
@@ -192,7 +210,7 @@ function createFilterPanel(data, containerId, isUpdate = false) {
                 .style("color", "white")
                 .style("padding", "2px 8px")
                 .style("border-radius", "12px")
-                .style("font-size", "0.8em")
+                .style("font-size", "12px")
                 .text(d => d)
                 .append("span")
                 .style("margin-left", "6px")

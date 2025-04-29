@@ -173,10 +173,23 @@ g.selectAll("circle")
             .attr("stroke-width", 1.5);
     })
     .on("mousemove", (event) => {
+        const tooltipNode = tooltip.node();
+        const tooltipWidth = tooltipNode.offsetWidth;
+        const pageX = event.pageX;
+        const pageY = event.pageY;
+        const padding = 10;
+    
+        let left = pageX + padding;
+    
+        if (left + tooltipWidth > window.innerWidth) {
+            left = pageX - tooltipWidth - padding;
+        }
+    
         tooltip
-            .style("left", (event.pageX + 10) + "px")
-            .style("top", (event.pageY - 20) + "px");
+            .style("left", left + "px")
+            .style("top", (pageY - 20) + "px");
     })
+    
     .on("mouseout", () => {
         tooltip.style("display", "none");
 

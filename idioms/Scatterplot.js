@@ -292,15 +292,36 @@ const gClip = gDot.append("g").attr("class", "clip-group");
                 `);
         })
         .on("mousemove", function (event) {
-            tooltip.style("left", (event.pageX + 10) + "px")
-                .style("top", (event.pageY + 10) + "px");
+            const tooltipNode = tooltip.node();
+            const tooltipWidth = tooltipNode.offsetWidth;
+            const pageX = event.pageX;
+            const pageY = event.pageY;
+            const padding = 10;
+        
+            let left = pageX + padding;
+        
+            // If it would overflow, position it to the left of the mouse
+            if (left + tooltipWidth > window.innerWidth) {
+                left = pageX - tooltipWidth - padding;
+            }
+        
+            tooltip.style("left", left + "px")
+                   .style("top", (pageY + padding) + "px");
         })
+        
         .on("mouseout", function () {
             tooltip.style("display", "none");
         });
-    const zoom = d3.zoom()
-        .scaleExtent([0.5, 28])
+        const zoom = d3.zoom()
+        .scaleExtent([1, 24])
+        .constrain(function(transform, extent, translateExtent) {
+            // Clamp translation to only allow panning within the chart
+            const x = Math.max(Math.min(transform.x, 0), -chartWidth * (transform.k - 1));
+            const y = Math.max(Math.min(transform.y, 0), -chartHeight * (transform.k - 1));
+            return d3.zoomIdentity.translate(x, y).scale(transform.k);
+        })
         .on("zoom", zoomed);
+    
 
     svg.call(zoom);
 

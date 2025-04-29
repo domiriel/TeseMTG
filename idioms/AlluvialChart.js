@@ -219,7 +219,7 @@ originalityCategories.forEach(orig => {
 const chartHeight = svgHeight *0.75
 const chartWidth = svgWidth * 0.85
 
-const margin = { top: 20, right: 50, bottom: 20, left: (svgWidth - chartWidth)/2 - marginLeftOffset }; 
+const margin = { top: 20, right: 60, bottom: 20, left: (svgWidth - chartWidth)/2 - marginLeftOffset }; 
 
 
 const chartXOffset = (svgWidth - chartWidth) / 2 - 40; 
@@ -239,7 +239,7 @@ const chartYOffset = (svgHeight - chartHeight) / 2;
 
   const sankeyGenerator = d3.sankey()
     .nodeWidth(20)
-    .nodePadding(10)
+    .nodePadding(20)
     .extent([[0, 0], [chartWidth, chartHeight]]);
   
   const sankeyData = sankeyGenerator({
@@ -358,14 +358,25 @@ sankeyGenerator.update(sankeyData);
     });
   
   
-  node.append("text")
-    .attr("x", d => d.x0 < width / 2 ? d.x1 + 6 : d.x0 - 6)
-    .attr("y", d => (d.y0 + d.y1) / 2)
-    .attr("dy", "0.35em")
-    .attr("text-anchor", d => d.x0 < width / 2 ? "start" : "end")
+    node.append("text")
+    .attr("x", d => {
+        const centerX = (d.x0 + d.x1) / 2;
+        const isLeftSide = centerX < width / 2;
+        return isLeftSide ? d.x0 : d.x1;
+    })
+    .attr("y", d => d.y0 - 5) // Above the node
+    .attr("dy", "0em")
+    .attr("text-anchor", d => {
+        const centerX = (d.x0 + d.x1) / 2;
+        const isLeftSide = centerX < width / 2;
+        return isLeftSide ? "start" : "end"; 
+    })
     .text(d => d.name)
     .attr("font-size", "12px")
-    .attr("fill", "#000");
+    .attr("fill", "#000")
+    .style("pointer-events", "none");
+
+
 
 
 
