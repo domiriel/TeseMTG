@@ -99,7 +99,7 @@ function createTimelineView(data, containerId, isUpdate = false) {
     
 
     const zoom = d3.zoom()
-        .scaleExtent([1, 10]) // limit the zoom levels
+        .scaleExtent([1, 10]) 
         .translateExtent([[0, 0], [chartWidth, adjustedChartHeight]])
         .on("zoom", zoomed);
     

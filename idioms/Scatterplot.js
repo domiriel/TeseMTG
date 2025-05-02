@@ -92,175 +92,137 @@ function getGroupColor(rank) {
 function createScatterPlot(data, containerId, isUpdate = false) {
     d3.select(containerId).selectAll("*").remove();
 
-    const excludedSetTypes = new Set(["promo", "funny", "memorabilia", "alchemy", "token", "minigame"]); 
-    const excludedSetNames = ["Arena", "Alchemy", "Digital"]; 
-    const excludedTypes =  ["Emblem", "Token"]
-    data = data.filter(card => 
-        !excludedSetTypes.has(card.set_type) && 
+    const excludedSetTypes = new Set(["promo", "funny", "memorabilia", "alchemy", "token", "minigame"]);
+    const excludedSetNames = ["Arena", "Alchemy", "Digital"];
+    const excludedTypes = ["Emblem", "Token"];
+    data = data.filter(card =>
+        !excludedSetTypes.has(card.set_type) &&
         !excludedSetNames.some(keyword => card.set_name && card.set_name.includes(keyword)) &&
         !excludedTypes.includes(card.type) &&
-
         !card.digital
-        
     );
 
     const cardMap = new Map();
 
     data.forEach(card => {
-        let price = isNaN(card.price_usd) || card.price_usd === null ? 0 : card.price_usd; 
-        
+        const price = isNaN(card.price_usd) || card.price_usd === null ? 0 : card.price_usd;
         if (!isNaN(card.complexity)) {
             if (!cardMap.has(card.name)) {
-                cardMap.set(card.name, {
-                    ...card, 
-                    prices: [],  
-                    avg_price: 0 
-                });
+                cardMap.set(card.name, { ...card, prices: [], avg_price: 0 });
             }
             cardMap.get(card.name).prices.push(price);
         }
-        /*if (card.name === "Zenkidar") {
-            console.log(`Price Type`, typeof(cardMap.get(card.name).prices[0]));
-            console.log(`Card Info Before Calcs:`, cardMap.get(card.name));
-        }*/
     });
 
-  
     cardMap.forEach(card => {
-        if (card.prices.length > 0) {
-            const total = card.prices.reduce((sum, p) => sum + p, 0);
-            card.avg_price = total / card.prices.length;
-        } else {
-            card.avg_price = 0; 
-        }
-        /*if (card.name === "Willow Elf") {
-            console.log(`Card Info After Calcs:`, cardMap.get(card.name));
-        }*/
+        card.avg_price = card.prices.length > 0
+            ? card.prices.reduce((sum, p) => sum + p, 0) / card.prices.length
+            : 0;
     });
-
-    
 
     const filteredData = Array.from(cardMap.values());
     const sampledData = filteredData.length > 1000 ? d3.shuffle(filteredData).slice(0, 30000) : filteredData;
 
-  
     const container = d3.select(containerId).node();
     const { width, height } = container.getBoundingClientRect();
     const margin = { top: 20, right: 30, bottom: 50, left: 70 };
     const chartWidth = width - margin.left - margin.right;
     const chartHeight = height - margin.top - margin.bottom;
 
-    
-    if (isUpdate) {
-        d3.select(containerId).select("svg").remove();
-    }
-
-  
     const svg = d3.select(containerId)
         .append("svg")
         .attr("width", width)
         .attr("height", height);
 
     const g = svg.append("g").attr("transform", `translate(${margin.left - 8.5}, ${margin.top})`);
-    
 
-    
-    const xScale = d3.scaleLog()
-        .domain([Math.max(0.01, d3.min(filteredData, d => d.avg_price || 0.01)), d3.max(filteredData, d => d.avg_price)])
+    const originalXScale = d3.scaleLog()
+        .domain([
+            Math.max(0.01, d3.min(sampledData, d => d.avg_price || 0.01)),
+            d3.max(sampledData, d => d.avg_price)
+        ])
         .range([0, chartWidth]);
 
-    const yScale = d3.scaleLinear()
-        .domain([d3.min(filteredData, d => d.complexity), d3.max(filteredData, d => d.complexity)])
+    const originalYScale = d3.scaleLinear()
+        .domain([
+            d3.min(sampledData, d => d.complexity),
+            d3.max(sampledData, d => d.complexity)
+        ])
         .range([chartHeight, 0]);
+
+    const xScale = originalXScale.copy();
+    const yScale = originalYScale.copy();
 
     const formatPrice = d3.format("$,.2f");
 
-
-    const numTicks = 12; 
-
-const logMin = Math.log10(xScale.domain()[0]);
-const logMax = Math.log10(xScale.domain()[1]);
-
-const initialTicks = d3.range(numTicks).map(i => {
-    const t = i / (numTicks - 1);
-    return Math.pow(10, logMin + t * (logMax - logMin));
-});
-
-
-    const xAxis = g.append("g")
+    const xAxisG = g.append("g")
         .attr("class", "x-axis")
-        .attr("transform", `translate(0, ${chartHeight})`)
-        .call(d3.axisBottom(xScale)
-        .tickValues(initialTicks.slice(0, numTicks))
-            .tickFormat(formatPrice));
+        .attr("transform", `translate(0, ${chartHeight})`);
 
-    const yAxis = g.append("g")
-        .attr("class", "y-axis")
-        .call(d3.axisLeft(yScale).ticks(numTicks));
+    const yAxisG = g.append("g")
+        .attr("class", "y-axis");
 
-    
-    
+    const numTicks = 12;
+    function updateAxes() {
+        const logMin = Math.log10(xScale.domain()[0]);
+        const logMax = Math.log10(xScale.domain()[1]);
+        const ticks = d3.range(numTicks).map(i => Math.pow(10, logMin + i / (numTicks - 1) * (logMax - logMin)));
 
-    
-svg.append("text")
-.attr("class", "x-axis-label")
-.attr("x", margin.left + chartWidth / 2)
-.attr("y", height - 15)
-.attr("text-anchor", "middle")
-.style("font-size", "14px")
-.style("font-weight", "bold")
-.text("Price (USD)");
+        xAxisG.call(d3.axisBottom(xScale).tickValues(ticks).tickFormat(formatPrice));
+        yAxisG.call(d3.axisLeft(yScale).ticks(numTicks));
+    }
 
+    updateAxes();
 
-svg.append("text")
-.attr("class", "y-axis-label")
-.attr("x", -margin.top - chartHeight / 2)
-.attr("y", 30)
-.attr("transform", "rotate(-90)")
-.attr("text-anchor", "middle")
-.style("font-size", "14px")
-.style("font-weight", "bold")
-.text("Complexity");
+    svg.append("text")
+        .attr("class", "x-axis-label")
+        .attr("x", margin.left + chartWidth / 2)
+        .attr("y", height - 15)
+        .attr("text-anchor", "middle")
+        .style("font-size", "14px")
+        .style("font-weight", "bold")
+        .text("Price (USD)");
 
+    svg.append("text")
+        .attr("class", "y-axis-label")
+        .attr("x", -margin.top - chartHeight / 2)
+        .attr("y", 30)
+        .attr("transform", "rotate(-90)")
+        .attr("text-anchor", "middle")
+        .style("font-size", "14px")
+        .style("font-weight", "bold")
+        .text("Complexity");
 
- 
-svg.append("defs")
-    .append("clipPath")
-    .attr("id", "chart-clip")
-    .append("rect")
-    .attr("x", 0)
-    .attr("y", 0)
-    .attr("width", chartWidth)
-    .attr("height", chartHeight);
+    svg.append("defs")
+        .append("clipPath")
+        .attr("id", "chart-clip")
+        .append("rect")
+        .attr("x", 0)
+        .attr("y", 0)
+        .attr("width", chartWidth)
+        .attr("height", chartHeight);
 
+    const gDot = g.append("g")
+        .attr("class", "dots")
+        .attr("clip-path", "url(#chart-clip)");
 
-const gDot = g.append("g")
-    .attr("class", "dots")
-    .attr("clip-path", "url(#chart-clip)");  
+    const gClip = gDot.append("g").attr("class", "clip-group");
 
+    const dots = gClip.selectAll("circle")
+        .data(sampledData, d => d.name)
+        .join("circle")
+        .attr("r",2.5)
+        .attr("fill", d => getGroupColor(d.edhrec_rank || 0))
+        .attr("stroke", "none")
+        .attr("opacity", 0.8);
 
-const gClip = gDot.append("g").attr("class", "clip-group");
+    function updatePointPositions() {
+        dots.attr("cx", d => xScale(d.avg_price))
+            .attr("cy", d => yScale(d.complexity));
+    }
 
-   
-    gClip.selectAll("circle")
-        .data(filteredData, d => d.name)
-        .join(
-            enter => enter.append("circle")
-                .attr("r", 1)
-                .attr("fill", d => getGroupColor(d.edhrec_rank || 0))
-                .attr("stroke", "none")
-                .attr("opacity", 0.8)
-                .attr("cx", d => {
-                    const x = xScale(d.avg_price);
-                    //if (isNaN(x)) console.log(`NaN cx for card:`, d.name, `avg_price:`, d.avg_price);
-                    return x;
-                })
-                .attr("cy", d => yScale(d.complexity)),
-            update => update,
-            exit => exit.remove()
-        );
+    updatePointPositions();
 
-   
     if (!d3.select("#scatter-tooltip").node()) {
         d3.select("body")
             .append("div")
@@ -277,88 +239,77 @@ const gClip = gDot.append("g").attr("class", "clip-group");
 
     const tooltip = d3.select("#scatter-tooltip");
 
-    gDot.selectAll("circle")
-        .on("mouseover", function (event, d) {
-            tooltip.style("display", "block")
-                .html(`
-                    <strong>${d.name}</strong><br>
-                    Complexity: ${d.complexity}<br>
-                    EDH Rank: ${d.edhrec_rank || "N/A"}<br>
-                    Supertypes: ${d.supertype}<br>
-                    Type: ${d.type}<br>
-                    Subtype: ${d.subtype}<br>
-                    Colors: ${d.color_identity}<br>
-                    Avg Price: $${d.avg_price.toFixed(2)}<br>
-                `);
-        })
+    dots.on("mouseover", function (event, d) {
+        tooltip.style("display", "block")
+            .html(`
+                <strong>${d.name}</strong><br>
+                Complexity: ${d.complexity}<br>
+                EDH Rank: ${d.edhrec_rank || "N/A"}<br>
+                Supertypes: ${d.supertype}<br>
+                Type: ${d.type}<br>
+                Subtype: ${d.subtype}<br>
+                Colors: ${d.color_identity}<br>
+                Avg Price: $${d.avg_price.toFixed(2)}<br>
+            `);
+    })
         .on("mousemove", function (event) {
             const tooltipNode = tooltip.node();
             const tooltipWidth = tooltipNode.offsetWidth;
             const pageX = event.pageX;
             const pageY = event.pageY;
             const padding = 10;
-        
+
             let left = pageX + padding;
-        
-            // If it would overflow, position it to the left of the mouse
             if (left + tooltipWidth > window.innerWidth) {
                 left = pageX - tooltipWidth - padding;
             }
-        
+
             tooltip.style("left", left + "px")
-                   .style("top", (pageY + padding) + "px");
+                .style("top", (pageY + padding) + "px");
         })
-        
         .on("mouseout", function () {
             tooltip.style("display", "none");
         });
-        const zoom = d3.zoom()
-        .scaleExtent([1, 24])
-        .constrain(function(transform, extent, translateExtent) {
-            // Clamp translation to only allow panning within the chart
-            const x = Math.max(Math.min(transform.x, 0), -chartWidth * (transform.k - 1));
-            const y = Math.max(Math.min(transform.y, 0), -chartHeight * (transform.k - 1));
-            return d3.zoomIdentity.translate(x, y).scale(transform.k);
-        })
-        .on("zoom", zoomed);
-    
+        let zoomTimeout = null;
+const ZOOM_DELAY = 60; // ms — feel free to tweak (e.g., 40–100)
+
+const zoom = d3.zoom()
+    .scaleExtent([1, 24])
+    .on("zoom", event => {
+        if (zoomTimeout) clearTimeout(zoomTimeout);
+        zoomTimeout = setTimeout(() => {
+            const transform = event.transform;
+            const newX = transform.rescaleX(originalXScale);
+            let newY = transform.rescaleY(originalYScale);
+            const [yMin, yMax] = newY.domain();
+
+            // Clamp Y-axis so it doesn't go below 0
+            if (yMin < 0) {
+                const span = yMax - yMin;
+                newY = d3.scaleLinear()
+                    .domain([0, Math.max(0.001, span)])
+                    .range([chartHeight, 0]);
+            }
+
+            xScale.domain(newX.domain());
+            yScale.domain(newY.domain());
+
+            updateAxes();
+            updatePointPositions();
+            
+        }, ZOOM_DELAY);
+    });
+
 
     svg.call(zoom);
 
-    let isZooming = false;
-    function zoomed(event) {
-        if (!isZooming) {
-            requestAnimationFrame(() => {
-                gClip.attr("transform", event.transform);
-
-                const newX = event.transform.rescaleX(xScale);
-                const newY = event.transform.rescaleY(yScale);
-
-                const numTicks = 12;
-
-                const zoomLogMin = Math.log10(newX.domain()[0]);
-                const zoomLogMax = Math.log10(newX.domain()[1]);
-
-                const zoomTicks = d3.range(numTicks).map(i => {
-                const t = i / (numTicks - 1);
-                return Math.pow(10, zoomLogMin + t * (zoomLogMax - zoomLogMin));
-});
-
-xAxis.call(d3.axisBottom(newX)
-    .tickValues(zoomTicks)
-    .tickFormat(formatPrice));
-
-
-                yAxis.call(d3.axisLeft(newY).ticks(numTicks));
-
-                isZooming = false;
-            });
-            isZooming = true;
-        }
+    function updatePointStyle(zoomLevel) {
+        dots.attr("r", d => {
+            if (zoomLevel < 2) return 1.5;
+            if (zoomLevel < 6) return 3;
+            return 5;
+        });
     }
-
-    
-
     
     function resetZoom() {
         svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity);
@@ -366,3 +317,4 @@ xAxis.call(d3.axisBottom(newX)
 
     d3.select("#reset-button").on("click", resetZoom);
 }
+

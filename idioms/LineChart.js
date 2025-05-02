@@ -67,7 +67,7 @@ function createStackedLineChart(data, containerId, isUpdate = false) {
     const margin = { top: 20, right: 50, bottom: 30, left: 60 };
     const width = containerWidth - margin.left - margin.right;
     const chartHeight = containerHeight*0.9 / 4; 
-    const chartSpacing = 20;
+    const chartSpacing = 23;
     const height = (chartHeight + chartSpacing) * metrics.length - chartSpacing; 
 
 
@@ -222,6 +222,9 @@ g.selectAll("circle")
     .call(xAxis);
 
 xAxisG.selectAll("text")
+.text(function(d) {
+    return d.getFullYear() % 2 === 1 ? d3.timeFormat("%Y")(d) : "";  // show only odd years
+})
     .attr("transform", "rotate(-45)")
     .style("text-anchor", "end")
     .attr("font-size", "10px");
@@ -229,7 +232,7 @@ xAxisG.selectAll("text")
 
 if (i !== metrics.length - 1) {
     xAxisG.selectAll("text").remove();
-    xAxisG.selectAll("line").attr("stroke-opacity", 0.3); // optional: lighter tick marks
+    xAxisG.selectAll("line").attr("stroke-opacity", 0.3); 
 }
 
         

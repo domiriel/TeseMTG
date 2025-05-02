@@ -16,6 +16,7 @@ function createFilterPanel(data, containerId, isUpdate = false) {
         .style("position", "relative")
         .style("width", "100%")
         .style("height", "100%");
+        
 
     if (isUpdate) {
         container.select(".filter-panel-wrapper").remove();
@@ -81,8 +82,9 @@ function createFilterPanel(data, containerId, isUpdate = false) {
     wrapper.append("input")
         .attr("type", "text")
         .attr("list", inputId)
+        
         .attr("placeholder", "Search cards...")
-        .style("width", "90%")
+        .style("width", "85%")
         .style("margin-bottom", "12px")
         .style("padding", "6px")
         .style("font-size", "16px");
@@ -95,11 +97,55 @@ function createFilterPanel(data, containerId, isUpdate = false) {
         .append("option")
         .attr("value", d => d);
 
+    // 1. Find all unique price attributes
+const priceFields = new Set();
+data.forEach(card => {
+    Object.keys(card).forEach(key => {
+        if (key.startsWith("price_")) {
+            priceFields.add(key);
+        }
+    });
+});
+
+const sortedPriceFields = Array.from(priceFields).sort();
+
+// 2. Add a dropdown for price selection
+const priceWrapper = wrapper.append("div")
+    .style("width", "100%")
+    .style("margin-bottom", "16px");
+
+
+priceWrapper.append("label")
+    .text("Select Price Attribute:")
+    .style("margin-right", "8px")
+    .style("font-size", "16px")
+    .style("font-weight", "bold");
+
+const priceSelect = priceWrapper.append("select")
+    .attr("id", "priceAttributeSelect")
+    .style("padding", "6px")
+    .style("width", "95%")
+    .style("font-size", "16px");
+
+priceSelect.selectAll("option")
+    .data(sortedPriceFields)
+    .enter()
+    .append("option")
+    .attr("value", d => d)
+    .text(d => d.replace("price_", "").toUpperCase()); // Prettify option names
+
+    priceSelect.on("change", function() {
+        const selectedPriceAttribute = this.value;
+        console.log("Selected price attribute:", selectedPriceAttribute);
+        // Do something with selectedPriceAttribute
+    });
+    
+
     Object.entries(filters).forEach(([category, values]) => {
         const section = wrapper.append("div")
             .attr("class", "filter-section")
             .style("margin-top", "12px")
-            .style("width", "100%"); // <- ensure this is here;
+            .style("width", "95%"); 
 
         section.append("div")
             .attr("class", "dropdown-header")
@@ -109,7 +155,12 @@ function createFilterPanel(data, containerId, isUpdate = false) {
             .style("border", "1px solid #ccc")
             .style("border-radius", "6px")
             .style("cursor", "pointer")
-            .style("font-weight", "bold");
+            .style("font-weight", "bold")
+            .style("width", "100%")
+            .style("box-sizing", "border-box")
+            .style("overflow", "hidden")
+            .style("text-overflow", "ellipsis");
+            ;
 
             const content = section.append("div")
             .attr("class", "dropdown-content")
@@ -125,22 +176,12 @@ function createFilterPanel(data, containerId, isUpdate = false) {
             .style("padding", "6px")
             .style("background", "#fff");
         
-            setTimeout(() => {
-                const sectionNode = section.node();
-                const contentNode = content.node();
-            
-                if (sectionNode && contentNode) {
-                    const width = sectionNode.getBoundingClientRect().width;
-                    content.style("width", `${width-2}px`);
-                }
-            }, 0); // wait for render
-            
-
-        const searchBox = section.append("input")
-            .attr("type", "text")
+            const searchBox = section.insert("input", function() {
+                return content.node(); // insert before the content div
+            })  .attr("type", "text")
             .attr("placeholder", `Search ${category}...`)
             .style("display", "none")
-            .style("width", "90%")
+            .style("width", "93.5%")
             .style("padding", "4px")
             .style("margin-top", "4px")
             .style("font-size", "14px")
@@ -150,6 +191,10 @@ function createFilterPanel(data, containerId, isUpdate = false) {
                     d.value.toLowerCase().includes(query) ? "flex" : "none"
                 );
             });
+            
+
+                     
+            
 
         section.select(".dropdown-header")
             .on("click", function () {
@@ -175,7 +220,7 @@ function createFilterPanel(data, containerId, isUpdate = false) {
             .style("align-items", "center")
             .style("padding", "4px 2px")
             .style("font-size", "14px")
-            .style("width", "100%")  // lock width
+            .style("width", "100%")  
             .style("box-sizing", "border-box")
             .style("overflow", "hidden");
 
@@ -183,21 +228,32 @@ function createFilterPanel(data, containerId, isUpdate = false) {
             .text(d => `${d.value}. (${d.count})`)
             .style("margin-right", "10px");
 
-        option.append("input")
-            .attr("type", "checkbox")
-            .attr("value", d => d.value)
-            .on("change", function (event, d) {
-                const checked = event.target.checked;
+            option
+            .on("click", function(event, d) {
                 const set = selectedFilters[category];
-                if (checked) {
-                    set.add(d.value);
-                } else {
+                const isSelected = set.has(d.value);
+                if (isSelected) {
                     set.delete(d.value);
+                } else {
+                    set.add(d.value);
                 }
                 updatePills(category);
-                console.log(`${checked ? "Selected" : "Unselected"}: ${d.value}`);
+                
+                updateFilterStyles(); // new function to re-style selected options
             });
+        
+            
 
+            
+            
+        function updateFilterStyles() {
+            content.selectAll(".filter-option")
+                .style("background-color", d =>
+                    selectedFilters[category].has(d.value) ? "#cce5ff" : "#fff"
+                )
+                .style("cursor", "pointer");
+        }
+        
         function updatePills(cat) {
             const set = selectedFilters[cat];
             const pills = pillContainer.selectAll(".pill")

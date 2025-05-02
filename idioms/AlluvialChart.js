@@ -364,7 +364,7 @@ sankeyGenerator.update(sankeyData);
         const isLeftSide = centerX < width / 2;
         return isLeftSide ? d.x0 : d.x1;
     })
-    .attr("y", d => d.y0 - 5) // Above the node
+    .attr("y", d => d.y0 - 5) 
     .attr("dy", "0em")
     .attr("text-anchor", d => {
         const centerX = (d.x0 + d.x1) / 2;
