@@ -8,36 +8,37 @@ import { createFilterPanel, updateFilterPanel } from "./idioms/FilterPanel.js";
 
 function init() {
     d3.json("./data/card_details.json").then(function (data) {
-        const originalData = JSON.parse(JSON.stringify(data));  // Store original unsorted data
-
-        
-          
-        
-        createIcicleChart(data, ".IcicleChart");  // Initial render
-        createAlluvialChart(data, ".AlluvialChart");
-        createTimelineView(data, ".TimelineView");
-        createScatterPlot(data, ".Scatterplot");
-        createStackedLineChart(data, ".LineChart");
-        createFilterPanel(data, ".FilterPanel", getState().selectedFilters);  // Initial render
-        
-        subscribe((state) => {
-            const filteredData = filterData(originalData, state.selectedFilters, state.selectedPriceAttribute);
-            updateFilterPanel(filteredData, ".FilterPanel");  // Update filter panel with filtered data
-        
-        })
-        const initState = getState();
-const filtered = filterData(originalData, initState.selectedFilters, initState.selectedPriceAttribute);
-updateFilterPanel(originalData, state.selectedFilters);
-
+      const originalData = JSON.parse(JSON.stringify(data));  // Store original unsorted data
+  
+      const { selectedFilters, selectedPriceAttribute } = getState();
+      const filtered = filterData(originalData, selectedFilters, selectedPriceAttribute);
+  
+      createIcicleChart(filtered, ".IcicleChart");
+      createAlluvialChart(filtered, ".AlluvialChart");
+      createTimelineView(filtered, ".TimelineView");
+      createScatterPlot(filtered, ".Scatterplot");
+      createStackedLineChart(filtered, ".LineChart");
+      createFilterPanel(originalData, ".FilterPanel", selectedFilters); // always use original here
+  
+      subscribe((state) => {
+        const filteredData = filterData(originalData, state.selectedFilters, state.selectedPriceAttribute);
+        updateFilterPanel(filteredData, ".FilterPanel");
+        createFilterPanel(originalData, ".FilterPanel", state.selectedFilters,true); // always use original here
+        createAlluvialChart(filteredData, ".AlluvialChart", true); // update
+        createIcicleChart(filteredData, ".IcicleChart", true); // update
+        createTimelineView(filteredData, ".TimelineView", true); // update
+        createScatterPlot(filteredData, ".Scatterplot", true); // update
+        createStackedLineChart(filteredData, ".LineChart", true); // update
+      });
     });
-
-    
+  
     window.addEventListener("resize", () => {
-        init();
+      init();
     });
-    
-
   }
+  
+
+
   function filterData(data, selectedFilters, selectedPriceAttribute) {
     console.log("Originality filter values:", Array.from(selectedFilters["Originality"]));
   
@@ -67,7 +68,11 @@ updateFilterPanel(originalData, state.selectedFilters);
   
   
   
-  
+  function updateAlluvialChart() {
+    const { selectedFilters, selectedPriceAttribute } = getState();
+    const filtered = filterData(originalData, selectedFilters, selectedPriceAttribute); // originalData must be in scope
+    createAlluvialChart(filtered, '#alluvialChart', true);
+  }
   
   
   function extractCardValue(card, category) {

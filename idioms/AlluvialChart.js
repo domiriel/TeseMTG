@@ -1,5 +1,5 @@
 //Issues fixed: 4
-
+import { updateState, getState } from "../state.js";
 const nodeColorScale = d3.scaleSequential()
     .interpolator(d3.interpolateRgb("#F0F0F0", "#373737")); // Soft to dark green
 
@@ -327,7 +327,36 @@ sankeyGenerator.update(sankeyData);
           .duration(200)
           .attr("transform", "scale(1)") 
           .attr("stroke-width", 1); 
+    })
+    .on("click", function(event, d) {
+      const currentState = getState();
+      const updatedFilters = {};
+    
+      for (const key in currentState.selectedFilters) {
+        updatedFilters[key] = new Set(currentState.selectedFilters[key]);
+      }
+    
+      const orig = d.source.name;
+      const rarity = d.target.name;
+    
+      // Toggle originality
+      if (updatedFilters["Originality"].has(orig)) {
+        updatedFilters["Originality"].delete(orig);
+      } else {
+        updatedFilters["Originality"].add(orig);
+      }
+    
+      // Toggle rarity
+      if (updatedFilters["Rarity"].has(rarity)) {
+        updatedFilters["Rarity"].delete(rarity);
+      } else {
+        updatedFilters["Rarity"].add(rarity);
+      }
+    
+      updateState({ selectedFilters: updatedFilters });
     });
+    
+    
   
   
   const node = sankeyGroup.append("g")
@@ -355,6 +384,24 @@ sankeyGenerator.update(sankeyData);
     })
     .on("mouseout", function() {
       tooltip.style("display", "none");
+    })
+    .on("click", function(event, d) {
+      const category = d.x0 === 0 ? "Originality" : "Rarity"; // left side = originality, right side = rarity
+      const currentState = getState();
+      const updatedFilters = {};
+  
+      for (const key in currentState.selectedFilters) {
+        updatedFilters[key] = new Set(currentState.selectedFilters[key]);
+      }
+  
+      // Toggle behavior
+      if (updatedFilters[category].has(d.name)) {
+        updatedFilters[category].delete(d.name);
+      } else {
+        updatedFilters[category].add(d.name);
+      }
+  
+      updateState({ selectedFilters: updatedFilters });
     });
   
   
