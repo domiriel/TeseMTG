@@ -1,4 +1,5 @@
 //Issues fixed: 18, 22
+import { updateState, getState } from "../state.js";
 
 
 function addToMap(map, key) {
@@ -9,7 +10,8 @@ function addToMap(map, key) {
 }
 
 
-function createFilterPanel(data, containerId, isUpdate = false) {
+export function createFilterPanel(data, containerId, selectedFiltersFromState, isUpdate = false) {
+
     d3.select(containerId).selectAll("*").remove();
 
     const container = d3.select(containerId)
@@ -40,15 +42,8 @@ function createFilterPanel(data, containerId, isUpdate = false) {
         "Rarity": new Map()
     };
 
-    const selectedFilters = {
-        "Keywords": new Set(),
-        "Supertypes": new Set(),
-        "Types": new Set(),
-        "Subtypes": new Set(),
-        "Set Types": new Set(),
-        "Originality": new Set(),
-        "Rarity": new Set()
-    };
+    const selectedFilters = selectedFiltersFromState;
+
 
     const cardNameSet = new Set();
 
@@ -137,7 +132,8 @@ priceSelect.selectAll("option")
     priceSelect.on("change", function() {
         const selectedPriceAttribute = this.value;
         console.log("Selected price attribute:", selectedPriceAttribute);
-        // Do something with selectedPriceAttribute
+        updateState({ selectedPriceAttribute });
+
     });
     
 
@@ -201,17 +197,22 @@ priceSelect.selectAll("option")
                 const isVisible = content.style("display") === "block";
                 content.style("display", isVisible ? "none" : "block");
                 searchBox.style("display", isVisible ? "none" : "block");
+                pillContainer.style("display", isVisible ? "none" : "flex");
             });
 
         const pillContainer = section.append("div")
             .attr("class", "pill-container")
             .style("margin-top", "6px")
-            .style("display", "flex")
+            .style("display", "none")
             .style("flex-wrap", "wrap")
             .style("gap", "4px");
 
-        const option = content.selectAll("div")
-            .data(values.map(([value, count]) => ({ value, count })))
+            const option = content.selectAll("div")
+            .data(values.map(([value, count]) => ({
+                category,
+                value,
+                count
+            })))        
             .enter()
             .append("div")
             .attr("class", "filter-option")
@@ -222,12 +223,19 @@ priceSelect.selectAll("option")
             .style("font-size", "14px")
             .style("width", "100%")  
             .style("box-sizing", "border-box")
-            .style("overflow", "hidden");
+            .style("overflow", "hidden")
+            .attr("data-category", category)
+            .attr("data-value", d => d.value);
+            updateFilterStyles();
+            updatePills(category);
+            updateFilterPanel(data);
 
         option.append("span")
             .text(d => `${d.value}. (${d.count})`)
             .style("margin-right", "10px");
 
+            
+            
             option
             .on("click", function(event, d) {
                 const set = selectedFilters[category];
@@ -237,11 +245,19 @@ priceSelect.selectAll("option")
                 } else {
                     set.add(d.value);
                 }
+                const updatedFilters = {};
+                for (const key in selectedFilters) {
+                updatedFilters[key] = new Set(selectedFilters[key]);
+                }
+                updateState({ selectedFilters: updatedFilters });
                 updatePills(category);
                 
                 updateFilterStyles(); // new function to re-style selected options
+                updateFilterPanel(data);
             });
         
+            updateFilterStyles();
+        updatePills(category);
             
 
             
@@ -274,13 +290,108 @@ priceSelect.selectAll("option")
                 .text("✕")
                 .on("click", function (event, value) {
                     selectedFilters[cat].delete(value);
-                    content.selectAll("input[type='checkbox']")
-                        .filter(d => d.value === value)
-                        .property("checked", false);
+                
+                    // 🔁 Rebuild updated filter state
+                    const updatedFilters = {};
+                    for (const key in selectedFilters) {
+                        updatedFilters[key] = new Set(selectedFilters[key]);
+                    }
+                
+                    // 🔄 Update global state and UI
+                    updateState({ selectedFilters: updatedFilters });
                     updatePills(cat);
+                    updateFilterStyles(); // restore color styling
+                    updateFilterPanel(data); // reapply filtered counts
                 });
+                
 
             pills.exit().remove();
         }
+        
     });
 }
+export function updateFilterPanel(data, containerId = ".FilterPanel") {
+    const { selectedFilters } = getState();
+  
+    const filters = {
+      "Keywords": new Map(),
+      "Supertypes": new Map(),
+      "Types": new Map(),
+      "Subtypes": new Map(),
+      "Set Types": new Map(),
+      "Originality": new Map(),
+      "Rarity": new Map()
+    };
+  
+    Object.keys(filters).forEach(category => {
+      // Deep copy filters and exclude this category
+      const partialFilters = {};
+      for (const key in selectedFilters) {
+        partialFilters[key] = new Set(selectedFilters[key]);
+      }
+      partialFilters[category] = new Set();
+  
+      const filtered = data.filter(card => {
+        for (const [cat, values] of Object.entries(partialFilters)) {
+          if (!values || values.size === 0) continue;
+  
+          const cardValue = extractCardValue(card, cat);
+          if (!cardValue) return false;
+  
+          const isSplittable = ["Supertypes", "Types", "Subtypes"].includes(cat);
+          const cardValues = Array.isArray(cardValue)
+            ? cardValue.map(v => v.trim().toLowerCase())
+            : (isSplittable
+                ? cardValue.split(/[\s/]+/).map(v => v.trim().toLowerCase())
+                : [cardValue.trim().toLowerCase()]);
+  
+          const filterValues = new Set([...values].map(v => v.trim().toLowerCase()));
+          const match = cardValues.some(v => filterValues.has(v));
+          if (!match) return false;
+        }
+        return true;
+      });
+  
+      // Count values for this category
+      filtered.forEach(card => {
+        const cardValue = extractCardValue(card, category);
+        if (!cardValue) return;
+  
+        const isSplittable = ["Supertypes", "Types", "Subtypes"].includes(category);
+        const values = Array.isArray(cardValue)
+          ? cardValue.map(v => v.trim())
+          : (isSplittable
+              ? cardValue.split(/[\s/]+/).map(v => v.trim())
+              : [cardValue.trim()]);
+  
+        values.forEach(v => addToMap(filters[category], v));
+      });
+    });
+  
+    // ✅ Apply updated values to DOM
+    d3.selectAll(".filter-option").each(function (d) {
+      const el = d3.select(this);
+      const category = el.attr("data-category");
+      const value = el.attr("data-value");
+  
+      const count = filters[category]?.get(value) || 0;
+      el.select("span").text(`${value}. (${count})`);
+      el.style("opacity", count === 0 ? 0.4 : 1);
+      el.style("pointer-events", count === 0 ? "none" : "auto");
+    });
+  }
+  
+  function extractCardValue(card, category) {
+    switch (category) {
+      case "Keywords": return card.keywords;
+      case "Supertypes": return card.supertype;
+      case "Types": return card.type;
+      case "Subtypes": return card.subtype;
+      case "Set Types": return card.set_type;
+      case "Originality": return card.originality;
+      case "Rarity": return card.rarity;
+      default: return null;
+    }
+  }
+  
+  

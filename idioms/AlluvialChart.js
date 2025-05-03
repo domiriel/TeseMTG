@@ -76,7 +76,7 @@ function getNodeColor(price, minPrice, maxPrice) {
   return getDiscreteColor(percentage); 
 }
 
-function createAlluvialChart(data, containerId, isUpdate = false) {
+export function createAlluvialChart(data, containerId, isUpdate = false) {
   d3.select(containerId).selectAll("*").remove();
 
  

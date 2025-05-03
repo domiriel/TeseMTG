@@ -1,6 +1,6 @@
 //Issues fixed: 3, 6, 8, 13
 
-function createStackedLineChart(data, containerId, isUpdate = false) {
+export function createStackedLineChart(data, containerId, isUpdate = false) {
     d3.select(containerId).selectAll("*").remove();
 
     
@@ -37,10 +37,10 @@ function createStackedLineChart(data, containerId, isUpdate = false) {
         d => new Date(d.release_date).getFullYear()
     )
     .map(([year, values]) => {
-        console.log(`Year: ${year}`);
+        /*console.log(`Year: ${year}`);
         console.log(`  Reprints: ${values.reprints}`);
         console.log(`  Avg Complexity: ${values.avgComplexity?.toFixed(2)}`);
-        console.log(`  Avg CMC: ${values.avgCMC?.toFixed(2)}`);
+        console.log(`  Avg CMC: ${values.avgCMC?.toFixed(2)}`);*/
         return {
             year: new Date(year, 0, 1),
             ...values

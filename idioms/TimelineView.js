@@ -1,6 +1,6 @@
 //Issues fixed: 3, 9
 
-function createTimelineView(data, containerId, isUpdate = false) {
+export function createTimelineView(data, containerId, isUpdate = false) {
     d3.select(containerId).selectAll("*").remove();
 
     let setMap = new Map();
@@ -208,7 +208,7 @@ function clicked(selectedSet) {
         .style("opacity", d => (d.releaseDate >= zoomStart && d.releaseDate <= zoomEnd) ? 1 : 0)
         .attr("x", d => xScale(d.releaseDate) - 2.5);
 
-    console.log("X-axis and squares updated");
+    //console.log("X-axis and squares updated");
 }
 
     
