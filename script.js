@@ -1,5 +1,5 @@
 import { getState, subscribe } from "./state.js";
-import { createIcicleChart } from "./idioms/IcicleChart.js";
+import { createIcicleChart } from "./idioms/icicleChart.js";
 import { createAlluvialChart } from "./idioms/AlluvialChart.js";
 import { createTimelineView } from "./idioms/TimelineView.js";
 import { createScatterPlot } from "./idioms/Scatterplot.js";
