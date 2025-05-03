@@ -1,4 +1,4 @@
-//Issues fixed: 1, 2, 4
+//Issues fixed: 1, 2, 4, teste
 import { updateState, getState } from "../state.js";
 
 const colorScale = [
