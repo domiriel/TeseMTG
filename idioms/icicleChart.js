@@ -1,5 +1,5 @@
 //Issues fixed: 1, 2, 4
-
+import { updateState, getState } from "../state.js";
 
 const colorScale = [
     { range: [0, 20], color: "#efefef" },
@@ -261,44 +261,52 @@ const levelHeight = chartHeight / depth;
 
     
     function clicked(event, p) {
-        focus = (focus === p) ? root : p;
-  
+        const wasFocused = (focus === p);
+        focus = wasFocused ? root : p;
     
-
-        
+        // 🔍 Zooming logic (always happens)
         xScale.domain([focus.x0, focus.x1]);
-    
-
-        
-
-        
-        yScale.domain([0, depth]); 
+        yScale.domain([0, depth]);
     
         const t = zoomGroup.transition().duration(750);
     
         rects.transition(t)
             .attr("x", d => xScale(d.x0))
-            .attr("y", d => yScale(d.depth) - (levelHeight / 2)) 
+            .attr("y", d => yScale(d.depth) - (levelHeight / 2))
             .attr("width", d => xScale(d.x1) - xScale(d.x0))
-            .attr("height", levelHeight - 2); 
+            .attr("height", levelHeight - 2);
     
-            labels.transition(t)
+        labels.transition(t)
             .attr("x", d => (xScale(d.x0) + xScale(d.x1)) / 2)
-            .attr("y", d => yScale(d.depth)) 
+            .attr("y", d => yScale(d.depth))
             .style("opacity", d => {
                 const rectWidth = xScale(d.x1) - xScale(d.x0);
                 const rectHeight = levelHeight - 2;
                 const textLength = d.data.name.length * 7;
-        
                 return (rectWidth > textLength && rectHeight > 12) ? 1 : 0;
-            }
-        
-        
-        
-        
-        );
-        
+            });
+    
+        // 🌍 Global filter logic (affects other charts only)
+        const currentFilters = getState().selectedFilters;
+        const newFilters = structuredClone(currentFilters);
+    
+        if (wasFocused) {
+            newFilters.IcicleColorGroups = new Set();
+            newFilters.IcicleColorIdentity = new Set();
+        } else if (p.depth === 1) {
+            newFilters.IcicleColorGroups = new Set([p.data.name]);
+            newFilters.IcicleColorIdentity = new Set(); // clear detail filter
+        } else if (p.depth === 2) {
+            newFilters.IcicleColorIdentity = new Set([p.data.name]);
+            newFilters.IcicleColorGroups = new Set(); // clear group filter
+        }
+    
+        setTimeout(() => {
+            updateState({ selectedFilters: newFilters });
+          }, 70);  // enough to let zoom start
+          
     }
+    
     
     const legendX = margin.left + chartWidth + 15;
     const legendY = margin.top; 

@@ -8,7 +8,7 @@ import { createFilterPanel, updateFilterPanel } from "./idioms/FilterPanel.js";
 
 function init() {
     d3.json("./data/card_details.json").then(function (data) {
-      const originalData = JSON.parse(JSON.stringify(data));  // Store original unsorted data
+      const originalData = JSON.parse(JSON.stringify(data));  
   
       const { selectedFilters, selectedPriceAttribute } = getState();
       const filtered = filterData(originalData, selectedFilters, selectedPriceAttribute);
@@ -18,18 +18,28 @@ function init() {
       createTimelineView(filtered, ".TimelineView");
       createScatterPlot(filtered, ".Scatterplot");
       createStackedLineChart(filtered, ".LineChart");
-      createFilterPanel(originalData, ".FilterPanel", selectedFilters); // always use original here
+      createFilterPanel(originalData, ".FilterPanel", selectedFilters); 
   
       subscribe((state) => {
         const filteredData = filterData(originalData, state.selectedFilters, state.selectedPriceAttribute);
+    
+        const onlyIcicleFilters =
+            state.selectedFilters.IcicleColorGroups?.size > 0 ||
+            state.selectedFilters.IcicleColorIdentity?.size > 0;
+    
+        if (!onlyIcicleFilters) {
+            
+            createIcicleChart(filteredData, ".IcicleChart", true);
+        }
+    
         updateFilterPanel(filteredData, ".FilterPanel");
-        createFilterPanel(originalData, ".FilterPanel", state.selectedFilters,true); // always use original here
-        createAlluvialChart(filteredData, ".AlluvialChart", true); // update
-        createIcicleChart(filteredData, ".IcicleChart", true); // update
-        createTimelineView(filteredData, ".TimelineView", true); // update
-        createScatterPlot(filteredData, ".Scatterplot", true); // update
-        createStackedLineChart(filteredData, ".LineChart", true); // update
-      });
+        createAlluvialChart(filteredData, ".AlluvialChart", true);
+        createTimelineView(filteredData, ".TimelineView", true);
+        createScatterPlot(filteredData, ".Scatterplot", true);
+        createStackedLineChart(filteredData, ".LineChart", true);
+    });
+    
+      
     });
   
     window.addEventListener("resize", () => {
@@ -43,13 +53,38 @@ function init() {
     console.log("Originality filter values:", Array.from(selectedFilters["Originality"]));
   
     return data.filter(card => {
+      
+      if (selectedFilters["IcicleColorGroups"]?.size > 0) {
+        const groupLabel = card.number_of_colours >= 4
+          ? "+4 Colors"
+          : card.number_of_colours === 0
+            ? "Colorless"
+            : `${card.number_of_colours} Colors`;
+  
+        if (!selectedFilters["IcicleColorGroups"].has(groupLabel)) {
+          return false;
+        }
+      }
+  
+      
+      if (selectedFilters["IcicleColorIdentity"]?.size > 0) {
+        const identity = Array.isArray(card.color_identity)
+          ? card.color_identity.sort().join("-") || "Colorless"
+          : "Colorless";
+  
+        if (!selectedFilters["IcicleColorIdentity"].has(identity)) {
+          return false;
+        }
+      }
+  
+      
       for (const [category, values] of Object.entries(selectedFilters || {})) {
         if (!values || values.size === 0) continue;
+        if (category === "IcicleColorGroups" || category === "IcicleColorIdentity") continue;
   
         const cardValue = extractCardValue(card, category);
         if (!cardValue) return false;
   
-        // Only split for categories with composite values
         const isSplittable = ["Supertypes", "Types", "Subtypes"].includes(category);
         const cardValues = Array.isArray(cardValue)
           ? cardValue.map(v => v.trim().toLowerCase())
@@ -68,11 +103,8 @@ function init() {
   
   
   
-  function updateAlluvialChart() {
-    const { selectedFilters, selectedPriceAttribute } = getState();
-    const filtered = filterData(originalData, selectedFilters, selectedPriceAttribute); // originalData must be in scope
-    createAlluvialChart(filtered, '#alluvialChart', true);
-  }
+  
+
   
   
   function extractCardValue(card, category) {
@@ -84,8 +116,22 @@ function init() {
       case "Set Types": return card.set_type;
       case "Originality": return card.originality;
       case "Rarity": return card.rarity;
+  
+     
+      case "IcicleColorGroups":
+        if (card.number_of_colours >= 4) return "+4 Colors";
+        if (card.number_of_colours === 0) return "Colorless";
+        return `${card.number_of_colours} Colors`;
+  
+      case "IcicleColorIdentity":
+        if (!Array.isArray(card.color_identity) || card.color_identity.length === 0) {
+          return "Colorless";
+        }
+        return card.color_identity.sort().join("-");  
+        
       default: return null;
     }
   }
+  
   
     init();

@@ -339,14 +339,14 @@ sankeyGenerator.update(sankeyData);
       const orig = d.source.name;
       const rarity = d.target.name;
     
-      // Toggle originality
+      
       if (updatedFilters["Originality"].has(orig)) {
         updatedFilters["Originality"].delete(orig);
       } else {
         updatedFilters["Originality"].add(orig);
       }
     
-      // Toggle rarity
+      
       if (updatedFilters["Rarity"].has(rarity)) {
         updatedFilters["Rarity"].delete(rarity);
       } else {
@@ -386,7 +386,7 @@ sankeyGenerator.update(sankeyData);
       tooltip.style("display", "none");
     })
     .on("click", function(event, d) {
-      const category = d.x0 === 0 ? "Originality" : "Rarity"; // left side = originality, right side = rarity
+      const category = d.x0 === 0 ? "Originality" : "Rarity"; 
       const currentState = getState();
       const updatedFilters = {};
   
@@ -394,7 +394,7 @@ sankeyGenerator.update(sankeyData);
         updatedFilters[key] = new Set(currentState.selectedFilters[key]);
       }
   
-      // Toggle behavior
+      
       if (updatedFilters[category].has(d.name)) {
         updatedFilters[category].delete(d.name);
       } else {

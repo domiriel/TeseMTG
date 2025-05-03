@@ -223,7 +223,7 @@ g.selectAll("circle")
 
 xAxisG.selectAll("text")
 .text(function(d) {
-    return d.getFullYear() % 2 === 1 ? d3.timeFormat("%Y")(d) : "";  // show only odd years
+    return d.getFullYear() % 2 === 1 ? d3.timeFormat("%Y")(d) : "";  
 })
     .attr("transform", "rotate(-45)")
     .style("text-anchor", "end")

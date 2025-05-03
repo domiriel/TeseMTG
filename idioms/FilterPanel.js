@@ -1,5 +1,6 @@
 //Issues fixed: 18, 22
 import { updateState, getState } from "../state.js";
+const optionMap = new Map();  
 
 
 function addToMap(map, key) {
@@ -92,7 +93,7 @@ export function createFilterPanel(data, containerId, selectedFiltersFromState, i
         .append("option")
         .attr("value", d => d);
 
-    // 1. Find all unique price attributes
+    
 const priceFields = new Set();
 data.forEach(card => {
     Object.keys(card).forEach(key => {
@@ -104,7 +105,7 @@ data.forEach(card => {
 
 const sortedPriceFields = Array.from(priceFields).sort();
 
-// 2. Add a dropdown for price selection
+
 const priceWrapper = wrapper.append("div")
     .style("width", "100%")
     .style("margin-bottom", "16px");
@@ -127,7 +128,7 @@ priceSelect.selectAll("option")
     .enter()
     .append("option")
     .attr("value", d => d)
-    .text(d => d.replace("price_", "").toUpperCase()); // Prettify option names
+    .text(d => d.replace("price_", "").toUpperCase()); 
 
     priceSelect.on("change", function() {
         const selectedPriceAttribute = this.value;
@@ -173,7 +174,7 @@ priceSelect.selectAll("option")
             .style("background", "#fff");
         
             const searchBox = section.insert("input", function() {
-                return content.node(); // insert before the content div
+                return content.node(); 
             })  .attr("type", "text")
             .attr("placeholder", `Search ${category}...`)
             .style("display", "none")
@@ -228,10 +229,21 @@ priceSelect.selectAll("option")
             .attr("data-value", d => d.value);
             updateFilterStyles();
             updatePills(category);
-            updateFilterPanel(data);
+            clearTimeout(window._filterPanelTimeout);
+window._filterPanelTimeout = setTimeout(() => {
+  updateFilterPanel(data);
+}, 50); 
+
+
+            option.each(function(d) {
+                const key = `${category}|${d.value}`;
+                optionMap.set(key, d3.select(this));
+            });
+            
 
         option.append("span")
-            .text(d => `${d.value}. (${d.count})`)
+            .text(d => `${d.value} (${d.count})`)
+            .attr("data-count", d => d.count)
             .style("margin-right", "10px");
 
             
@@ -245,15 +257,17 @@ priceSelect.selectAll("option")
                 } else {
                     set.add(d.value);
                 }
-                const updatedFilters = {};
-                for (const key in selectedFilters) {
-                updatedFilters[key] = new Set(selectedFilters[key]);
-                }
+                const updatedFilters = structuredClone(selectedFilters);
+
                 updateState({ selectedFilters: updatedFilters });
                 updatePills(category);
                 
-                updateFilterStyles(); // new function to re-style selected options
-                updateFilterPanel(data);
+                updateFilterStyles(); 
+                clearTimeout(window._filterPanelTimeout);
+window._filterPanelTimeout = setTimeout(() => {
+  updateFilterPanel(data);
+}, 50); 
+
             });
         
             updateFilterStyles();
@@ -291,17 +305,21 @@ priceSelect.selectAll("option")
                 .on("click", function (event, value) {
                     selectedFilters[cat].delete(value);
                 
-                    // 🔁 Rebuild updated filter state
+                    
                     const updatedFilters = {};
                     for (const key in selectedFilters) {
                         updatedFilters[key] = new Set(selectedFilters[key]);
                     }
                 
-                    // 🔄 Update global state and UI
+                    
                     updateState({ selectedFilters: updatedFilters });
                     updatePills(cat);
-                    updateFilterStyles(); // restore color styling
-                    updateFilterPanel(data); // reapply filtered counts
+                    updateFilterStyles(); 
+                    clearTimeout(window._filterPanelTimeout);
+window._filterPanelTimeout = setTimeout(() => {
+  updateFilterPanel(data);
+}, 50); 
+
                 });
                 
 
@@ -314,45 +332,55 @@ export function updateFilterPanel(data, containerId = ".FilterPanel") {
     const { selectedFilters } = getState();
   
     const filters = {
-      "Keywords": new Map(),
-      "Supertypes": new Map(),
-      "Types": new Map(),
-      "Subtypes": new Map(),
-      "Set Types": new Map(),
-      "Originality": new Map(),
-      "Rarity": new Map()
+        "Keywords": new Map(),
+        "Supertypes": new Map(),
+        "Types": new Map(),
+        "Subtypes": new Map(),
+        "Set Types": new Map(),
+        "Originality": new Map(),
+        "Rarity": new Map(),
+        "IcicleColorGroups": new Map(),      
+        "IcicleColorIdentity": new Map()      
     };
+    
+  
+    const cachedFiltered = new Map(); 
   
     Object.keys(filters).forEach(category => {
-      // Deep copy filters and exclude this category
-      const partialFilters = {};
-      for (const key in selectedFilters) {
-        partialFilters[key] = new Set(selectedFilters[key]);
-      }
-      partialFilters[category] = new Set();
-  
-      const filtered = data.filter(card => {
-        for (const [cat, values] of Object.entries(partialFilters)) {
-          if (!values || values.size === 0) continue;
-  
-          const cardValue = extractCardValue(card, cat);
-          if (!cardValue) return false;
-  
-          const isSplittable = ["Supertypes", "Types", "Subtypes"].includes(cat);
-          const cardValues = Array.isArray(cardValue)
-            ? cardValue.map(v => v.trim().toLowerCase())
-            : (isSplittable
-                ? cardValue.split(/[\s/]+/).map(v => v.trim().toLowerCase())
-                : [cardValue.trim().toLowerCase()]);
-  
-          const filterValues = new Set([...values].map(v => v.trim().toLowerCase()));
-          const match = cardValues.some(v => filterValues.has(v));
-          if (!match) return false;
+      if (!cachedFiltered.has(category)) {
+        const partialFilters = {};
+        for (const key in selectedFilters) {
+          partialFilters[key] = new Set(selectedFilters[key]);
         }
-        return true;
-      });
+        partialFilters[category] = new Set(); 
   
-      // Count values for this category
+        const result = data.filter(card => {
+          for (const [cat, values] of Object.entries(partialFilters)) {
+            if (!values || values.size === 0) continue;
+  
+            const cardValue = extractCardValue(card, cat);
+            if (!cardValue) return false;
+  
+            const isSplittable = ["Supertypes", "Types", "Subtypes"].includes(cat);
+            const cardValues = Array.isArray(cardValue)
+              ? cardValue.map(v => v.trim().toLowerCase())
+              : (isSplittable
+                  ? cardValue.split(/[\s/]+/).map(v => v.trim().toLowerCase())
+                  : [cardValue.trim().toLowerCase()]);
+  
+            const filterValues = new Set([...values].map(v => v.trim().toLowerCase()));
+            const match = cardValues.some(v => filterValues.has(v));
+            if (!match) return false;
+          }
+          return true;
+        });
+  
+        cachedFiltered.set(category, result); 
+      }
+  
+      const filtered = cachedFiltered.get(category);
+  
+      
       filtered.forEach(card => {
         const cardValue = extractCardValue(card, category);
         if (!cardValue) return;
@@ -368,18 +396,30 @@ export function updateFilterPanel(data, containerId = ".FilterPanel") {
       });
     });
   
-    // ✅ Apply updated values to DOM
-    d3.selectAll(".filter-option").each(function (d) {
-      const el = d3.select(this);
-      const category = el.attr("data-category");
-      const value = el.attr("data-value");
-  
-      const count = filters[category]?.get(value) || 0;
-      el.select("span").text(`${value}. (${count})`);
-      el.style("opacity", count === 0 ? 0.4 : 1);
-      el.style("pointer-events", count === 0 ? "none" : "auto");
-    });
+    
+    optionMap.forEach((el, key) => {
+        const [category, value] = key.split("|");
+      
+        if (category === "IcicleColorGroups" || category === "IcicleColorIdentity") {
+          return; 
+        }
+      
+        const count = filters[category]?.get(value) || 0;
+      
+        const span = el.select("span");
+        const currentCount = parseInt(span.attr("data-count") || "0");
+      
+        if (currentCount !== count) {
+          span.text(`${value} (${count})`);
+          span.attr("data-count", count);
+        }
+      
+        el.style("opacity", count === 0 ? 0.4 : 1);
+        el.style("pointer-events", count === 0 ? "none" : "auto");
+      });
+      
   }
+  
   
   function extractCardValue(card, category) {
     switch (category) {
@@ -391,6 +431,17 @@ export function updateFilterPanel(data, containerId = ".FilterPanel") {
       case "Originality": return card.originality;
       case "Rarity": return card.rarity;
       default: return null;
+      case "IcicleColorGroups":
+    if (card.number_of_colours >= 4) return "+4 Colors";
+    if (card.number_of_colours === 0) return "Colorless";
+    return `${card.number_of_colours} Colors`;
+
+    case "IcicleColorIdentity":
+    if (!Array.isArray(card.color_identity) || card.color_identity.length === 0) {
+        return "Colorless";
+    }
+    return card.color_identity.sort().join("-");
+
     }
   }
   
