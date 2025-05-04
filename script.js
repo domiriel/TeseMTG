@@ -1,6 +1,6 @@
 import { getState, subscribe } from "./state.js";
-import { createIcicleChart } from "./idioms/IcicleChart.js";
-import { createAlluvialChart } from "./idioms/AlluvialChart.js";
+import { createIcicleChart, highlightIcicleRect } from "./idioms/IcicleChart.js";
+import { createAlluvialChart, highlightAlluvialElements} from "./idioms/AlluvialChart.js";
 import { createTimelineView } from "./idioms/TimelineView.js";
 import { createScatterPlot } from "./idioms/Scatterplot.js";
 import { createStackedLineChart } from "./idioms/LineChart.js";
@@ -9,7 +9,15 @@ import { createFilterPanel, updateFilterPanel } from "./idioms/FilterPanel.js";
 function init() {
     d3.json("./data/card_details.json").then(function (data) {
       const originalData = JSON.parse(JSON.stringify(data));  
-  
+    let hoverTimeout = null;
+      getState().onChange("hoveredCard", (hovered) => {
+        if (hoverTimeout) clearTimeout(hoverTimeout);
+        hoverTimeout = setTimeout(() => {
+            
+          highlightAlluvialElements(hovered);
+          highlightIcicleRect(hovered);
+        }, 60);
+      });      
       const { selectedFilters, selectedPriceAttribute } = getState();
       const filtered = filterData(originalData, selectedFilters, selectedPriceAttribute);
   
@@ -50,7 +58,7 @@ function init() {
 
 
   function filterData(data, selectedFilters, selectedPriceAttribute) {
-    console.log("Originality filter values:", Array.from(selectedFilters["Originality"]));
+    
   
     return data.filter(card => {
       
@@ -135,3 +143,4 @@ function init() {
   
   
     init();
+    

@@ -94,4 +94,20 @@ body {
   /*.FilterPanel {
     border: 1px solid black; 
   }*/
+  rect.highlighted {
+    stroke: rgb(0, 0, 0);
+    stroke-width: 10px;
+    stroke-opacity: 1;
+    fill-opacity: 1;
+  }
+  
+  .nodes rect.highlighted {
+    stroke: orange;
+    stroke-width: 3px;
+  }
+  
+  .links path.highlighted {
+    stroke: orange !important;
+    stroke-opacity: 1 !important;
+  }
   

@@ -1,5 +1,6 @@
 //Issues fixed: 1, 2, 4, teste
 import { updateState, getState } from "../state.js";
+let globalRects = null;  // this will hold the current rect selection
 
 const colorScale = [
     { range: [0, 20], color: "#efefef" },
@@ -234,7 +235,14 @@ const levelHeight = chartHeight / depth;
         .on("mouseout", function() {
             d3.select("#tooltip").style("display", "none");
         });
-    
+
+        globalRects = rects;
+
+        let hoverTimeout;
+
+
+
+          
     
     const labels = zoomGroup.selectAll("text")
     .data(root.descendants().slice(1)) 
@@ -370,5 +378,35 @@ zeroLabel.append("text")
     
 }
 
+export function highlightIcicleRect(hovered) {
+    console.log("[IcicleChart] highlightIcicleRect called with:", hovered?.name);
+
+    if (!globalRects) {
+        console.warn("[IcicleChart] globalRects is null!");
+        return;
+      }
+      
+
+    globalRects.classed("highlighted", d => {
+        
+        if (!hovered) return false;
+
+        if (d.depth === 1 && hovered.number_of_colours != null) {
+            const expectedGroup = hovered.number_of_colours >= 4
+                ? "+4 Colors"
+                : hovered.number_of_colours === 0
+                    ? "Colorless"
+                    : `${hovered.number_of_colours} Colors`;
+            return d.data.name === expectedGroup;
+        }
+
+        if (d.depth === 2 && hovered.color_identity) {
+            const identity = hovered.color_identity.sort().join("-");
+            return d.data.name === identity;
+        }
+
+        return false;
+    });
+}
 
 

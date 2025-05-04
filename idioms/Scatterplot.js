@@ -1,5 +1,5 @@
 //Issues fixed: 13
-
+import { updateState, getState } from "../state.js";
 const colorGroups = [
     { range: [1, 5691], color: "#787878" },  
     { range: [5692, 11382], color:  "#a9a9a9" },
@@ -238,6 +238,8 @@ export function createScatterPlot(data, containerId, isUpdate = false) {
     }
 
     const tooltip = d3.select("#scatter-tooltip");
+    let hoverTimeout = null;
+
 
     dots.on("mouseover", function (event, d) {
         tooltip.style("display", "block")
@@ -269,36 +271,52 @@ export function createScatterPlot(data, containerId, isUpdate = false) {
         })
         .on("mouseout", function () {
             tooltip.style("display", "none");
-        });
-        let zoomTimeout = null;
-const ZOOM_DELAY = 60; // ms — feel free to tweak (e.g., 40–100)
-
-const zoom = d3.zoom()
-    .scaleExtent([1, 24])
-    .on("zoom", event => {
-        if (zoomTimeout) clearTimeout(zoomTimeout);
-        zoomTimeout = setTimeout(() => {
-            const transform = event.transform;
-            const newX = transform.rescaleX(originalXScale);
-            let newY = transform.rescaleY(originalYScale);
-            const [yMin, yMax] = newY.domain();
-
-            // Clamp Y-axis so it doesn't go below 0
-            if (yMin < 0) {
-                const span = yMax - yMin;
-                newY = d3.scaleLinear()
-                    .domain([0, Math.max(0.001, span)])
-                    .range([chartHeight, 0]);
+        })
+        .on("click", function (event, d) {
+            const currentHovered = getState().hoveredCard;
+            const isSameCard = currentHovered && currentHovered.name === d.name;
+        
+            if (isSameCard) {
+                console.log("[Scatterplot] Unhighlighting:", d.name);
+                updateState({ hoveredCard: null });
+            } else {
+                console.log("[Scatterplot] Highlighting:", d.name);
+                updateState({ hoveredCard: d });
             }
+        });
+        
+        
+        
+        
+    let zoomTimeout = null;
+    const ZOOM_DELAY = 60; // ms — feel free to tweak (e.g., 40–100)
 
-            xScale.domain(newX.domain());
-            yScale.domain(newY.domain());
+    const zoom = d3.zoom()
+        .scaleExtent([1, 24])
+        .on("zoom", event => {
+            if (zoomTimeout) clearTimeout(zoomTimeout);
+            zoomTimeout = setTimeout(() => {
+                const transform = event.transform;
+                const newX = transform.rescaleX(originalXScale);
+                let newY = transform.rescaleY(originalYScale);
+                const [yMin, yMax] = newY.domain();
 
-            updateAxes();
-            updatePointPositions();
-            
-        }, ZOOM_DELAY);
-    });
+                // Clamp Y-axis so it doesn't go below 0
+                if (yMin < 0) {
+                    const span = yMax - yMin;
+                    newY = d3.scaleLinear()
+                        .domain([0, Math.max(0.001, span)])
+                        .range([chartHeight, 0]);
+                }
+
+                xScale.domain(newX.domain());
+                yScale.domain(newY.domain());
+
+                updateAxes();
+                updatePointPositions();
+                
+            }, ZOOM_DELAY);
+        });
 
 
     svg.call(zoom);

@@ -497,3 +497,28 @@ zeroEntry.append("text")
     .style("font-size", "12px");
 
 }
+export function highlightAlluvialAllElements(hovered) {
+  d3.selectAll(".nodes rect, .links path").classed("highlighted", function(d) {
+    if (!hovered) return false;
+
+    if (this.tagName === "rect") {
+      return d.name === hovered.originality?.toLowerCase() || d.name === hovered.rarity?.toLowerCase();
+    }
+
+    if (this.tagName === "path") {
+      return d.source?.name === hovered.originality?.toLowerCase() &&
+             d.target?.name === hovered.rarity?.toLowerCase();
+    }
+
+    return false;
+  });
+}
+
+export function highlightAlluvialElements(hovered) {
+  d3.selectAll(".nodes rect").classed("highlighted", function(d) {
+    if (!hovered) return false;
+    return d.name === hovered.rarity?.toLowerCase();
+  });
+}
+
+
