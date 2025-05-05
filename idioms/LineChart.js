@@ -1,5 +1,5 @@
 //Issues fixed: 3, 6, 8, 13
-
+import { updateState, getState } from "../state.js";
 export function createStackedLineChart(data, containerId, isUpdate = false) {
     d3.select(containerId).selectAll("*").remove();
 
@@ -157,6 +157,7 @@ g.selectAll("circle")
     .attr("r", 4)
     .attr("fill", metric.color)
     .attr("data-year", d => d.year.getFullYear()) 
+    .style("cursor", "pointer")
     .attr("class", "data-point") 
     .on("mouseover", (event, d) => {
         tooltip
@@ -188,8 +189,7 @@ g.selectAll("circle")
         tooltip
             .style("left", left + "px")
             .style("top", (pageY - 20) + "px");
-    })
-    
+    }) 
     .on("mouseout", () => {
         tooltip.style("display", "none");
 
@@ -197,7 +197,29 @@ g.selectAll("circle")
         d3.selectAll("circle.data-point")
             .attr("r", 4)
             .attr("stroke", "none");
+    })
+    .on("click", (event, d) => {
+        const selectedYear = d.year.getFullYear().toString();
+    
+        const currentState = getState();
+        const updatedFilters = {};
+    
+        for (const key in currentState.selectedFilters) {
+            updatedFilters[key] = new Set(currentState.selectedFilters[key]);
+        }
+    
+        if (updatedFilters["Year"]?.has(selectedYear)) {
+            updatedFilters["Year"].delete(selectedYear);
+        } else {
+            updatedFilters["Year"].add(selectedYear);
+        }
+    
+        updateState({
+            selectedFilters: updatedFilters,
+            updateContext: "TimelineFilter"
+        });
     });
+    ;
 
 
 

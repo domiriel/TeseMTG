@@ -125,7 +125,11 @@ with open(output_file, 'w') as outfile:
             "digital": card.get('digital', False),
             "edhrec_rank": card.get('edhrec_rank', 0),
             "price_usd": float(card.get('prices', {}).get('usd', 0) or 0),
+            "price_usd_foil": float(card.get('prices', {}).get('usd_foil', 0) or 0),
+            "price_usd_etched": float(card.get('prices', {}).get('usd_etched', 0) or 0),
             "price_eur": float(card.get('prices', {}).get('eur', 0) or 0),
+            "price_eur_foil": float(card.get('prices', {}).get('eur_foil', 0) or 0),
+            "price_tix": float(card.get('prices', {}).get('tix', 0) or 0),
             "set_name": card.get('set_name', 'Unknown'),
             "set_type": card.get('set_type', 'Unknown'),
         }

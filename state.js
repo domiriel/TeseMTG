@@ -10,6 +10,7 @@ const state = {
       "IcicleColorGroups": new Set(),
       "IcicleColorIdentity": new Set(),
       "Set Names": new Set(),
+      "Year": new Set(),
     },
     selectedPriceAttribute: "price_usd",
     hoveredCard: null,

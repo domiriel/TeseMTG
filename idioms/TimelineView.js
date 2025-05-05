@@ -1,5 +1,5 @@
 //Issues fixed: 3, 9
-
+import { updateState, getState } from "../state.js";
 export function createTimelineView(data, containerId, isUpdate = false) {
     d3.select(containerId).selectAll("*").remove();
 
@@ -78,7 +78,36 @@ export function createTimelineView(data, containerId, isUpdate = false) {
         .attr("transform", `translate(${margin.left}, ${margin.top - 20})`)
         .call(xAxis)
         .selectAll("text")
-        .style("text-anchor", "middle");
+        .style("text-anchor", "middle")
+        .style("cursor", "pointer")
+        .on("click", function(event, d) {
+            const year = d.getFullYear();
+            const currentState = getState();
+            const updatedFilters = {};
+        
+            for (const key in currentState.selectedFilters) {
+                updatedFilters[key] = new Set(currentState.selectedFilters[key]);
+            }
+        
+            const yearLabel = year.toString();
+        
+            // Create or toggle a new 'Year' filter
+            if (!updatedFilters["Year"]) {
+                updatedFilters["Year"] = new Set();
+            }
+        
+            if (updatedFilters["Year"].has(yearLabel)) {
+                updatedFilters["Year"].delete(yearLabel);
+            } else {
+                updatedFilters["Year"].add(yearLabel);
+            }
+        
+            updateState({
+                selectedFilters: updatedFilters,
+                updateContext: "TimelineFilter"  // Don't update timeline
+            });
+        });
+        ;
 
 
     const scrollContainer = wrapper.append("div")
@@ -139,40 +168,59 @@ export function createTimelineView(data, containerId, isUpdate = false) {
         .attr("stroke", "black")
         .on("mouseover", function (event, d) {
             const tooltip = d3.select("#tooltip");
-    
-    
-    const tooltipWidth = 200; 
-    const tooltipHeight = 50; 
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
+            const tooltipWidth = 200; 
+            const tooltipHeight = 50; 
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
 
-    let left = event.pageX + 10; 
-    let top = event.pageY - 10; 
+            let left = event.pageX + 10; 
+            let top = event.pageY - 10; 
 
     
-    if (left + tooltipWidth > viewportWidth) {
-        left = event.pageX - tooltipWidth - 10;
-    }
+            if (left + tooltipWidth > viewportWidth) {
+                left = event.pageX - tooltipWidth - 10;
+            }
 
-    
-    if (top + tooltipHeight > viewportHeight) {
-        top = event.pageY - tooltipHeight - 10;
-    }
+            
+            if (top + tooltipHeight > viewportHeight) {
+                top = event.pageY - tooltipHeight - 10;
+            }
 
-    tooltip
-        .style("display", "block")
-        .style("left", `${left}px`)
-        .style("top", `${top}px`)
-        .html(`
-            <strong>${d.name}</strong><br>
-            ${d.releaseDate.toDateString()}<br>
-            Type: ${d.setType}<br>
-            Cards in Set: ${d.cardCount}
-        `);
-        })
+            tooltip
+                .style("display", "block")
+                .style("left", `${left}px`)
+                .style("top", `${top}px`)
+                .html(`
+                    <strong>${d.name}</strong><br>
+                    ${d.releaseDate.toDateString()}<br>
+                    Type: ${d.setType}<br>
+                    Cards in Set: ${d.cardCount}
+                `);
+                })
         .on("mouseout", function () {
-            d3.select("#tooltip").style("display", "none");
-        })
+                    d3.select("#tooltip").style("display", "none");
+                })
+        .on("click", function (event, d) {
+                    const currentState = getState();
+                    const updatedFilters = {};
+                    
+                    for (const key in currentState.selectedFilters) {
+                        updatedFilters[key] = new Set(currentState.selectedFilters[key]);
+                    }
+                    
+                    // Add or remove clicked set name
+                    if (updatedFilters["Set Names"].has(d.name)) {
+                        updatedFilters["Set Names"].delete(d.name);
+                    } else {
+                        updatedFilters["Set Names"].add(d.name);
+                    }
+                    
+                    updateState({
+                        selectedFilters: updatedFilters,
+                        updateContext: "TimelineFilter"
+                    });
+                    });
+        
         
     
  

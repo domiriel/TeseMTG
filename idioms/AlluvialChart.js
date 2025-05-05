@@ -4,8 +4,19 @@ const nodeColorScale = d3.scaleSequential()
     .interpolator(d3.interpolateRgb("#F0F0F0", "#373737")); // Soft to dark green
 
 
-
-  
+function formatPriceLabel(priceAttr) {
+    return priceAttr
+      .replace("price_", "") // remove prefix
+      .replace(/_/g, " ")    // replace underscores with spaces
+      .toUpperCase();        // uppercase
+  }
+    
+  function formatPriceSymbol(attr) {
+    if (attr.toLowerCase().includes("usd")) return "$";
+    if (attr.toLowerCase().includes("eur")) return "€";
+    return "";
+  }
+   
   function applyFisheyeEffect(rects, xScale, yScale, event) {
     const [mouseX, mouseY] = d3.pointer(event);
 
@@ -76,7 +87,8 @@ function getNodeColor(price, minPrice, maxPrice) {
   return getDiscreteColor(percentage); 
 }
 
-export function createAlluvialChart(data, containerId, isUpdate = false) {
+export function createAlluvialChart(data, containerId, isUpdate = false, selectedPriceAttribute = "price_usd") {
+
   d3.select(containerId).selectAll("*").remove();
 
  
@@ -117,7 +129,9 @@ export function createAlluvialChart(data, containerId, isUpdate = false) {
   let linkCounts = {};
   const linkPriceSums = {};
   const linkPriceCounts = {};
-  
+
+  const priceAttr = selectedPriceAttribute;
+
   data.forEach(card => {
     const orig = card.originality ? card.originality.toLowerCase() : "";
     const rarity = card.rarity ? card.rarity.toLowerCase() : "";
@@ -125,7 +139,9 @@ export function createAlluvialChart(data, containerId, isUpdate = false) {
     if (originalitySet.has(orig) && raritySet.has(rarity)) {
       const key = `${orig}|${rarity}`;
       linkCounts[key] = (linkCounts[key] || 0) + 1;
-      let price = parseFloat(card.price_usd);
+      
+      let price = parseFloat(card[priceAttr]);
+
       if (!isNaN(price)) {
         linkPriceSums[key] = (linkPriceSums[key] || 0) + price;
         linkPriceCounts[key] = (linkPriceCounts[key] || 0) + 1;
@@ -133,7 +149,8 @@ export function createAlluvialChart(data, containerId, isUpdate = false) {
     }
     
     
-    let price = parseFloat(card.price_usd);
+    let price = parseFloat(card[priceAttr]);
+
     if (!isNaN(price)) {
       if (origPriceSums.hasOwnProperty(orig)) {
         origPriceSums[orig] += price;
@@ -434,10 +451,15 @@ sankeyGenerator.update(sankeyData);
   const priceStep = (sharedPriceRange.max - sharedPriceRange.min) / numBins;
 
   
+  const symbol = formatPriceSymbol(priceAttr);
+
   const dynamicLegendData = Array.from({ length: numBins }, (_, i) => ({
-    label: `$${(sharedPriceRange.min + (i+1) * priceStep).toFixed(2)}`,
-      color: getDiscreteColor(i * (100 / numBins)) 
-  })).reverse(); 
+    label: `${symbol ? symbol + " " : ""}${(sharedPriceRange.min + (i + 1) * priceStep).toFixed(2)}`,
+    color: getDiscreteColor(i * (100 / numBins))
+  })).reverse();
+  
+  
+
 
     
   
@@ -461,7 +483,7 @@ const legend = svg.append("g")
 legend.append("text")
     .attr("x", 0)
     .attr("y", 135)
-    .text("(USD)")
+    .text("(" + formatPriceLabel(priceAttr)+ ")")
     .attr("fill", "#000")
     .style("font-size", "12px")
     .style("font-weight", "bold");
@@ -492,7 +514,7 @@ const zeroEntry = legend.append("g")
 zeroEntry.append("text")
     .attr("x", 30)
     .attr("y", rectHeight - 16)
-    .text("$0.00")
+    .text(`${symbol} 0.00`)
     .attr("fill", "#000")
     .style("font-size", "12px");
 

@@ -310,7 +310,8 @@ const levelHeight = chartHeight / depth;
         }
     
         setTimeout(() => {
-            updateState({ selectedFilters: newFilters });
+            updateState({ selectedFilters: newFilters, updateContext: "IcicleFilter" });
+            
           }, 70);  // enough to let zoom start
           
     }

@@ -130,6 +130,10 @@ priceSelect.selectAll("option")
     .attr("value", d => d)
     .text(d => d.replace("price_", "").toUpperCase()); 
 
+// 👇 Set the initial visible value here
+priceSelect.property("value", getState().selectedPriceAttribute);
+
+
     priceSelect.on("change", function() {
         const selectedPriceAttribute = this.value;
         console.log("Selected price attribute:", selectedPriceAttribute);
@@ -430,6 +434,10 @@ export function updateFilterPanel(data, containerId = ".FilterPanel") {
       case "Set Types": return card.set_type;
       case "Originality": return card.originality;
       case "Rarity": return card.rarity;
+      case "Set Names": return card.set_name;
+      case "Year":
+        if (!card.release_date) return null;
+        return new Date(card.release_date).getFullYear().toString();
       default: return null;
       case "IcicleColorGroups":
     if (card.number_of_colours >= 4) return "+4 Colors";

@@ -89,7 +89,8 @@ function getGroupColor(rank) {
 
 
 
-export function createScatterPlot(data, containerId, isUpdate = false) {
+export function createScatterPlot(data, containerId, isUpdate = false, selectedPriceAttribute = "price_usd") {
+
     d3.select(containerId).selectAll("*").remove();
 
     const excludedSetTypes = new Set(["promo", "funny", "memorabilia", "alchemy", "token", "minigame"]);
@@ -105,7 +106,7 @@ export function createScatterPlot(data, containerId, isUpdate = false) {
     const cardMap = new Map();
 
     data.forEach(card => {
-        const price = isNaN(card.price_usd) || card.price_usd === null ? 0 : card.price_usd;
+        const price = isNaN(card[selectedPriceAttribute]) || card[selectedPriceAttribute] === null ? 0 : card[selectedPriceAttribute];
         if (!isNaN(card.complexity)) {
             if (!cardMap.has(card.name)) {
                 cardMap.set(card.name, { ...card, prices: [], avg_price: 0 });
@@ -181,7 +182,12 @@ export function createScatterPlot(data, containerId, isUpdate = false) {
         .attr("text-anchor", "middle")
         .style("font-size", "14px")
         .style("font-weight", "bold")
-        .text("Price (USD)");
+        .text(() => {
+            if (selectedPriceAttribute.includes("eur")) return "Price (€)";
+            if (selectedPriceAttribute.includes("thx")) return "Price";
+            return "Price ($)";
+        });
+        
 
     svg.append("text")
         .attr("class", "y-axis-label")
@@ -251,7 +257,14 @@ export function createScatterPlot(data, containerId, isUpdate = false) {
                 Type: ${d.type}<br>
                 Subtype: ${d.subtype}<br>
                 Colors: ${d.color_identity}<br>
-                Avg Price: $${d.avg_price.toFixed(2)}<br>
+               Avg Price: ${
+    selectedPriceAttribute.includes("eur")
+        ? "€"
+        : selectedPriceAttribute.includes("thx")
+        ? ""
+        : "$"
+}${d.avg_price.toFixed(2)}
+<br>
             `);
     })
         .on("mousemove", function (event) {

@@ -22,30 +22,37 @@ function init() {
       const filtered = filterData(originalData, selectedFilters, selectedPriceAttribute);
   
       createIcicleChart(filtered, ".IcicleChart");
-      createAlluvialChart(filtered, ".AlluvialChart");
+      createAlluvialChart(filtered, ".AlluvialChart", false, selectedPriceAttribute);
+
       createTimelineView(filtered, ".TimelineView");
-      createScatterPlot(filtered, ".Scatterplot");
+      createScatterPlot(filtered, ".Scatterplot", true, selectedPriceAttribute);
+
       createStackedLineChart(filtered, ".LineChart");
       createFilterPanel(originalData, ".FilterPanel", selectedFilters); 
   
       subscribe((state) => {
         const filteredData = filterData(originalData, state.selectedFilters, state.selectedPriceAttribute);
-    
-        const onlyIcicleFilters =
-            state.selectedFilters.IcicleColorGroups?.size > 0 ||
-            state.selectedFilters.IcicleColorIdentity?.size > 0;
-    
-        if (!onlyIcicleFilters) {
-            
-            createIcicleChart(filteredData, ".IcicleChart", true);
+        const context = state.updateContext || "default";
+      
+        // 🎯 Update charts conditionally based on context
+        if (context !== "IcicleFilter") {
+          createIcicleChart(filteredData, ".IcicleChart", true);
         }
-    
+      
+        if (context !== "TimelineFilter") {
+          createTimelineView(filteredData, ".TimelineView", true);
+          createStackedLineChart(filteredData, ".LineChart", true);
+        }
+      
+        // Always update these
         updateFilterPanel(filteredData, ".FilterPanel");
-        createAlluvialChart(filteredData, ".AlluvialChart", true);
-        createTimelineView(filteredData, ".TimelineView", true);
-        createScatterPlot(filteredData, ".Scatterplot", true);
-        createStackedLineChart(filteredData, ".LineChart", true);
-    });
+        createAlluvialChart(filteredData, ".AlluvialChart", true, state.selectedPriceAttribute);
+
+        createScatterPlot(filteredData, ".Scatterplot", true, state.selectedPriceAttribute);
+
+        
+      });
+      
     
       
     });
@@ -58,10 +65,7 @@ function init() {
 
 
   function filterData(data, selectedFilters, selectedPriceAttribute) {
-    
-  
     return data.filter(card => {
-      
       if (selectedFilters["IcicleColorGroups"]?.size > 0) {
         const groupLabel = card.number_of_colours >= 4
           ? "+4 Colors"
@@ -74,7 +78,6 @@ function init() {
         }
       }
   
-      
       if (selectedFilters["IcicleColorIdentity"]?.size > 0) {
         const identity = Array.isArray(card.color_identity)
           ? card.color_identity.sort().join("-") || "Colorless"
@@ -85,10 +88,16 @@ function init() {
         }
       }
   
-      
+      if (selectedFilters["Year"]?.size > 0) {
+        const releaseYear = new Date(card.release_date).getFullYear().toString();
+        if (!selectedFilters["Year"].has(releaseYear)) {
+          return false;
+        }
+      }
+  
       for (const [category, values] of Object.entries(selectedFilters || {})) {
         if (!values || values.size === 0) continue;
-        if (category === "IcicleColorGroups" || category === "IcicleColorIdentity") continue;
+        if (["IcicleColorGroups", "IcicleColorIdentity", "Year"].includes(category)) continue;
   
         const cardValue = extractCardValue(card, category);
         if (!cardValue) return false;
@@ -112,6 +121,7 @@ function init() {
   
   
   
+  
 
   
   
@@ -124,8 +134,11 @@ function init() {
       case "Set Types": return card.set_type;
       case "Originality": return card.originality;
       case "Rarity": return card.rarity;
-  
-     
+      case "Set Names": return card.set_name;
+      case "Year":
+        if (!card.release_date) return null;
+        return new Date(card.release_date).getFullYear().toString();
+    
       case "IcicleColorGroups":
         if (card.number_of_colours >= 4) return "+4 Colors";
         if (card.number_of_colours === 0) return "Colorless";
