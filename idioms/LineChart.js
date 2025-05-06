@@ -198,7 +198,7 @@ g.selectAll("circle")
             .attr("r", 4)
             .attr("stroke", "none");
     })
-    .on("click", (event, d) => {
+    .on("click", function(event, d) {
         const selectedYear = d.year.getFullYear().toString();
     
         const currentState = getState();
@@ -208,10 +208,20 @@ g.selectAll("circle")
             updatedFilters[key] = new Set(currentState.selectedFilters[key]);
         }
     
-        if (updatedFilters["Year"]?.has(selectedYear)) {
-            updatedFilters["Year"].delete(selectedYear);
-        } else {
+        const isSelected = updatedFilters["Year"].has(selectedYear);
+    
+        if (!isSelected) {
             updatedFilters["Year"].add(selectedYear);
+            
+            // this works now because we're using a regular function
+            d3.select(this)
+                .attr("fill", "#007bff");
+        }
+        else {
+            updatedFilters["Year"].delete(selectedYear);
+            
+            d3.select(this)
+                .attr("fill", metric.color);
         }
     
         updateState({
@@ -219,6 +229,7 @@ g.selectAll("circle")
             updateContext: "TimelineFilter"
         });
     });
+    
     ;
 
 

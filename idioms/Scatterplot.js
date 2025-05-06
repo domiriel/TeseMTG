@@ -290,13 +290,26 @@ export function createScatterPlot(data, containerId, isUpdate = false, selectedP
             const isSameCard = currentHovered && currentHovered.name === d.name;
         
             if (isSameCard) {
-                console.log("[Scatterplot] Unhighlighting:", d.name);
+                d3.select(this)
+                    .attr("stroke", "none")
+                    .attr("stroke-width", null);
+        
                 updateState({ hoveredCard: null });
             } else {
-                console.log("[Scatterplot] Highlighting:", d.name);
+                d3.selectAll(".dots circle")
+                    .attr("stroke", "none")
+                    .attr("stroke-width", null);
+        
+                d3.select(this)
+                    .attr("stroke", "#007bff")
+                    .attr("stroke-width", 2.5);
+        
                 updateState({ hoveredCard: d });
             }
         });
+        
+        
+
         
         
         

@@ -1,5 +1,12 @@
 //Issues fixed: 3, 9
 import { updateState, getState } from "../state.js";
+function updateYearTickStyles() {
+    const yearFilter = getState().selectedFilters["Year"] || new Set();
+    d3.selectAll(".x-axis .tick text")
+        .style("fill", d => yearFilter.has(d.getFullYear().toString()) ? "#007bff" : "black")
+        .style("font-weight", d => yearFilter.has(d.getFullYear().toString()) ? "bold" : "normal");
+}
+
 export function createTimelineView(data, containerId, isUpdate = false) {
     d3.select(containerId).selectAll("*").remove();
 
@@ -73,41 +80,55 @@ export function createTimelineView(data, containerId, isUpdate = false) {
         .ticks(d3.timeYear.every(1))
         .tickFormat(d3.timeFormat("%Y"));
 
-    const xAxisGroup = fixedXAxis.append("g")
-        .attr("class", "x-axis")
-        .attr("transform", `translate(${margin.left}, ${margin.top - 20})`)
-        .call(xAxis)
-        .selectAll("text")
-        .style("text-anchor", "middle")
-        .style("cursor", "pointer")
-        .on("click", function(event, d) {
-            const year = d.getFullYear();
-            const currentState = getState();
-            const updatedFilters = {};
         
-            for (const key in currentState.selectedFilters) {
-                updatedFilters[key] = new Set(currentState.selectedFilters[key]);
-            }
+
+        const xAxisGroup = fixedXAxis.append("g")
+            .attr("class", "x-axis")
+            .attr("transform", `translate(${margin.left}, ${margin.top - 20})`)
+            .call(xAxis);
         
-            const yearLabel = year.toString();
+            const yearFilter = getState().selectedFilters["Year"] || new Set();
+
+            xAxisGroup.selectAll(".tick")
+            .select("text")
+            .classed("year-tick-timeline", true)
+            .style("text-anchor", "middle")
+            .style("cursor", "pointer")
+            .on("click", function (event, d) {
+                const year = d.getFullYear().toString();
+                const currentState = getState();
+                const updatedFilters = {};
         
-            // Create or toggle a new 'Year' filter
-            if (!updatedFilters["Year"]) {
-                updatedFilters["Year"] = new Set();
-            }
+                for (const key in currentState.selectedFilters) {
+                    updatedFilters[key] = new Set(currentState.selectedFilters[key]);
+                }
         
-            if (updatedFilters["Year"].has(yearLabel)) {
-                updatedFilters["Year"].delete(yearLabel);
-            } else {
-                updatedFilters["Year"].add(yearLabel);
-            }
+                if (!updatedFilters["Year"]) {
+                    updatedFilters["Year"] = new Set();
+                }
         
-            updateState({
-                selectedFilters: updatedFilters,
-                updateContext: "TimelineFilter"  // Don't update timeline
+                const isSelected = updatedFilters["Year"].has(year);
+        
+                if (isSelected) {
+                    updatedFilters["Year"].delete(year);
+                    d3.select(this)
+                        .style("fill", "black")
+                        .style("font-weight", "normal");
+                } else {
+                    updatedFilters["Year"].add(year);
+                    d3.select(this)
+                        .style("fill", "#007bff")
+                        .style("font-weight", "bold");
+                }
+        
+                updateState({
+                    selectedFilters: updatedFilters,
+                    updateContext: "TimelineFilter"
+                });
             });
-        });
-        ;
+        
+            
+        
 
 
     const scrollContainer = wrapper.append("div")
@@ -201,26 +222,39 @@ export function createTimelineView(data, containerId, isUpdate = false) {
                     d3.select("#tooltip").style("display", "none");
                 })
         .on("click", function (event, d) {
-                    const currentState = getState();
-                    const updatedFilters = {};
-                    
-                    for (const key in currentState.selectedFilters) {
-                        updatedFilters[key] = new Set(currentState.selectedFilters[key]);
-                    }
-                    
-                    // Add or remove clicked set name
-                    if (updatedFilters["Set Names"].has(d.name)) {
-                        updatedFilters["Set Names"].delete(d.name);
-                    } else {
-                        updatedFilters["Set Names"].add(d.name);
-                    }
-                    
-                    updateState({
-                        selectedFilters: updatedFilters,
-                        updateContext: "TimelineFilter"
-                    });
-                    });
+            const currentState = getState();
+            const updatedFilters = {};
         
+            for (const key in currentState.selectedFilters) {
+                updatedFilters[key] = new Set(currentState.selectedFilters[key]);
+            }
+        
+            if (!updatedFilters["Set Names"]) {
+                updatedFilters["Set Names"] = new Set();
+            }
+        
+            const isSelected = updatedFilters["Set Names"].has(d.name);
+        
+            if (isSelected) {
+                updatedFilters["Set Names"].delete(d.name);
+                d3.select(this).attr("fill", "#C3C3C3"); // Unhighlight only this square
+            } else {
+                updatedFilters["Set Names"].add(d.name);
+                d3.select(this).attr("fill", "#007bff"); // Highlight only this square
+            }
+        
+            updateState({
+                selectedFilters: updatedFilters,
+                updateContext: "TimelineFilter"
+            });
+        });
+                
+        
+        const selectedSetNames = getState().selectedFilters["Set Names"] || new Set();
+
+        squares.attr("fill", d =>
+            selectedSetNames.has(d.name) ? "#007bff" : "#C3C3C3"
+        );
         
     
  
