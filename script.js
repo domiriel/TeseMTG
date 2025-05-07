@@ -25,7 +25,16 @@ function init() {
       createAlluvialChart(filtered, ".AlluvialChart", false, selectedPriceAttribute);
 
       createTimelineView(filtered, ".TimelineView");
-      createScatterPlot(filtered, ".Scatterplot", true, selectedPriceAttribute);
+      let savedTransform = null;
+
+      try {
+          const svgNode = d3.select(".Scatterplot svg").node();
+          if (svgNode) savedTransform = d3.zoomTransform(svgNode);
+        } catch (e) {
+          console.warn("Could not read zoom transform:", e);
+        }
+
+      createScatterPlot(filtered, ".Scatterplot", true, selectedPriceAttribute, savedTransform);
 
       createStackedLineChart(filtered, ".LineChart");
       createFilterPanel(originalData, ".FilterPanel", selectedFilters); 
@@ -34,7 +43,7 @@ function init() {
         const filteredData = filterData(originalData, state.selectedFilters, state.selectedPriceAttribute);
         const context = state.updateContext || "default";
       
-        // 🎯 Update charts conditionally based on context
+       
         if (context !== "IcicleFilter") {
           createIcicleChart(filteredData, ".IcicleChart", true);
         }
@@ -44,11 +53,20 @@ function init() {
           createStackedLineChart(filteredData, ".LineChart", true);
         }
       
-        // Always update these
+        
         updateFilterPanel(filteredData, ".FilterPanel");
         createAlluvialChart(filteredData, ".AlluvialChart", true, state.selectedPriceAttribute);
 
-        createScatterPlot(filteredData, ".Scatterplot", true, state.selectedPriceAttribute);
+        let savedTransform = null;
+try {
+  const svgNode = d3.select(".Scatterplot svg").node();
+  if (svgNode) savedTransform = d3.zoomTransform(svgNode);
+} catch (e) {
+  console.warn("Could not read zoom transform:", e);
+}
+
+createScatterPlot(filteredData, ".Scatterplot", true, state.selectedPriceAttribute, savedTransform);
+
 
         
       });

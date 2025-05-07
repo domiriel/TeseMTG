@@ -1,4 +1,4 @@
-//Issues fixed: 3, 9
+
 import { updateState, getState } from "../state.js";
 function updateYearTickStyles() {
     const yearFilter = getState().selectedFilters["Year"] || new Set();
@@ -237,10 +237,10 @@ export function createTimelineView(data, containerId, isUpdate = false) {
         
             if (isSelected) {
                 updatedFilters["Set Names"].delete(d.name);
-                d3.select(this).attr("fill", "#C3C3C3"); // Unhighlight only this square
+                d3.select(this).attr("fill", "#C3C3C3"); 
             } else {
                 updatedFilters["Set Names"].add(d.name);
-                d3.select(this).attr("fill", "#007bff"); // Highlight only this square
+                d3.select(this).attr("fill", "#007bff"); 
             }
         
             updateState({
@@ -290,7 +290,7 @@ function clicked(selectedSet) {
         .style("opacity", d => (d.releaseDate >= zoomStart && d.releaseDate <= zoomEnd) ? 1 : 0)
         .attr("x", d => xScale(d.releaseDate) - 2.5);
 
-    //console.log("X-axis and squares updated");
+   
 }
 
     

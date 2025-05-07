@@ -1,6 +1,6 @@
-//Issues fixed: 1, 2, 4, teste
+
 import { updateState, getState } from "../state.js";
-let globalRects = null;  // this will hold the current rect selection
+let globalRects = null;  
 
 const colorScale = [
     { range: [0, 20], color: "#efefef" },
@@ -272,7 +272,7 @@ const levelHeight = chartHeight / depth;
         const wasFocused = (focus === p);
         focus = wasFocused ? root : p;
     
-        // 🔍 Zooming logic (always happens)
+       
         xScale.domain([focus.x0, focus.x1]);
         yScale.domain([0, depth]);
     
@@ -294,7 +294,7 @@ const levelHeight = chartHeight / depth;
                 return (rectWidth > textLength && rectHeight > 12) ? 1 : 0;
             });
     
-        // 🌍 Global filter logic (affects other charts only)
+       
         const currentFilters = getState().selectedFilters;
         const newFilters = structuredClone(currentFilters);
     
@@ -303,16 +303,16 @@ const levelHeight = chartHeight / depth;
             newFilters.IcicleColorIdentity = new Set();
         } else if (p.depth === 1) {
             newFilters.IcicleColorGroups = new Set([p.data.name]);
-            newFilters.IcicleColorIdentity = new Set(); // clear detail filter
+            newFilters.IcicleColorIdentity = new Set(); 
         } else if (p.depth === 2) {
             newFilters.IcicleColorIdentity = new Set([p.data.name]);
-            newFilters.IcicleColorGroups = new Set(); // clear group filter
+            newFilters.IcicleColorGroups = new Set(); 
         }
     
         setTimeout(() => {
             updateState({ selectedFilters: newFilters, updateContext: "IcicleFilter" });
             
-          }, 70);  // enough to let zoom start
+          }, 70);  
           
     }
     

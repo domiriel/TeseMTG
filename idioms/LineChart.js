@@ -1,4 +1,4 @@
-//Issues fixed: 3, 6, 8, 13
+
 import { updateState, getState } from "../state.js";
 export function createStackedLineChart(data, containerId, isUpdate = false) {
     d3.select(containerId).selectAll("*").remove();
@@ -212,16 +212,16 @@ g.selectAll("circle")
     
         if (!isSelected) {
             updatedFilters["Year"].add(selectedYear);
-            
-            // this works now because we're using a regular function
-            d3.select(this)
+    
+            // Highlight all circles from the same year
+            d3.selectAll(`circle.data-point[data-year='${selectedYear}']`)
                 .attr("fill", "#007bff");
-        }
-        else {
+        } else {
             updatedFilters["Year"].delete(selectedYear);
-            
-            d3.select(this)
-                .attr("fill", metric.color);
+    
+            // Revert all circles from the same year
+            d3.selectAll(`circle.data-point[data-year='${selectedYear}']`)
+                .attr("fill", "#c3c3c3");
         }
     
         updateState({
@@ -229,6 +229,7 @@ g.selectAll("circle")
             updateContext: "TimelineFilter"
         });
     });
+    
     
     ;
 

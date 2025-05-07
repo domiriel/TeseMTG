@@ -1,4 +1,4 @@
-//Issues fixed: 13
+
 import { updateState, getState } from "../state.js";
 const colorGroups = [
     { range: [1, 5691], color: "#787878" },  
@@ -89,7 +89,7 @@ function getGroupColor(rank) {
 
 
 
-export function createScatterPlot(data, containerId, isUpdate = false, selectedPriceAttribute = "price_usd") {
+export function createScatterPlot(data, containerId, isUpdate = false, selectedPriceAttribute = "price_usd", savedTransform = null) {
 
     d3.select(containerId).selectAll("*").remove();
 
@@ -129,6 +129,9 @@ export function createScatterPlot(data, containerId, isUpdate = false, selectedP
     const margin = { top: 20, right: 30, bottom: 50, left: 70 };
     const chartWidth = width - margin.left - margin.right;
     const chartHeight = height - margin.top - margin.bottom;
+
+    d3.select(containerId)
+  .style("visibility", "hidden");
 
     const svg = d3.select(containerId)
         .append("svg")
@@ -222,6 +225,16 @@ export function createScatterPlot(data, containerId, isUpdate = false, selectedP
         .attr("stroke", "none")
         .attr("opacity", 0.8);
 
+        const currentHovered = getState().hoveredCard;
+
+        if (currentHovered) {
+            gClip.selectAll("circle")
+                .filter(d => d.name === currentHovered.name)
+                .attr("stroke", "orange")
+                .attr("stroke-width", 1.5)
+                .raise();
+        }
+        
     function updatePointPositions() {
         dots.attr("cx", d => xScale(d.avg_price))
             .attr("cy", d => yScale(d.complexity));
@@ -257,16 +270,11 @@ export function createScatterPlot(data, containerId, isUpdate = false, selectedP
                 Type: ${d.type}<br>
                 Subtype: ${d.subtype}<br>
                 Colors: ${d.color_identity}<br>
-               Avg Price: ${
-    selectedPriceAttribute.includes("eur")
-        ? "€"
-        : selectedPriceAttribute.includes("thx")
-        ? ""
-        : "$"
-}${d.avg_price.toFixed(2)}
-<br>
-            `);
-    })
+               Avg Price: ${selectedPriceAttribute.includes("eur")
+                            ? "€"
+                            :selectedPriceAttribute.includes("thx")
+                            ? ""
+                            : "$"}${d.avg_price.toFixed(2)}<br>`); })
         .on("mousemove", function (event) {
             const tooltipNode = tooltip.node();
             const tooltipWidth = tooltipNode.offsetWidth;
@@ -301,12 +309,14 @@ export function createScatterPlot(data, containerId, isUpdate = false, selectedP
                     .attr("stroke-width", null);
         
                 d3.select(this)
-                    .attr("stroke", "#007bff")
+                    .raise() // ensures it's not hidden behind others
+                    .attr("stroke", "#000")  // high contrast for visibility
                     .attr("stroke-width", 2.5);
         
                 updateState({ hoveredCard: d });
             }
         });
+        
         
         
 
@@ -315,7 +325,7 @@ export function createScatterPlot(data, containerId, isUpdate = false, selectedP
         
         
     let zoomTimeout = null;
-    const ZOOM_DELAY = 60; // ms — feel free to tweak (e.g., 40–100)
+    const ZOOM_DELAY = 60; 
 
     const zoom = d3.zoom()
         .scaleExtent([1, 24])
@@ -327,7 +337,7 @@ export function createScatterPlot(data, containerId, isUpdate = false, selectedP
                 let newY = transform.rescaleY(originalYScale);
                 const [yMin, yMax] = newY.domain();
 
-                // Clamp Y-axis so it doesn't go below 0
+                
                 if (yMin < 0) {
                     const span = yMax - yMin;
                     newY = d3.scaleLinear()
@@ -345,7 +355,18 @@ export function createScatterPlot(data, containerId, isUpdate = false, selectedP
         });
 
 
-    svg.call(zoom);
+        svg.call(zoom);
+
+        if (savedTransform) {
+            svg.call(zoom.transform, savedTransform);
+        }
+        
+        // Wait 1 frame (~16ms) before revealing chart
+        setTimeout(() => {
+            d3.select(containerId).style("visibility", "visible");
+        }, 20);
+        
+    
 
     function updatePointStyle(zoomLevel) {
         dots.attr("r", d => {
