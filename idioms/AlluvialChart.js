@@ -1,5 +1,6 @@
 //Issues fixed: 4
 import { updateState, getState } from "../state.js";
+import { updateFilterPanel } from "./FilterPanel.js"; 
 const nodeColorScale = d3.scaleSequential()
     .interpolator(d3.interpolateRgb("#F0F0F0", "#373737")); // Soft to dark green
 
@@ -371,6 +372,8 @@ sankeyGenerator.update(sankeyData);
       }
     
       updateState({ selectedFilters: updatedFilters });
+      updateFilterPanel(getState().originalData, updatedFilters); // Ensure panel reflects the change
+
     });
     
     
@@ -417,8 +420,10 @@ sankeyGenerator.update(sankeyData);
       } else {
         updatedFilters[category].add(d.name);
       }
-  
+      
       updateState({ selectedFilters: updatedFilters });
+      updateFilterPanel(getState().originalData, updatedFilters); // Ensure panel reflects the change
+
     });
   
   

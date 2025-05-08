@@ -1,7 +1,10 @@
 //Issues fixed: 18, 22
 import { updateState, getState } from "../state.js";
+import { filterData } from "../script.js"; // Add this at top if not already
 
 const optionMap = new Map();  
+const pillMap = new Map();
+
 
 function addToMap(map, key) {
     if (!key) return;
@@ -209,6 +212,8 @@ export function createFilterPanel(data, containerId, selectedFiltersFromState, i
             .style("display", "none")
             .style("flex-wrap", "wrap")
             .style("gap", "4px");
+        pillMap.set(category, pillContainer);
+
 
         const selectedSet = selectedFilters[category];
 
@@ -246,6 +251,7 @@ export function createFilterPanel(data, containerId, selectedFiltersFromState, i
                     updateFilterStyles();
                     clearTimeout(window._filterPanelTimeout);
                     window._filterPanelTimeout = setTimeout(() => {
+                        console.log("[pills] Selected filters now:", [...selectedSet]);
                         updateFilterPanel(data);
                     }, 50);
                 });
@@ -276,6 +282,8 @@ export function createFilterPanel(data, containerId, selectedFiltersFromState, i
                 updateFilterStyles();
                 clearTimeout(window._filterPanelTimeout);
                 window._filterPanelTimeout = setTimeout(() => {
+                    
+
                     updateFilterPanel(data);
                 }, 50);
             });
@@ -295,8 +303,7 @@ export function createFilterPanel(data, containerId, selectedFiltersFromState, i
     });
 }
 
-export function updateFilterPanel(data, containerId = ".FilterPanel") {
-    const { selectedFilters } = getState();
+export function updateFilterPanel(originalData, selectedFilters, containerId = ".FilterPanel") {
     const filters = {
         "Keywords": new Map(),
         "Supertypes": new Map(),
@@ -309,41 +316,35 @@ export function updateFilterPanel(data, containerId = ".FilterPanel") {
         "IcicleColorIdentity": new Map()
     };
 
-    const cachedFiltered = new Map();
-
     Object.keys(filters).forEach(category => {
-        if (!cachedFiltered.has(category)) {
-            const partialFilters = {};
-            for (const key in selectedFilters) {
-                partialFilters[key] = new Set(selectedFilters[key]);
-            }
-            partialFilters[category] = new Set();
-
-            const result = data.filter(card => {
-                for (const [cat, values] of Object.entries(partialFilters)) {
-                    if (!values || values.size === 0) continue;
-                    const cardValue = extractCardValue(card, cat);
-                    if (!cardValue) return false;
-
-                    const isSplittable = ["Supertypes", "Types", "Subtypes"].includes(cat);
-                    const cardValues = Array.isArray(cardValue)
-                        ? cardValue.map(v => v.trim().toLowerCase())
-                        : (isSplittable
-                            ? cardValue.split(/[\s/]+/).map(v => v.trim().toLowerCase())
-                            : [cardValue.trim().toLowerCase()]);
-
-                    const filterValues = new Set([...values].map(v => v.trim().toLowerCase()));
-                    if (!cardValues.some(v => filterValues.has(v))) return false;
-                }
-                return true;
-            });
-
-            cachedFiltered.set(category, result);
+        // Partial filter: ignore the current category
+        const partialFilters = {};
+        for (const key in selectedFilters) {
+            partialFilters[key] = new Set(selectedFilters[key]);
         }
+        partialFilters[category] = new Set(); // empty for this category
 
-        const filtered = cachedFiltered.get(category);
+        const partiallyFilteredData = originalData.filter(card => {
+            for (const [cat, values] of Object.entries(partialFilters)) {
+                if (!values || values.size === 0) continue;
+                const cardValue = extractCardValue(card, cat);
+                if (!cardValue) return false;
 
-        filtered.forEach(card => {
+                const isSplittable = ["Supertypes", "Types", "Subtypes"].includes(cat);
+                const cardValues = Array.isArray(cardValue)
+                    ? cardValue.map(v => v.trim().toLowerCase())
+                    : (isSplittable
+                        ? cardValue.split(/[\s/]+/).map(v => v.trim().toLowerCase())
+                        : [cardValue.trim().toLowerCase()]);
+
+                const filterValues = new Set([...values].map(v => v.trim().toLowerCase()));
+                if (!cardValues.some(v => filterValues.has(v))) return false;
+            }
+            return true;
+        });
+
+        // Count the values for this category using the partially filtered data
+        partiallyFilteredData.forEach(card => {
             const cardValue = extractCardValue(card, category);
             if (!cardValue) return;
 
@@ -356,16 +357,58 @@ export function updateFilterPanel(data, containerId = ".FilterPanel") {
         });
     });
 
-    optionMap.forEach((el, key) => {
-        const [category, value] = key.split("|");
-        if (category === "IcicleColorGroups" || category === "IcicleColorIdentity") return;
-        const count = filters[category]?.get(value) || 0;
-        const span = el.select("span");
-        span.text(`${value} (${count})`).attr("data-count", count);
-        el.style("opacity", count === 0 ? 0.4 : 1);
-        el.style("pointer-events", count === 0 ? "none" : "auto");
+    window.requestAnimationFrame(() => {
+        optionMap.forEach((el, key) => {
+            const [category, value] = key.split("|");
+            if (!filters[category]) return;
+
+            const count = filters[category]?.get(value) || 0;
+            const span = el.select("span");
+            span.text(`${value} (${count})`).attr("data-count", count);
+
+            const selectedSet = selectedFilters[category] || new Set();
+            const isSelected = selectedSet.has(value);
+
+            el.style("opacity", count === 0 && !isSelected ? 0.4 : 1);
+            el.style("pointer-events", count === 0 && !isSelected ? "none" : "auto");
+            el.style("background-color", isSelected ? "#cce5ff" : "#fff");
+        });
     });
+
+    Object.entries(selectedFilters).forEach(([category, selectedSet]) => {
+        const pillContainer = pillMap.get(category);
+        if (!pillContainer) return;
+      
+        const pills = pillContainer.selectAll(".pill")
+          .data(Array.from(selectedSet), d => d);
+      
+        pills.enter()
+          .append("div")
+          .attr("class", "pill")
+          .style("background", "#007bff")
+          .style("color", "white")
+          .style("padding", "2px 8px")
+          .style("border-radius", "12px")
+          .style("font-size", "12px")
+          .text(d => d)
+          .append("span")
+          .style("margin-left", "6px")
+          .style("cursor", "pointer")
+          .text("\u2715")
+          .on("click", function (event, value) {
+              selectedSet.delete(value);
+              const updatedFilters = {};
+              for (const key in selectedFilters) {
+                  updatedFilters[key] = new Set(selectedFilters[key]);
+              }
+              updateState({ selectedFilters: updatedFilters });
+          });
+      
+        pills.exit().remove();
+      });
+      
 }
+
 
 function extractCardValue(card, category) {
     switch (category) {
@@ -387,4 +430,8 @@ function extractCardValue(card, category) {
             return card.color_identity.sort().join("-");
         default: return null;
     }
-}
+} 
+
+
+
+

@@ -42,7 +42,7 @@ export function createTimelineView(data, containerId, isUpdate = false) {
     const containerWidth = containerBounds.width * 0.98;
     const containerHeight = containerBounds.height;
 
-    const chartWidth = containerWidth * 0.90;
+    const chartWidth = containerWidth * 0.927;
     const chartHeight = containerHeight;
 
     const margin = { 
@@ -195,12 +195,18 @@ export function createTimelineView(data, containerId, isUpdate = false) {
             const viewportHeight = window.innerHeight;
 
             let left = event.pageX + 10; 
-            let top = event.pageY - 10; 
+            let top = event.pageY - 10;
 
-    
-            if (left + tooltipWidth > viewportWidth) {
-                left = event.pageX - tooltipWidth - 10;
-            }
+// If tooltip would go below the viewport, move it above the cursor
+if (top + tooltipHeight > viewportHeight) {
+    top = event.pageY - tooltipHeight - 10;
+}
+
+// Prevent it from going above the screen
+if (top < 0) {
+    top = 10;
+}
+
 
             
             if (top + tooltipHeight > viewportHeight) {

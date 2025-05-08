@@ -2,7 +2,7 @@ import { getState, subscribe } from "./state.js";
 import { createIcicleChart, highlightIcicleRect } from "./idioms/IcicleChart.js";
 import { createAlluvialChart, highlightAlluvialElements} from "./idioms/AlluvialChart.js";
 import { createTimelineView } from "./idioms/TimelineView.js";
-import { createScatterPlot } from "./idioms/Scatterplot.js";
+import { createScatterPlot, updateScatterPlot } from "./idioms/Scatterplot.js";
 import { createStackedLineChart } from "./idioms/LineChart.js";
 import { createFilterPanel, updateFilterPanel } from "./idioms/FilterPanel.js";
 
@@ -22,6 +22,7 @@ function init() {
       const filtered = filterData(originalData, selectedFilters, selectedPriceAttribute);
   
       createIcicleChart(filtered, ".IcicleChart");
+      updateFilterPanel(originalData, selectedFilters);
       createAlluvialChart(filtered, ".AlluvialChart", false, selectedPriceAttribute);
 
       createTimelineView(filtered, ".TimelineView");
@@ -40,36 +41,56 @@ function init() {
       createFilterPanel(originalData, ".FilterPanel", selectedFilters); 
   
       subscribe((state) => {
-        const filteredData = filterData(originalData, state.selectedFilters, state.selectedPriceAttribute);
         const context = state.updateContext || "default";
-      
+        const { selectedFilters, selectedPriceAttribute } = state;
+
+        
+        const filteredData = filterData(originalData, selectedFilters, selectedPriceAttribute);
+
+        
+        if (window._prevFilteredLength === filteredData.length &&
+            window._prevPriceAttribute === selectedPriceAttribute &&
+            context === "default") {
+          return;
+        }
+        window._prevFilteredLength = filteredData.length;
+        window._prevPriceAttribute = selectedPriceAttribute;
+
        
         if (context !== "IcicleFilter") {
           createIcicleChart(filteredData, ".IcicleChart", true);
         }
-      
+
+        
         if (context !== "TimelineFilter") {
           createTimelineView(filteredData, ".TimelineView", true);
           createStackedLineChart(filteredData, ".LineChart", true);
         }
-      
+
+       
+        createAlluvialChart(filteredData, ".AlluvialChart", true, selectedPriceAttribute);
+
         
-        updateFilterPanel(filteredData, ".FilterPanel");
-        createAlluvialChart(filteredData, ".AlluvialChart", true, state.selectedPriceAttribute);
-
         let savedTransform = null;
-try {
-  const svgNode = d3.select(".Scatterplot svg").node();
-  if (svgNode) savedTransform = d3.zoomTransform(svgNode);
-} catch (e) {
-  console.warn("Could not read zoom transform:", e);
-}
+        try {
+          const svgNode = d3.select(".Scatterplot svg").node();
+          if (svgNode) savedTransform = d3.zoomTransform(svgNode);
+        } catch (e) {
+          console.warn("Could not read zoom transform:", e);
+        }
 
-createScatterPlot(filteredData, ".Scatterplot", true, state.selectedPriceAttribute, savedTransform);
+        createScatterPlot(filteredData, ".Scatterplot", true, selectedPriceAttribute, savedTransform);
 
+        
+        setTimeout(() => {
+          
 
+          updateFilterPanel(originalData, selectedFilters, ".FilterPanel");
+
+        }, 10);
         
       });
+
       
     
       
@@ -82,7 +103,7 @@ createScatterPlot(filteredData, ".Scatterplot", true, state.selectedPriceAttribu
   
 
 
-  function filterData(data, selectedFilters, selectedPriceAttribute) {
+  export function filterData(data, selectedFilters, selectedPriceAttribute) {
     return data.filter(card => {
       if (selectedFilters["IcicleColorGroups"]?.size > 0) {
         const groupLabel = card.number_of_colours >= 4
