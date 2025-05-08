@@ -304,6 +304,7 @@ export function createFilterPanel(data, containerId, selectedFiltersFromState, i
 }
 
 export function updateFilterPanel(originalData, selectedFilters, containerId = ".FilterPanel") {
+    selectedFilters = selectedFilters || {};
     const filters = {
         "Keywords": new Map(),
         "Supertypes": new Map(),

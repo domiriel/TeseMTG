@@ -7,6 +7,11 @@ const colorGroups = [
     { range: [17075, 22765], color: "#dadada"},
     { range: [22766, 28456], color: "#efefef" }  
 ];
+function getSymbolFromAttribute(attr) {
+    if (attr.includes("eur")) return "€";
+    if (attr.includes("usd")) return "$";
+    return "";
+}
 
 function generateLogTicks2(min, max) {
     const ticks = [];
@@ -157,7 +162,9 @@ export function createScatterPlot(data, containerId, isUpdate = false, selectedP
     const xScale = originalXScale.copy();
     const yScale = originalYScale.copy();
 
-    const formatPrice = d3.format("$,.2f");
+    const symbol = getSymbolFromAttribute(selectedPriceAttribute); 
+const formatPrice = d => `${symbol}${d.toFixed(2)}`;
+
 
     const xAxisG = g.append("g")
         .attr("class", "x-axis")
@@ -381,5 +388,65 @@ export function createScatterPlot(data, containerId, isUpdate = false, selectedP
     }
 
     d3.select("#reset-button").on("click", resetZoom);
+}
+
+export function updateScatterPlot(data, selectedPriceAttribute) {
+    const cardMap = new Map();
+
+    data.forEach(card => {
+        const price = isNaN(card[selectedPriceAttribute]) || card[selectedPriceAttribute] === null ? 0 : card[selectedPriceAttribute];
+        if (!isNaN(card.complexity)) {
+            if (!cardMap.has(card.name)) {
+                cardMap.set(card.name, { ...card, prices: [], avg_price: 0 });
+            }
+            cardMap.get(card.name).prices.push(price);
+        }
+    });
+
+    cardMap.forEach(card => {
+        card.avg_price = card.prices.length > 0
+            ? card.prices.reduce((sum, p) => sum + p, 0) / card.prices.length
+            : 0;
+    });
+
+    const updatedData = Array.from(cardMap.values());
+
+    const xScale = d3.scaleLog()
+        .domain([
+            Math.max(0.01, d3.min(updatedData, d => d.avg_price || 0.01)),
+            d3.max(updatedData, d => d.avg_price)
+        ]);
+
+    const symbol = getSymbolFromAttribute(selectedPriceAttribute);
+    const formatPrice = d => `${symbol}${d.toFixed(2)}`;
+
+    const xAxis = d3.axisBottom(xScale)
+        .tickValues(generateLogTicks2(xScale.domain()[0], xScale.domain()[1]))
+        .tickFormat(formatPrice);
+
+    d3.select(".x-axis").call(xAxis);
+    d3.select(".x-axis-label").text(`Price (${symbol})`);
+
+    // 🔧 FIX: Scoped selection inside clip group
+    const gClip = d3.select(".dots .clip-group");
+
+    const dots = gClip.selectAll("circle")
+        .data(updatedData, d => d.name);
+
+    dots.join(
+        enter => enter.append("circle")
+            .attr("r", 2.5)
+            .attr("fill", d => getGroupColor(d.edhrec_rank || 0))
+            .attr("stroke", "none")
+            .attr("opacity", 0.8)
+            .attr("cx", d => xScale(d.avg_price))
+            .attr("cy", d => +d.complexity),
+        update => update
+            .transition().duration(200)
+            .attr("fill", d => getGroupColor(d.edhrec_rank || 0))
+            .attr("cx", d => xScale(d.avg_price))
+            .attr("cy", d => +d.complexity),
+        exit => exit.remove()
+    );
 }
 

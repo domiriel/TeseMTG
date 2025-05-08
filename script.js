@@ -35,7 +35,7 @@ function init() {
           console.warn("Could not read zoom transform:", e);
         }
 
-      createScatterPlot(filtered, ".Scatterplot", true, selectedPriceAttribute, savedTransform);
+      createScatterPlot(filtered, ".Scatterplot", false, selectedPriceAttribute, savedTransform);
 
       createStackedLineChart(filtered, ".LineChart");
       createFilterPanel(originalData, ".FilterPanel", selectedFilters); 
