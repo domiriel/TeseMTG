@@ -2,7 +2,7 @@ import { getState, subscribe } from "./state.js";
 import { createIcicleChart, highlightIcicleRect } from "./idioms/IcicleChart.js";
 import { createAlluvialChart, highlightAlluvialElements} from "./idioms/AlluvialChart.js";
 import { createTimelineView } from "./idioms/TimelineView.js";
-import { createScatterPlot, updateScatterPlot } from "./idioms/Scatterplot.js";
+import { createScatterPlot} from "./idioms/Scatterplot.js";
 import { createStackedLineChart } from "./idioms/LineChart.js";
 import { createFilterPanel, updateFilterPanel } from "./idioms/FilterPanel.js";
 
