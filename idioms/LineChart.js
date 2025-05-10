@@ -55,7 +55,7 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
     const metrics = [
         { key: "reprints", label: "Func. Reprints", color: "#c3c3c3" },
         { key: "avgComplexity", label: "Avg. Complexity", color: "#c3c3c3" },
-        { key: "avgCMC", label: "Average CMC", color: "#c3c3c3" }
+        { key: "avgCMC", label: "Avg. MV", color: "#c3c3c3" }
     ];
     
     const container = d3.select(containerId);
@@ -160,12 +160,23 @@ g.selectAll("circle")
     .style("cursor", "pointer")
     .attr("class", "data-point") 
     .on("mouseover", (event, d) => {
-        tooltip
-            .style("display", "block")
-            .html(`
-                <strong>Year:</strong> ${d.year.getFullYear()}<br/>
-                <strong>${metric.label}:</strong> ${d[metric.key].toFixed(2)}<br/>
-            `);
+        const year = d.year.getFullYear();
+
+        const allMetrics = metrics.map(m => {
+            const value = d[m.key];
+            const formatted = m.key === "reprints"
+                ? Math.round(value)            // no decimals for reprints
+                : (value?.toFixed(2) ?? "N/A");
+            return `<strong>${m.label}:</strong> ${formatted}`;
+        }).join("<br/>");
+        
+
+    tooltip
+        .style("display", "block")
+        .html(`
+            <strong>Year:</strong> ${year}<br/>
+            ${allMetrics}
+        `);
 
         
         d3.selectAll(`circle.data-point[data-year='${d.year.getFullYear()}']`)

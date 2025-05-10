@@ -284,7 +284,7 @@ export function createFilterPanel(data, containerId, selectedFiltersFromState, i
                 window._filterPanelTimeout = setTimeout(() => {
                     
 
-                    updateFilterPanel(data);
+                    updateFilterPanel(data, updatedFilters);
                 }, 50);
             });
 

@@ -96,6 +96,7 @@ function getGroupColor(rank) {
 
 export function createScatterPlot(data, containerId, isUpdate = false, selectedPriceAttribute = "price_usd", savedTransform = null) {
 
+    
     d3.select(containerId).selectAll("*").remove();
 
     const excludedSetTypes = new Set(["promo", "funny", "memorabilia", "alchemy", "token", "minigame"]);
@@ -152,12 +153,14 @@ export function createScatterPlot(data, containerId, isUpdate = false, selectedP
         ])
         .range([0, chartWidth]);
 
-    const originalYScale = d3.scaleLinear()
-        .domain([
-            d3.min(sampledData, d => d.complexity),
-            d3.max(sampledData, d => d.complexity)
-        ])
-        .range([chartHeight, 0]);
+        const minComplexity = d3.min(sampledData, d => d.complexity);
+        const maxComplexity = d3.max(sampledData, d => d.complexity);
+        const yPadding = (maxComplexity - minComplexity) * 0.01; // 5% padding
+        
+        const originalYScale = d3.scaleLinear()
+            .domain([minComplexity - yPadding, maxComplexity + yPadding])
+            .range([chartHeight, 0]);
+        
 
     const xScale = originalXScale.copy();
     const yScale = originalYScale.copy();
@@ -199,16 +202,40 @@ const formatPrice = d => `${symbol}${d.toFixed(2)}`;
         });
         
 
-    svg.append("text")
-        .attr("class", "y-axis-label")
-        .attr("x", -margin.top - chartHeight / 2)
-        .attr("y", 30)
-        .attr("transform", "rotate(-90)")
-        .attr("text-anchor", "middle")
-        .style("font-size", "14px")
-        .style("font-weight", "bold")
-        .text("Complexity");
+        svg.append("text")
+    .attr("class", "y-axis-label")
+    .attr("x", margin.left-15)
+    .attr("y", margin.top - 5)
+    .attr("text-anchor", "middle")
+    .style("font-size", "14px")
+    .style("font-weight", "bold")
+    .style("cursor", "help")
+    .text("Complexity")
+    .on("mouseover", (event) => {
+        d3.select("#scatter-tooltip")
+            .style("display", "block")
+            .html(`An aggregated score representing the number <br> of non-flavor words a card has.`);
+    })
+    .on("mousemove", (event) => {
+        const tooltip = d3.select("#scatter-tooltip");
+        const tooltipWidth = tooltip.node().offsetWidth;
+        const padding = 10;
+        let left = event.pageX + padding;
+        if (left + tooltipWidth > window.innerWidth) {
+            left = event.pageX - tooltipWidth - padding;
+        }
 
+        tooltip
+            .style("left", `${left}px`)
+            .style("top", `${event.pageY + padding}px`);
+    })
+    .on("mouseout", () => {
+        d3.select("#scatter-tooltip").style("display", "none");
+    });
+
+
+    
+    
     svg.append("defs")
         .append("clipPath")
         .attr("id", "chart-clip")
@@ -225,12 +252,14 @@ const formatPrice = d => `${symbol}${d.toFixed(2)}`;
     const gClip = gDot.append("g").attr("class", "clip-group");
 
     const dots = gClip.selectAll("circle")
-        .data(sampledData, d => d.name)
-        .join("circle")
-        .attr("r",2.5)
-        .attr("fill", d => getGroupColor(d.edhrec_rank || 0))
-        .attr("stroke", "none")
-        .attr("opacity", 0.8);
+    .data(sampledData, d => d.name)
+    .join("circle")
+    .attr("r", 2.5)
+    .attr("fill", d => d.edhrec_rank ? getGroupColor(d.edhrec_rank) : "transparent")
+    .attr("stroke", d => d.edhrec_rank ? "none" : "black")
+    .attr("stroke-width", d => d.edhrec_rank ? 0 : 1.2)
+    .attr("opacity", 0.8);
+
 
         const currentHovered = getState().hoveredCard;
 
@@ -390,63 +419,4 @@ const formatPrice = d => `${symbol}${d.toFixed(2)}`;
     d3.select("#reset-button").on("click", resetZoom);
 }
 
-export function updateScatterPlot(data, selectedPriceAttribute) {
-    const cardMap = new Map();
-
-    data.forEach(card => {
-        const price = isNaN(card[selectedPriceAttribute]) || card[selectedPriceAttribute] === null ? 0 : card[selectedPriceAttribute];
-        if (!isNaN(card.complexity)) {
-            if (!cardMap.has(card.name)) {
-                cardMap.set(card.name, { ...card, prices: [], avg_price: 0 });
-            }
-            cardMap.get(card.name).prices.push(price);
-        }
-    });
-
-    cardMap.forEach(card => {
-        card.avg_price = card.prices.length > 0
-            ? card.prices.reduce((sum, p) => sum + p, 0) / card.prices.length
-            : 0;
-    });
-
-    const updatedData = Array.from(cardMap.values());
-
-    const xScale = d3.scaleLog()
-        .domain([
-            Math.max(0.01, d3.min(updatedData, d => d.avg_price || 0.01)),
-            d3.max(updatedData, d => d.avg_price)
-        ]);
-
-    const symbol = getSymbolFromAttribute(selectedPriceAttribute);
-    const formatPrice = d => `${symbol}${d.toFixed(2)}`;
-
-    const xAxis = d3.axisBottom(xScale)
-        .tickValues(generateLogTicks2(xScale.domain()[0], xScale.domain()[1]))
-        .tickFormat(formatPrice);
-
-    d3.select(".x-axis").call(xAxis);
-    d3.select(".x-axis-label").text(`Price (${symbol})`);
-
-    // 🔧 FIX: Scoped selection inside clip group
-    const gClip = d3.select(".dots .clip-group");
-
-    const dots = gClip.selectAll("circle")
-        .data(updatedData, d => d.name);
-
-    dots.join(
-        enter => enter.append("circle")
-            .attr("r", 2.5)
-            .attr("fill", d => getGroupColor(d.edhrec_rank || 0))
-            .attr("stroke", "none")
-            .attr("opacity", 0.8)
-            .attr("cx", d => xScale(d.avg_price))
-            .attr("cy", d => +d.complexity),
-        update => update
-            .transition().duration(200)
-            .attr("fill", d => getGroupColor(d.edhrec_rank || 0))
-            .attr("cx", d => xScale(d.avg_price))
-            .attr("cy", d => +d.complexity),
-        exit => exit.remove()
-    );
-}
 

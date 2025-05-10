@@ -43,7 +43,7 @@ function rgbToHex(r, g, b) {
     return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase()}`;
 }
 export function createIcicleChart(data, containerId, isUpdate = false) {
-    
+    const mtgColorOrder = { W: 0, U: 1, R: 2, B: 3, G: 4 };
     d3.select(containerId).selectAll("*").remove();
 
     let groupedData = [];
@@ -55,7 +55,12 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
       
         if (numColors >= 4) numColors = 4; 
 
-        let colorKey = colors.sort().join("-") || "Colorless";  
+        
+        let colorKey = colors
+        .slice()
+        .sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b])
+        .join("-") || "Colorless";
+
         let colorGroupName = numColors === 0 ? "Colorless" : numColors === 4 ? "+4 Colors" : `${numColors} Colors`;
 
         let colorGroup = groupedData.find(c => c.name === colorGroupName);
@@ -126,7 +131,18 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
 
     
     groupedData.forEach(group => {
-        group.children.sort((a, b) => a.name.localeCompare(b.name));
+        group.children.sort((a, b) => {
+            const aColors = a.name.split("-");
+            const bColors = b.name.split("-");
+    
+            for (let i = 0; i < Math.max(aColors.length, bColors.length); i++) {
+                const aVal = mtgColorOrder[aColors[i]] ?? 99;
+                const bVal = mtgColorOrder[bColors[i]] ?? 99;
+                if (aVal !== bVal) return aVal - bVal;
+            }
+    
+            return 0;
+        });
     });
 
     
@@ -218,14 +234,20 @@ const levelHeight = chartHeight / depth;
         .attr("fill", d => d.data.color)
         .style("stroke", "#fff")
         .style("cursor", "pointer")
-        .on("click", clicked)
+        .on("click", function(event, d) {
+            clicked(event, d, false);
+        })
+        .on("dblclick", function(event, d) {
+            clicked(event, d, true);
+        })
+        
         .on("mouseover", function(event, d) {
             d3.select("#tooltip")
                 .style("display", "block")
                 .style("left", `${event.pageX + 10}px`)
                 .style("top", `${event.pageY - 10}px`)
                 .html(`
-                    <strong>${d.data.name}</strong><br>
+                    <strong>${d.data.name.replaceAll("-", "")}</strong><br>
                     Total: ${d.value} cards<br>
                     Original: ${d.data.originalCount || 0} (${((d.data.originalCount / d.value) * 100).toFixed(2)}%)<br>
                     Reprint: ${d.data.reprintCount || 0} cards<br>
@@ -244,31 +266,35 @@ const levelHeight = chartHeight / depth;
 
           
     
-    const labels = zoomGroup.selectAll("text")
-    .data(root.descendants().slice(1)) 
-    .enter()
-    .append("text")
-    .attr("x", d => xScale(d.x0) + (xScale(d.x1) - xScale(d.x0)) / 2)
-    .attr("y", d => d.depth * levelHeight )
-    .attr("dy", "0.35em")
-    .attr("text-anchor", "middle")
-    .attr("fill", "#000")
-    .attr("font-size", "15px")
-    .attr("pointer-events", "none")
-    .style("opacity", d => {
-        const rectWidth = xScale(d.x1) - xScale(d.x0);
-        const rectHeight = levelHeight - 1;
-        const textLength = d.data.name.length * 7;
+        const labels = zoomGroup.selectAll("text")
+        .data(root.descendants().slice(1))
+        .enter()
+        .append("text")
+        .attr("x", d => (xScale(d.x0) + xScale(d.x1)) / 2)
+        .attr("y", d => yScale(d.depth))
+        .attr("dy", "0.35em")
+        .attr("text-anchor", "middle")
+        .attr("fill", "#000")
+        .attr("pointer-events", "none")
+        .style("font-size", d => {
+            const rectWidth = xScale(d.x1) - xScale(d.x0);
+            const baseSize = 15;
+            if (rectWidth < 40) return `${(14)}px`;
+            return `${baseSize}px`;
+        })
+        .style("opacity", d => {
+            const rectWidth = xScale(d.x1) - xScale(d.x0);
+            const textLength = d.data.name.replaceAll("-", "").length * 6;
+            return (rectWidth > textLength) ? 1 : 0;
+        })
         
-        return (rectWidth > textLength && rectHeight > 12) ? 1 : 0;
-    })
-    .text(d => d.data.name);
-
+        .text(d => d.data.name.replaceAll("-", ""));
+      
     
     
 
     
-    function clicked(event, p) {
+    function clicked(event, p, doubleClickFlag = false) {
         const wasFocused = (focus === p);
         focus = wasFocused ? root : p;
     
@@ -285,7 +311,14 @@ const levelHeight = chartHeight / depth;
             .attr("height", levelHeight - 2);
     
         labels.transition(t)
-            .attr("x", d => (xScale(d.x0) + xScale(d.x1)) / 2)
+        .attr("x", d => {
+            if (d.depth === 1 && focus.depth === 2 && focus.parent === d) {
+                // If it's the parent of the focused node, center it above the child
+                return (xScale(focus.x0) + xScale(focus.x1)) / 2;
+            } else {
+                return (xScale(d.x0) + xScale(d.x1)) / 2;
+            }
+        })
             .attr("y", d => yScale(d.depth))
             .style("opacity", d => {
                 const rectWidth = xScale(d.x1) - xScale(d.x0);
@@ -294,26 +327,26 @@ const levelHeight = chartHeight / depth;
                 return (rectWidth > textLength && rectHeight > 12) ? 1 : 0;
             });
     
-       
-        const currentFilters = getState().selectedFilters;
-        const newFilters = structuredClone(currentFilters);
-    
-        if (wasFocused) {
-            newFilters.IcicleColorGroups = new Set();
-            newFilters.IcicleColorIdentity = new Set();
-        } else if (p.depth === 1) {
-            newFilters.IcicleColorGroups = new Set([p.data.name]);
-            newFilters.IcicleColorIdentity = new Set(); 
-        } else if (p.depth === 2) {
-            newFilters.IcicleColorIdentity = new Set([p.data.name]);
-            newFilters.IcicleColorGroups = new Set(); 
+        if (doubleClickFlag) {
+            const currentFilters = getState().selectedFilters;
+            const newFilters = structuredClone(currentFilters);
+        
+            if (wasFocused) {
+                newFilters.IcicleColorGroups = new Set();
+                newFilters.IcicleColorIdentity = new Set();
+            } else if (p.depth === 1) {
+                newFilters.IcicleColorGroups = new Set([p.data.name]);
+                newFilters.IcicleColorIdentity = new Set(); 
+            } else if (p.depth === 2) {
+                newFilters.IcicleColorIdentity = new Set([p.data.name]);
+                newFilters.IcicleColorGroups = new Set(); 
+            }
+        
+            setTimeout(() => {
+                updateState({ selectedFilters: newFilters, updateContext: "IcicleFilter" });
+                
+            }, 70);  
         }
-    
-        setTimeout(() => {
-            updateState({ selectedFilters: newFilters, updateContext: "IcicleFilter" });
-            
-          }, 70);  
-          
     }
     
     

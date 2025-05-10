@@ -428,22 +428,47 @@ sankeyGenerator.update(sankeyData);
   
   
     node.append("text")
-    .attr("x", d => {
-        const centerX = (d.x0 + d.x1) / 2;
-        const isLeftSide = centerX < width / 2;
-        return isLeftSide ? d.x0 : d.x1;
-    })
-    .attr("y", d => d.y0 - 5) 
-    .attr("dy", "0em")
-    .attr("text-anchor", d => {
-        const centerX = (d.x0 + d.x1) / 2;
-        const isLeftSide = centerX < width / 2;
-        return isLeftSide ? "start" : "end"; 
-    })
-    .text(d => d.name)
-    .attr("font-size", "12px")
-    .attr("fill", "#000")
-    .style("pointer-events", "none");
+  .attr("x", d => {
+      const centerX = (d.x0 + d.x1) / 2;
+      const isLeftSide = centerX < width / 2;
+      return isLeftSide ? d.x0 : d.x1;
+  })
+  .attr("y", d => d.y0 - 5)
+  .attr("dy", "0em")
+  .attr("text-anchor", d => {
+      const centerX = (d.x0 + d.x1) / 2;
+      const isLeftSide = centerX < width / 2;
+      return isLeftSide ? "start" : "end";
+  })
+  .text(d => d.name)
+  .attr("font-size", "12px")
+  .attr("fill", "#000")
+  .style("cursor", "help")
+  .style("pointer-events", "auto") // Allow interaction
+  .on("mouseover", function(event, d) {
+    const explanations = {
+      "original": `<strong>Original Card</strong><br>This is the first-ever printing of a card, typically from its debut set.`,
+      "reprint": `<strong>Reprint</strong><br>A card that has been printed again in a later set without functional changes.`,
+      "functional reprint": `<strong>Functional Reprint</strong><br>A different card with identical rules text and function, but a different name or flavor.`
+    };
+  
+    const key = d.name.toLowerCase();
+    if (explanations[key]) {
+      tooltip
+        .style("display", "block")
+        .html(explanations[key]);
+    }
+  })
+  
+  .on("mousemove", function(event) {
+    tooltip
+      .style("left", (event.pageX + 10) + "px")
+      .style("top", (event.pageY + 10) + "px");
+  })
+  .on("mouseout", function() {
+    tooltip.style("display", "none");
+  });
+
 
 
 
