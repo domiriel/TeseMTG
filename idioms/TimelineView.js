@@ -180,7 +180,7 @@ export function createTimelineView(data, containerId, isUpdate = false) {
         .data(uniqueSets)
         .enter()
         .append("rect")
-        .attr("class", "set-square")
+        .attr("class", "set-square set-rect")
         .attr("x", d => xScale(d.releaseDate) - 2.5)
         .attr("y", d => yScale(d.setType) - 5)
         .attr("width", 8)
@@ -327,3 +327,13 @@ function zoomed(event) {
 
 
 }
+
+export function highlightTimelineSets(hovered) {
+    d3.selectAll(".set-rect").classed("highlighted", function (d) {
+        if (!hovered || !hovered.all_sets) return false;
+
+        const hoveredSets = hovered.all_sets.map(s => s.name.toLowerCase());
+        return hoveredSets.includes(d.name.toLowerCase());
+    });
+}
+

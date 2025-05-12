@@ -55,4 +55,43 @@ const state = {
       }
     };
   }
-  
+  export function saveFilterSettings() {
+  const filters = getState().selectedFilters;
+  const serialized = {};
+
+  for (const key in filters) {
+    serialized[key] = Array.from(filters[key]);
+  }
+
+  return JSON.stringify(serialized); // You can store this string anywhere
+}
+export function loadFilterSettings(serializedString) {
+  try {
+    const parsed = JSON.parse(serializedString);
+    const newFilters = {};
+
+    for (const key in parsed) {
+      newFilters[key] = new Set(parsed[key]);
+    }
+
+    updateState({
+      selectedFilters: newFilters,
+      updateContext: "LoadedFilterSettings"
+    });
+  } catch (e) {
+    console.error("Failed to load filters:", e);
+  }
+}
+export function generateFilterShareURL(baseURL = window.location.origin + window.location.pathname) {
+  const filters = getState().selectedFilters;
+  const params = new URLSearchParams();
+
+  for (const key in filters) {
+    if (filters[key].size > 0) {
+      params.set(key, Array.from(filters[key]).join(","));
+    }
+  }
+
+  return `${baseURL}?filters=${encodeURIComponent(params.toString())}`;
+}
+

@@ -102,32 +102,51 @@ export function createScatterPlot(data, containerId, isUpdate = false, selectedP
     const excludedSetTypes = new Set(["promo", "funny", "memorabilia", "alchemy", "token", "minigame"]);
     const excludedSetNames = ["Arena", "Alchemy", "Digital"];
     const excludedTypes = ["Emblem", "Token"];
-    data = data.filter(card =>
-        !excludedSetTypes.has(card.set_type) &&
-        !excludedSetNames.some(keyword => card.set_name && card.set_name.includes(keyword)) &&
-        !excludedTypes.includes(card.type) &&
-        !card.digital
-    );
 
-    const cardMap = new Map();
 
-    data.forEach(card => {
-        const price = isNaN(card[selectedPriceAttribute]) || card[selectedPriceAttribute] === null ? 0 : card[selectedPriceAttribute];
-        if (!isNaN(card.complexity)) {
-            if (!cardMap.has(card.name)) {
-                cardMap.set(card.name, { ...card, prices: [], avg_price: 0 });
-            }
-            cardMap.get(card.name).prices.push(price);
-        }
-    });
+    const allData = data; // include digital for metadata
+const filteredForPlot = allData.filter(card =>
+    !excludedSetTypes.has(card.set_type) &&
+    !excludedSetNames.some(keyword => card.set_name && card.set_name.includes(keyword)) &&
+    !excludedTypes.includes(card.type) &&
+    !card.digital
+);
 
-    cardMap.forEach(card => {
-        card.avg_price = card.prices.length > 0
-            ? card.prices.reduce((sum, p) => sum + p, 0) / card.prices.length
-            : 0;
-    });
+const cardMap = new Map();
 
-    const filteredData = Array.from(cardMap.values());
+// Include *all* sets in all_sets, but only non-digital prices in avg_price
+allData.forEach(card => {
+    if (!cardMap.has(card.name)) {
+        cardMap.set(card.name, {
+            ...card,
+            prices: [],
+            avg_price: 0,
+            all_sets: new Map([[card.set_name, card.set_type]])
+        });
+    } else {
+        cardMap.get(card.name).all_sets.set(card.set_name, card.set_type);
+    }
+
+    // Only collect price for non-digital cards
+    const price = isNaN(card[selectedPriceAttribute]) || card[selectedPriceAttribute] === null ? 0 : card[selectedPriceAttribute];
+    if (!card.digital && !isNaN(card.complexity)) {
+        cardMap.get(card.name).prices.push(price);
+    }
+});
+
+cardMap.forEach(card => {
+    card.avg_price = card.prices.length > 0
+        ? card.prices.reduce((sum, p) => sum + p, 0) / card.prices.length
+        : 0;
+    card.all_sets = Array.from(card.all_sets.entries()).map(([name, type]) => ({ name, type }));
+});
+
+// Only show non-digital cards in the plot
+const filteredData = filteredForPlot
+    .filter(card => cardMap.has(card.name))
+    .map(card => cardMap.get(card.name));
+
+
     const sampledData = filteredData.length > 1000 ? d3.shuffle(filteredData).slice(0, 30000) : filteredData;
 
     const container = d3.select(containerId).node();
@@ -350,6 +369,12 @@ const formatPrice = d => `${symbol}${d.toFixed(2)}`;
                     .attr("stroke-width", 2.5);
         
                 updateState({ hoveredCard: d });
+                if (Array.isArray(d.all_sets)) {
+            console.log(`Sets for "${d.name}":`);
+            d.all_sets.forEach(({ name, type }) => {
+                console.log(`- ${name} (${type})`);
+            });
+        }
             }
         });
         

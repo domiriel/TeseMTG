@@ -1,5 +1,5 @@
 //Issues fixed: 18, 22
-import { updateState, getState } from "../state.js";
+import { updateState, getState, saveFilterSettings, loadFilterSettings, generateFilterShareURL} from "../state.js";
 import { filterData } from "../script.js"; // Add this at top if not already
 
 const optionMap = new Map();  
@@ -98,35 +98,7 @@ export function createFilterPanel(data, containerId, selectedFiltersFromState, i
 
     const sortedPriceFields = Array.from(priceFields).sort();
 
-    const priceWrapper = wrapper.append("div")
-        .style("width", "100%")
-        .style("margin-bottom", "16px");
-
-    priceWrapper.append("label")
-        .text("Select Price Attribute:")
-        .style("margin-right", "8px")
-        .style("font-size", "16px")
-        .style("font-weight", "bold");
-
-    const priceSelect = priceWrapper.append("select")
-        .attr("id", "priceAttributeSelect")
-        .style("padding", "6px")
-        .style("width", "95%")
-        .style("font-size", "16px");
-
-    priceSelect.selectAll("option")
-        .data(sortedPriceFields)
-        .enter()
-        .append("option")
-        .attr("value", d => d)
-        .text(d => d.replace("price_", "").toUpperCase());
-
-    priceSelect.property("value", getState().selectedPriceAttribute);
-
-    priceSelect.on("change", function() {
-        const selectedPriceAttribute = this.value;
-        updateState({ selectedPriceAttribute });
-    });
+   
 
     const resetWrapper = wrapper.append("div")
         .style("margin-bottom", "12px")
@@ -301,6 +273,129 @@ export function createFilterPanel(data, containerId, selectedFiltersFromState, i
         updateFilterStyles();
         updatePills();
     });
+
+    // SETTINGS SECTION
+const settingsSection = wrapper.append("div")
+    .attr("class", "filter-section")
+    .style("margin-top", "20px")
+    .style("width", "95%");
+
+const settingsHeader = settingsSection.append("div")
+    .attr("class", "dropdown-header")
+    .text("Settings")
+    .style("background", "#f0f0f0")
+    .style("padding", "6px 10px")
+    .style("border", "1px solid #ccc")
+    .style("border-radius", "6px")
+    .style("cursor", "pointer")
+    .style("font-weight", "bold")
+    .style("width", "100%")
+    .style("box-sizing", "border-box");
+
+const settingsContent = settingsSection.append("div")
+    .attr("class", "dropdown-content")
+    .style("display", "none")
+    .style("margin-top", "4px")
+    .style("border", "1px solid #ccc")
+    .style("border-radius", "6px")
+    .style("padding", "6px")
+    .style("background", "#fff");
+
+settingsHeader.on("click", function () {
+    const isVisible = settingsContent.style("display") === "block";
+    settingsContent.style("display", isVisible ? "none" : "block");
+});
+
+// PRICE SELECT
+const priceWrapper = settingsContent.append("div")
+    .style("margin-bottom", "12px");
+
+priceWrapper.append("label")
+    .text("Select Price Attribute:")
+    .style("font-size", "14px")
+    .style("font-weight", "bold")
+    .style("display", "block")
+    .style("margin-bottom", "4px");
+
+const priceSelect = priceWrapper.append("select")
+    .attr("id", "priceAttributeSelect")
+    .style("padding", "6px")
+    .style("width", "100%")
+    .style("font-size", "14px")
+    .style("border", "1px solid #ccc")
+    .style("border-radius", "6px");
+
+priceSelect.selectAll("option")
+    .data(sortedPriceFields)
+    .enter()
+    .append("option")
+    .attr("value", d => d)
+    .text(d => d.replace("price_", "").toUpperCase());
+
+priceSelect.property("value", getState().selectedPriceAttribute);
+priceSelect.on("change", function () {
+    const selectedPriceAttribute = this.value;
+    updateState({ selectedPriceAttribute });
+});
+
+// BUTTONS
+settingsContent.append("button")
+    .text("Save Filters")
+    .style("padding", "6px 12px")
+    .style("font-size", "14px")
+    .style("background-color", "#f0f0f0")
+    .style("border", "none")
+    .style("border-radius", "4px")
+    .style("cursor", "pointer")
+    .style("margin-right", "8px")
+    .on("click", () => {
+        const filters = getState().selectedFilters;
+        const json = JSON.stringify(Object.fromEntries(
+            Object.entries(filters).map(([k, v]) => [k, Array.from(v)])
+        ), null, 2);
+        const blob = new Blob([json], { type: "application/json" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "filters.json";
+        link.click();
+    });
+
+settingsContent.append("button")
+    .text("Load Filters")
+    .style("padding", "6px 12px")
+    .style("font-size", "14px")
+    .style("background-color", "#f0f0f0")
+    .style("color", "#000")
+    .style("border", "none")
+    .style("border-radius", "4px")
+    .style("cursor", "pointer")
+    .style("margin-top", "8px")
+    .on("click", () => document.getElementById("loadFilterInput").click());
+
+wrapper.append("input")
+    .attr("type", "file")
+    .attr("id", "loadFilterInput")
+    .style("display", "none")
+    .on("change", function () {
+        const file = this.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = e => {
+            try {
+                const loaded = JSON.parse(e.target.result);
+                const newFilters = {};
+                for (const key in loaded) {
+                    newFilters[key] = new Set(loaded[key]);
+                }
+                updateState({ selectedFilters: newFilters });
+                createFilterPanel(data, containerId, newFilters, true);
+            } catch (err) {
+                alert("Failed to load filters.");
+            }
+        };
+        reader.readAsText(file);
+    });
+
 }
 
 export function updateFilterPanel(originalData, selectedFilters, containerId = ".FilterPanel") {
@@ -407,7 +502,9 @@ export function updateFilterPanel(originalData, selectedFilters, containerId = "
       
         pills.exit().remove();
       });
-      
+    
+    
+
 }
 
 
