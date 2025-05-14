@@ -67,13 +67,14 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
     const margin = { top: 20, right: 50, bottom: 30, left: 60 };
     const width = containerWidth - margin.left - margin.right;
     const chartHeight = containerHeight*0.9 / 4; 
-    const chartSpacing = 23;
+    const chartSpacing = 10;
     const height = (chartHeight + chartSpacing) * metrics.length - chartSpacing; 
 
 
     if (isUpdate) {
         container.select(".stacked-line-wrapper").remove();
     }
+const tooltip = d3.select("#tooltip");
 
     const wrapper = container.append("div")
         .attr("class", "stacked-line-wrapper")
@@ -135,16 +136,7 @@ metrics.forEach((metric, i) => {
             .attr("d", line);
 
         
-const tooltip = d3.select("body")
-.append("div")
-.attr("class", "chart-tooltip")
-.style("position", "absolute")
-.style("background", "rgba(0, 0, 0, 0.7)")
-.style("color", "white")
-.style("padding", "5px")
-.style("border-radius", "3px")
-.style("pointer-events", "none")
-.style("display", "none");
+
 
 
 
@@ -173,6 +165,7 @@ g.selectAll("circle")
 
     tooltip
         .style("display", "block")
+        .style("font-size", "16px")
         .html(`
             <strong>Year:</strong> ${year}<br/>
             ${allMetrics}
@@ -203,43 +196,45 @@ g.selectAll("circle")
     }) 
     .on("mouseout", () => {
         tooltip.style("display", "none");
+        tooltip.style("font-size", "12px");
 
        
         d3.selectAll("circle.data-point")
             .attr("r", 4)
             .attr("stroke", "none");
     })
-    .on("click", function(event, d) {
-        const selectedYear = d.year.getFullYear().toString();
-    
-        const currentState = getState();
-        const updatedFilters = {};
-    
-        for (const key in currentState.selectedFilters) {
-            updatedFilters[key] = new Set(currentState.selectedFilters[key]);
-        }
-    
-        const isSelected = updatedFilters["Year"].has(selectedYear);
-    
-        if (!isSelected) {
-            updatedFilters["Year"].add(selectedYear);
-    
-            // Highlight all circles from the same year
-            d3.selectAll(`circle.data-point[data-year='${selectedYear}']`)
-                .attr("fill", "#007bff");
-        } else {
-            updatedFilters["Year"].delete(selectedYear);
-    
-            // Revert all circles from the same year
-            d3.selectAll(`circle.data-point[data-year='${selectedYear}']`)
-                .attr("fill", "#c3c3c3");
-        }
-    
-        updateState({
-            selectedFilters: updatedFilters,
-            updateContext: "TimelineFilter"
+   .on("click", function(event, d) {
+    const selectedYear = d.year.getFullYear().toString();
+
+    const currentState = getState();
+    const updatedFilters = {};
+
+    // Copy the current filter state
+    for (const key in currentState.selectedFilters) {
+        updatedFilters[key] = new Set(currentState.selectedFilters[key]);
+    }
+
+    // Toggle year selection
+    if (updatedFilters["Year"].has(selectedYear)) {
+        updatedFilters["Year"].delete(selectedYear);
+    } else {
+        updatedFilters["Year"].add(selectedYear);
+    }
+
+    // Update all dot opacities based on selected years
+    const selectedYears = updatedFilters["Year"];
+    d3.selectAll("circle.data-point")
+        .attr("opacity", function() {
+            const year = this.getAttribute("data-year");
+            return selectedYears.size === 0 || selectedYears.has(year) ? 1 : 0.5;
         });
+
+    updateState({
+        selectedFilters: updatedFilters,
+        updateContext: "TimelineFilter"
     });
+});
+
     
     
     ;
@@ -251,9 +246,9 @@ g.selectAll("circle")
 
        
         g.append("text")
-    .attr("x", 0)
-    .attr("y",-6)
-    .attr("text-anchor", "middle")
+    .attr("x", 5)
+    .attr("y",8)
+    .attr("text-anchor", "left")
     .text(metric.label)
     .attr("fill", "#000")
     .attr("font-size", "11px")

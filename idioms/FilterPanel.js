@@ -116,9 +116,9 @@ export function createFilterPanel(data, containerId, selectedFiltersFromState, i
         .on("click", () => {
             const clearedFilters = {};
             for (const key in selectedFilters) clearedFilters[key] = new Set();
-            d3.selectAll(".set-square").attr("fill", "#C3C3C3");
-            d3.selectAll(".year-tick-timeline").style("fill", "black")
-            d3.selectAll(".data-point").attr("fill", "#C3C3C3")
+            d3.selectAll(".set-square").attr("fill", "#C3C3C3").style("opacity", 1);
+            d3.selectAll(".year-tick-timeline").style("fill", "black").style("font-weight", "normal");
+            d3.selectAll(".data-point").attr("fill", "#C3C3C3").style("opacity", 1)
             .style("font-weight", "normal");
             updateState({ selectedFilters: clearedFilters });
             createFilterPanel(data, containerId, clearedFilters, true);

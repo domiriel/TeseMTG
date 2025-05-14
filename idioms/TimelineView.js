@@ -95,39 +95,62 @@ export function createTimelineView(data, containerId, isUpdate = false) {
             .style("text-anchor", "middle")
             .style("cursor", "pointer")
             .on("click", function (event, d) {
-                const year = d.getFullYear().toString();
-                const currentState = getState();
-                const updatedFilters = {};
+    const year = d.getFullYear().toString();
+    const currentState = getState();
+    const updatedFilters = {};
+
+    for (const key in currentState.selectedFilters) {
+        updatedFilters[key] = new Set(currentState.selectedFilters[key]);
+    }
+
+    if (!updatedFilters["Year"]) {
+        updatedFilters["Year"] = new Set();
+    }
+
+    const isSelected = updatedFilters["Year"].has(year);
+
+    if (isSelected) {
+        updatedFilters["Year"].delete(year);
+    } else {
+        updatedFilters["Year"].add(year);
+    }
+
+    updateState({
+        selectedFilters: updatedFilters,
+        updateContext: "TimelineFilter"
+    });
+
+    // Update styles after state update
+    updateYearTickStyles();
+    updateSetRectOpacity();  // New function to control set opacity
+});
+
+function updateYearTickStyles() {
+    const yearFilter = getState().selectedFilters["Year"] || new Set();
+
+    d3.selectAll(".x-axis .tick text")
+        .style("fill", function(d) {
+            const year = (d instanceof Date) ? d.getFullYear().toString() : d.toString();
+            return yearFilter.has(year) ? "#007bff" : "black";
+        })
+        .style("font-weight", function(d) {
+            const year = (d instanceof Date) ? d.getFullYear().toString() : d.toString();
+            return yearFilter.has(year) ? "bold" : "normal";
+        });
+}
+
+function updateSetRectOpacity() {
+    const yearFilter = getState().selectedFilters["Year"] || new Set();
+
+    d3.selectAll(".set-rect")
+        .transition()
+        .duration(200)
+        .style("opacity", d => {
+            const year = d.releaseDate.getFullYear().toString();
+            return yearFilter.size === 0 || yearFilter.has(year) ? 1 : 0.2;
+        });
+}
         
-                for (const key in currentState.selectedFilters) {
-                    updatedFilters[key] = new Set(currentState.selectedFilters[key]);
-                }
-        
-                if (!updatedFilters["Year"]) {
-                    updatedFilters["Year"] = new Set();
-                }
-        
-                const isSelected = updatedFilters["Year"].has(year);
-        
-                if (isSelected) {
-                    updatedFilters["Year"].delete(year);
-                    d3.select(this)
-                        .style("fill", "black")
-                        .style("font-weight", "normal");
-                } else {
-                    updatedFilters["Year"].add(year);
-                    d3.select(this)
-                        .style("fill", "#007bff")
-                        .style("font-weight", "bold");
-                }
-        
-                updateState({
-                    selectedFilters: updatedFilters,
-                    updateContext: "TimelineFilter"
-                });
-            });
-        
-            
         
 
 
@@ -188,42 +211,47 @@ export function createTimelineView(data, containerId, isUpdate = false) {
         .attr("fill", "#C3C3C3")
         .attr("stroke", "black")
         .on("mouseover", function (event, d) {
-            const tooltip = d3.select("#tooltip");
-            const tooltipWidth = 200; 
-            const tooltipHeight = 50; 
-            const viewportWidth = window.innerWidth;
-            const viewportHeight = window.innerHeight;
+    const tooltip = d3.select("#tooltip");
 
-            let left = event.pageX + 10; 
-            let top = event.pageY - 10;
+    // Set content first so dimensions are accurate
+    tooltip
+        .style("display", "block")
+        .html(`
+            <strong>${d.name}</strong><br>
+            ${d.releaseDate.toDateString()}<br>
+            Type: ${d.setType}<br>
+            Cards in Set: ${d.cardCount}
+        `);
 
-// If tooltip would go below the viewport, move it above the cursor
-if (top + tooltipHeight > viewportHeight) {
-    top = event.pageY - tooltipHeight - 10;
-}
+    const tooltipNode = tooltip.node();
+    const tooltipWidth = tooltipNode.offsetWidth;
+    const tooltipHeight = tooltipNode.offsetHeight;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
 
-// Prevent it from going above the screen
-if (top < 0) {
-    top = 10;
-}
+    const horizontalPadding = 10;
+    const verticalPadding = 10;
+
+    let left = event.pageX + horizontalPadding;
+    if (left + tooltipWidth > viewportWidth) {
+        // Flip to left side
+        left = event.pageX - tooltipWidth - horizontalPadding;
+    }
+    if (left < 0) left = horizontalPadding;
+
+    let top = event.pageY + verticalPadding;
+    if (top + tooltipHeight > viewportHeight) {
+        // Flip above
+        top = event.pageY - tooltipHeight - verticalPadding;
+    }
+    if (top < 0) top = verticalPadding;
+
+    tooltip
+        .style("left", `${left}px`)
+        .style("top", `${top}px`);
+})
 
 
-            
-            if (top + tooltipHeight > viewportHeight) {
-                top = event.pageY - tooltipHeight - 10;
-            }
-
-            tooltip
-                .style("display", "block")
-                .style("left", `${left}px`)
-                .style("top", `${top}px`)
-                .html(`
-                    <strong>${d.name}</strong><br>
-                    ${d.releaseDate.toDateString()}<br>
-                    Type: ${d.setType}<br>
-                    Cards in Set: ${d.cardCount}
-                `);
-                })
         .on("mouseout", function () {
                     d3.select("#tooltip").style("display", "none");
                 })

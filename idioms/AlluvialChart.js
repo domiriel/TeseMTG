@@ -332,9 +332,24 @@ sankeyGenerator.update(sankeyData);
           .attr("stroke-width", 3); 
     })
     .on("mousemove", function(event) {
-        tooltip.style("left", (event.pageX + 10) + "px")
-               .style("top", (event.pageY + 10) + "px");
-    })
+  const tooltipWidth = tooltip.node().offsetWidth;
+  const tooltipHeight = tooltip.node().offsetHeight;
+
+  let x = event.pageX + 10;
+  let y = event.pageY + 10;
+
+  if (x + tooltipWidth > window.innerWidth) {
+    x = window.innerWidth - tooltipWidth - 10;
+  }
+  if (y + tooltipHeight > window.innerHeight) {
+    y = window.innerHeight - tooltipHeight - 10;
+  }
+
+  tooltip
+    .style("left", `${x}px`)
+    .style("top", `${y}px`);
+})
+
     .on("mouseout", function(event, d) {
         tooltip.style("display", "none");
     
@@ -399,9 +414,24 @@ sankeyGenerator.update(sankeyData);
              .html(`Category: ${d.name}<br>Total cards: ${d.value}<br>Avg Price: $${d.avgPrice.toFixed(2)}`);
     })
     .on("mousemove", function(event) {
-      tooltip.style("left", (event.pageX + 10) + "px")
-             .style("top", (event.pageY + 10) + "px");
-    })
+  const tooltipWidth = tooltip.node().offsetWidth;
+  const tooltipHeight = tooltip.node().offsetHeight;
+
+  let x = event.pageX + 10;
+  let y = event.pageY + 10;
+
+  if (x + tooltipWidth > window.innerWidth) {
+    x = window.innerWidth - tooltipWidth - 10;
+  }
+  if (y + tooltipHeight > window.innerHeight) {
+    y = window.innerHeight - tooltipHeight - 10;
+  }
+
+  tooltip
+    .style("left", `${x}px`)
+    .style("top", `${y}px`);
+})
+
     .on("mouseout", function() {
       tooltip.style("display", "none");
     })
@@ -461,10 +491,24 @@ sankeyGenerator.update(sankeyData);
   })
   
   .on("mousemove", function(event) {
-    tooltip
-      .style("left", (event.pageX + 10) + "px")
-      .style("top", (event.pageY + 10) + "px");
-  })
+  const tooltipWidth = tooltip.node().offsetWidth;
+  const tooltipHeight = tooltip.node().offsetHeight;
+
+  let x = event.pageX + 10;
+  let y = event.pageY + 10;
+
+  if (x + tooltipWidth > window.innerWidth) {
+    x = window.innerWidth - tooltipWidth - 10;
+  }
+  if (y + tooltipHeight > window.innerHeight) {
+    y = window.innerHeight - tooltipHeight - 10;
+  }
+
+  tooltip
+    .style("left", `${x}px`)
+    .style("top", `${y}px`);
+})
+
   .on("mouseout", function() {
     tooltip.style("display", "none");
   });

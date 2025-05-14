@@ -242,21 +242,43 @@ const levelHeight = chartHeight / depth;
         })
         
         .on("mouseover", function(event, d) {
-            d3.select("#tooltip")
-                .style("display", "block")
-                .style("left", `${event.pageX + 10}px`)
-                .style("top", `${event.pageY - 10}px`)
-                .html(`
-                    <strong>${d.data.name.replaceAll("-", "")}</strong><br>
-                    Total: ${d.value} cards<br>
-                    Original: ${d.data.originalCount || 0} (${((d.data.originalCount / d.value) * 100).toFixed(2)}%)<br>
-                    Reprint: ${d.data.reprintCount || 0} cards<br>
-                    Functional Reprint: ${d.data.functionalReprintCount || 0} cards
-                `);
-        })
-        .on("mouseout", function() {
-            d3.select("#tooltip").style("display", "none");
-        });
+    const tooltip = d3.select("#tooltip");
+    tooltip
+        .style("display", "block")
+        .html(`
+            <strong>${d.data.name.replaceAll("-", "")}</strong><br>
+            Total: ${d.value} cards<br>
+            Original: ${d.data.originalCount || 0} (${((d.data.originalCount / d.value) * 100).toFixed(2)}%)<br>
+            Reprint: ${d.data.reprintCount || 0} cards<br>
+            Functional Reprint: ${d.data.functionalReprintCount || 0} cards
+        `);
+})
+.on("mousemove", function(event) {
+    const tooltip = d3.select("#tooltip");
+    const tooltipNode = tooltip.node();
+
+    const tooltipWidth = tooltipNode.offsetWidth;
+    const tooltipHeight = tooltipNode.offsetHeight;
+
+    let x = event.pageX + 10;
+    let y = event.pageY + 10;
+
+    if (x + tooltipWidth > window.innerWidth) {
+        x = window.innerWidth - tooltipWidth - 10;
+    }
+    if (y + tooltipHeight > window.innerHeight) {
+        y = window.innerHeight - tooltipHeight - 10;
+    }
+
+    tooltip
+        .style("left", `${x}px`)
+        .style("top", `${Math.max(y, 0)}px`);
+})
+.on("mouseout", function() {
+    d3.select("#tooltip").style("display", "none");
+});
+
+
 
         globalRects = rects;
 

@@ -231,12 +231,12 @@ const formatPrice = d => `${symbol}${d.toFixed(2)}`;
     .style("cursor", "help")
     .text("Complexity")
     .on("mouseover", (event) => {
-        d3.select("#scatter-tooltip")
+        d3.select("#tooltip")
             .style("display", "block")
             .html(`An aggregated score representing the number <br> of non-flavor words a card has.`);
     })
     .on("mousemove", (event) => {
-        const tooltip = d3.select("#scatter-tooltip");
+        const tooltip = d3.select("#tooltip");
         const tooltipWidth = tooltip.node().offsetWidth;
         const padding = 10;
         let left = event.pageX + padding;
@@ -249,7 +249,7 @@ const formatPrice = d => `${symbol}${d.toFixed(2)}`;
             .style("top", `${event.pageY + padding}px`);
     })
     .on("mouseout", () => {
-        d3.select("#scatter-tooltip").style("display", "none");
+        d3.select("#tooltip").style("display", "none");
     });
 
 
@@ -297,21 +297,9 @@ const formatPrice = d => `${symbol}${d.toFixed(2)}`;
 
     updatePointPositions();
 
-    if (!d3.select("#scatter-tooltip").node()) {
-        d3.select("body")
-            .append("div")
-            .attr("id", "scatter-tooltip")
-            .style("position", "absolute")
-            .style("background", "rgba(0, 0, 0, 0.7)")
-            .style("color", "white")
-            .style("padding", "5px")
-            .style("border-radius", "3px")
-            .style("font-size", "12px")
-            .style("pointer-events", "none")
-            .style("display", "none");
-    }
+    
 
-    const tooltip = d3.select("#scatter-tooltip");
+    const tooltip = d3.select("#tooltip");
     let hoverTimeout = null;
 
 
