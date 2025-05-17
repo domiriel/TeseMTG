@@ -4,6 +4,11 @@ import { updateFilterPanel } from "./FilterPanel.js";
 const nodeColorScale = d3.scaleSequential()
     .interpolator(d3.interpolateRgb("#F0F0F0", "#373737")); // Soft to dark green
 
+let localChartFilters = {
+  Originality: new Set(),
+  Rarity: new Set()
+};
+let localLinkFilters = new Set(); // each entry will be a string like "original|common"
 
 function formatPriceLabel(priceAttr) {
     return priceAttr
@@ -362,6 +367,19 @@ sankeyGenerator.update(sankeyData);
           .attr("stroke-width", 1); 
     })
     .on("click", function(event, d) {
+  const key = `${d.source.name}|${d.target.name}`;
+
+  if (localLinkFilters.has(key)) {
+    localLinkFilters.delete(key);
+  } else {
+    localLinkFilters.add(key);
+  }
+
+  applyLocalLinkAndNodeFilter();// hide/show based on link filter
+})
+
+
+    .on("dblclick", function(event, d) {
       const currentState = getState();
       const updatedFilters = {};
     
@@ -392,7 +410,54 @@ sankeyGenerator.update(sankeyData);
     });
     
     
-  
+  function applyLocalLinkAndNodeFilter() {
+  const activeLinks = Array.from(localLinkFilters);
+  const activeSources = new Set();
+  const activeTargets = new Set();
+
+  // Collect node names from active links
+  activeLinks.forEach(linkKey => {
+    const [source, target] = linkKey.split("|");
+    activeSources.add(source);
+    activeTargets.add(target);
+  });
+
+  // Apply to links
+  d3.selectAll(".links path").each(function(d) {
+    const key = `${d.source.name}|${d.target.name}`;
+    const show = localLinkFilters.size === 0 || localLinkFilters.has(key);
+
+    d3.select(this)
+      .classed("alluvial-hidden", !show)
+      .classed("alluvial-visible", show);
+  });
+
+  // Apply to nodes
+  d3.selectAll(".nodes rect").each(function(d) {
+    const isLeft = d.x0 === 0;
+    const show = localLinkFilters.size === 0 ||
+                 (isLeft && activeSources.has(d.name)) ||
+                 (!isLeft && activeTargets.has(d.name));
+
+    d3.select(this)
+      .classed("alluvial-hidden", !show)
+      .classed("alluvial-visible", show);
+  });
+
+  // Optional: also dim labels if you want
+  d3.selectAll(".nodes text").each(function(d) {
+    const isLeft = d.x0 === 0;
+    const show = localLinkFilters.size === 0 ||
+                 (isLeft && activeSources.has(d.name)) ||
+                 (!isLeft && activeTargets.has(d.name));
+
+    d3.select(this)
+      .classed("alluvial-hidden", !show)
+      .classed("alluvial-visible", show);
+  });
+}
+
+
   
   const node = sankeyGroup.append("g")
     .attr("class", "nodes")
@@ -435,7 +500,21 @@ sankeyGenerator.update(sankeyData);
     .on("mouseout", function() {
       tooltip.style("display", "none");
     })
-    .on("click", function(event, d) {
+.on("click", function(event, d) {
+  const category = d.x0 === 0 ? "Originality" : "Rarity";
+  const name = d.name;
+
+  // Toggle filter
+  if (localChartFilters[category].has(name)) {
+    localChartFilters[category].delete(name);
+  } else {
+    localChartFilters[category].add(name);
+  }
+
+  applyLocalChartFilter(); // update visibility
+})
+
+    .on("dblclick", function(event, d) {
       const category = d.x0 === 0 ? "Originality" : "Rarity"; 
       const currentState = getState();
       const updatedFilters = {};
@@ -456,6 +535,32 @@ sankeyGenerator.update(sankeyData);
 
     });
   
+    function applyLocalChartFilter() {
+  const origSet = localChartFilters.Originality;
+  const raritySet = localChartFilters.Rarity;
+
+  d3.selectAll(".nodes rect").each(function(d) {
+    const isOrig = d.x0 === 0;
+    const category = isOrig ? "Originality" : "Rarity";
+    const filterSet = isOrig ? origSet : raritySet;
+    const match = filterSet.size === 0 || filterSet.has(d.name);
+
+    d3.select(this)
+      .classed("alluvial-hidden", !match)
+      .classed("alluvial-visible", match);
+  });
+
+  d3.selectAll(".links path").each(function(d) {
+    const origMatch = origSet.size === 0 || origSet.has(d.source.name);
+    const rarityMatch = raritySet.size === 0 || raritySet.has(d.target.name);
+    const match = origMatch && rarityMatch;
+
+    d3.select(this)
+      .classed("alluvial-hidden", !match)
+      .classed("alluvial-visible", match);
+  });
+}
+
   
     node.append("text")
   .attr("x", d => {

@@ -37,7 +37,7 @@ class DecimalEncoder(json.JSONEncoder):
         return super().default(obj)
 
 # Paths
-input_file = './src/Dataset_MTG_Cards.json'
+input_file = './src/MTG_DATASET_2.json'
 output_dir = './data'
 os.makedirs(output_dir, exist_ok=True)
 output_file = os.path.join(output_dir, 'card_details.json')
@@ -96,6 +96,12 @@ with open(output_file, 'w') as outfile:
         supertype = parsed['supertype'] if parsed['supertype'] else 'Basic'
         type_ = parsed['type']
         subtype = parsed['subtype']
+
+
+        # If the card is a Land, override color to be colorless
+        if "Land" in type_:
+            color_identity = []
+
         supertype_count[supertype] += 1
         type_count[type_] += 1
         subtype_count[subtype] += 1
@@ -109,6 +115,29 @@ with open(output_file, 'w') as outfile:
         originality_count[originality] += 1
 
         # Extract set name and set type
+        image_uris = card.get('image_uris', {})
+
+        faces_data = []
+        if 'card_faces' in card:
+            for face in card['card_faces']:
+                faces_data.append({
+                    "name": face.get('name'),
+                    "mana_cost": face.get('mana_cost', ''),
+                    "type_line": face.get('type_line', ''),
+                    "oracle_text": face.get('oracle_text', ''),
+                    "image_normal": face.get('image_uris', {}).get('normal', ''),
+                  
+
+                    })
+        else:
+            faces_data.append({
+                "name": card.get('name'),
+                "mana_cost": card.get('mana_cost', ''),
+                "type_line": card.get('type_line', ''),
+                "oracle_text": card.get('oracle_text', ''),
+                "image_normal": image_uris.get('normal', ''),
+
+            })
         card_details = {
             "name": card.get('name'),
             "cmc": float(card.get('cmc', 0)),
@@ -132,6 +161,9 @@ with open(output_file, 'w') as outfile:
             "price_tix": float(card.get('prices', {}).get('tix', 0) or 0),
             "set_name": card.get('set_name', 'Unknown'),
             "set_type": card.get('set_type', 'Unknown'),
+            "image_normal": image_uris.get('normal', ''),
+            "faces": faces_data,
+
         }
 
         if index > 0:

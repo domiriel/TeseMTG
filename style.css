@@ -115,3 +115,11 @@ body {
     stroke: orange;
     stroke-width: 3px;
 }
+.alluvial-hidden {
+  opacity: 0.1;
+  pointer-events: none;
+}
+
+.alluvial-visible {
+  opacity: 1;
+}

@@ -67,7 +67,7 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
     const margin = { top: 20, right: 50, bottom: 30, left: 60 };
     const width = containerWidth - margin.left - margin.right;
     const chartHeight = containerHeight*0.9 / 4; 
-    const chartSpacing = 10;
+    const chartSpacing = 15;
     const height = (chartHeight + chartSpacing) * metrics.length - chartSpacing; 
 
 
@@ -81,9 +81,16 @@ const tooltip = d3.select("#tooltip");
         .style("position", "relative")
         .style("width", `${containerWidth}px`);
 
+
+    const zoom = d3.zoom()
+    .scaleExtent([1, 20])
+    .translateExtent([[0, 0], [containerWidth, containerHeight]])
+    .extent([[0, 0], [containerWidth, containerHeight]])
+    .on("zoom", zoomed);
     const svg = wrapper.append("svg")
         .attr("width", containerWidth)
-        .attr("height", containerHeight);
+        .attr("height", containerHeight)
+        .call(zoom);
 
     const chartGroup = svg.append("g")
         .attr("transform", `translate(${margin.left}, ${margin.top})`);
@@ -97,6 +104,8 @@ const tooltip = d3.select("#tooltip");
             .domain([new Date(xExtent[0].getTime()), new Date(xExtent[1].getTime())])
             .range([10, width]);
         
+        
+
 
     const allYears = groupedData.map(d => d.year);
 
@@ -107,7 +116,20 @@ const tooltip = d3.select("#tooltip");
 
     
 
-   
+const yScales = [];
+const linePaths = [];
+const circleGroups = [];
+const xAxisGroups = [];
+
+
+svg.append("defs").append("clipPath")
+    .attr("id", "clip-left-margin")
+    .append("rect")
+    .attr("x", 0)
+    .attr("y", 0)
+    .attr("width", width + 20)  // width of the chart area
+    .attr("height", containerHeight);  // height of the full chart
+
 
 metrics.forEach((metric, i) => {
     const y = d3.scaleLinear()
@@ -116,8 +138,9 @@ metrics.forEach((metric, i) => {
         d3.max(groupedData, d => d[metric.key])
     ])
     .nice()
-    .range([chartHeight, 0]);
+    .range([chartHeight, 4]);
 
+    yScales.push(y);
 
     const line = d3.line()
         .x(d => xScale(d.year))
@@ -126,21 +149,23 @@ metrics.forEach((metric, i) => {
     const g = chartGroup.append("g")
         .attr("transform", `translate(0, ${i * (chartHeight + chartSpacing)})`);
 
-
-       
-        g.append("path")
-            .datum(groupedData)
-            .attr("fill", "none")
-            .attr("stroke", metric.color)
-            .attr("stroke-width", 2)
-            .attr("d", line);
-
-        
+    const clippedGroup = g.append("g")
+    .attr("clip-path", "url(#clip-left-margin)");
 
 
+       const linePath = clippedGroup.append("path")
+
+    .datum(groupedData)
+    .attr("fill", "none")
+    .attr("stroke", metric.color)
+    .attr("stroke-width", 2)
+    .attr("d", line);
+
+linePaths.push({ line, path: linePath });
 
 
-g.selectAll("circle")
+clippedGroup.selectAll("circle")
+
     .data(groupedData)
     .enter()
     .append("circle")
@@ -209,19 +234,16 @@ g.selectAll("circle")
     const currentState = getState();
     const updatedFilters = {};
 
-    // Copy the current filter state
     for (const key in currentState.selectedFilters) {
         updatedFilters[key] = new Set(currentState.selectedFilters[key]);
     }
 
-    // Toggle year selection
     if (updatedFilters["Year"].has(selectedYear)) {
         updatedFilters["Year"].delete(selectedYear);
     } else {
         updatedFilters["Year"].add(selectedYear);
     }
 
-    // Update all dot opacities based on selected years
     const selectedYears = updatedFilters["Year"];
     d3.selectAll("circle.data-point")
         .attr("opacity", function() {
@@ -236,7 +258,7 @@ g.selectAll("circle")
 });
 
     
-    
+  circleGroups.push({ group: g, yScale: y, metric });  
     ;
 
 
@@ -257,9 +279,12 @@ g.selectAll("circle")
        
         
     
-            const xAxisG = g.append("g")
+            const xAxisG = clippedGroup.append("g")
     .attr("transform", `translate(0, ${chartHeight})`)
     .call(xAxis);
+
+    xAxisGroups.push({ g: xAxisG, isBottom: i === metrics.length - 1 });
+
 
 xAxisG.selectAll("text")
 .text(function(d) {
@@ -277,4 +302,43 @@ if (i !== metrics.length - 1) {
 
         
     });
+
+function zoomed(event) {
+    const transform = event.transform;
+    const newXScale = transform.rescaleX(xScale);
+
+    // Update paths
+    linePaths.forEach(({ line, path }) => {
+        path.attr("d", line.x(d => newXScale(d.year)));
+    });
+
+    // Update circles
+    circleGroups.forEach(({ group, yScale, metric }) => {
+        group.selectAll("circle")
+            .attr("cx", d => newXScale(d.year))
+            .attr("cy", d => yScale(d[metric.key]));
+    });
+
+    // Update x-axes
+    xAxisGroups.forEach(({ g, isBottom }) => {
+        g.call(d3.axisBottom(newXScale)
+            .tickValues(allYears)
+            .tickFormat(d3.timeFormat("%Y"))
+        );
+
+        g.selectAll("text")
+            .text(function(d) {
+                return isBottom && d.getFullYear() % 2 === 1 ? d3.timeFormat("%Y")(d) : "";
+            })
+            .attr("transform", "rotate(-45)")
+            .style("text-anchor", "end")
+            .attr("font-size", "10px");
+
+        if (!isBottom) {
+            g.selectAll("text").remove();
+        }
+    });
 }
+
+}
+
