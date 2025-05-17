@@ -5,9 +5,19 @@ import { createTimelineView, highlightTimelineSets } from "./idioms/TimelineView
 import { createScatterPlot} from "./idioms/Scatterplot.js";
 import { createStackedLineChart } from "./idioms/LineChart.js";
 import { createFilterPanel, updateFilterPanel } from "./idioms/FilterPanel.js";
+function loadCardData() {
+  const localPath = "./data/card_details.json";
+  const googleDriveURL = "https://drive.google.com/uc?export=download&id=1q3PD40N8nLbpMBknczyxJhDqFahQr2d3";
+
+  return d3.json(localPath)
+    .catch((err) => {
+      console.warn("Local JSON load failed, falling back to Google Drive:", err);
+      return d3.json(googleDriveURL);
+    });
+}
 
 function init() {
-    d3.json("./data/card_details.json").then(function (data) {
+    d3.json("./data/dataset_card_details.json").then(function (data) {
       const originalData = JSON.parse(JSON.stringify(data));  
     let hoverTimeout = null;
       getState().onChange("hoveredCard", (hovered) => {
