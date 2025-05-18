@@ -2,7 +2,7 @@ import { getState, subscribe } from "./state.js";
 import { createIcicleChart, highlightIcicleRect } from "./idioms/IcicleChart.js";
 import { createAlluvialChart, highlightAlluvialElements} from "./idioms/AlluvialChart.js";
 import { createTimelineView, highlightTimelineSets } from "./idioms/TimelineView.js";
-import { createScatterPlot} from "./idioms/Scatterplot.js";
+import { createScatterPlot, updateScatterPlot, prepareScatterData} from "./idioms/Scatterplot.js";
 import { createStackedLineChart } from "./idioms/LineChart.js";
 import { createFilterPanel, updateFilterPanel } from "./idioms/FilterPanel.js";
 function loadCardData() {
@@ -90,7 +90,10 @@ function init() {
           console.warn("Could not read zoom transform:", e);
         }
 
-        createScatterPlot(filteredData, ".Scatterplot", true, selectedPriceAttribute, savedTransform);
+      const processedData = prepareScatterData(filteredData, selectedPriceAttribute);
+      updateScatterPlot(processedData, selectedPriceAttribute);
+
+
 
         
         setTimeout(() => {
