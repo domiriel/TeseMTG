@@ -61,7 +61,12 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
         .sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b])
         .join("-") || "Colorless";
 
-        let colorGroupName = numColors === 0 ? "Colorless" : numColors === 4 ? "+4 Colors" : `${numColors} Colors`;
+        let colorGroupName = 
+    numColors === 0 ? "Colorless" :
+    numColors === 1 ? "1 Color" :
+    numColors === 4 ? "+4 Colors" :
+    `${numColors} Colors`;
+
 
         let colorGroup = groupedData.find(c => c.name === colorGroupName);
         if (!colorGroup) {

@@ -583,7 +583,10 @@ export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_
         .attr("cy", d => yScale(d.complexity))
        .on("mouseover", function (event, d) {
         tooltip.style("display", "block")
-            .html(`
+    .html(`
+        <div style="display: flex; gap: 12px; align-items: flex-start;">
+            <img src="${d.image_normal}" alt="${d.name}" width="200" style="border-radius: 4px; box-shadow: 0 0 4px rgba(0,0,0,0.5);" />
+            <div>
                 <strong>${d.name}</strong><br>
                 Complexity: ${d.complexity}<br>
                 EDH Rank: ${d.edhrec_rank || "N/A"}<br>
@@ -591,11 +594,15 @@ export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_
                 Type: ${d.type}<br>
                 Subtype: ${d.subtype}<br>
                 Colors: ${d.color_identity}<br>
-               Avg Price: ${selectedPriceAttribute.includes("eur")
-                            ? "€"
-                            :selectedPriceAttribute.includes("thx")
-                            ? ""
-                            : "$"}${d.avg_price.toFixed(2)}<br>`); })
+                Avg Price: ${selectedPriceAttribute.includes("eur")
+                    ? "€"
+                    : selectedPriceAttribute.includes("thx")
+                    ? ""
+                    : "$"}${d.avg_price.toFixed(2)}<br>
+            </div>
+        </div>
+    `);
+ })
         .on("mousemove", function (event) {
             const tooltipNode = tooltip.node();
             const tooltipWidth = tooltipNode.offsetWidth;

@@ -131,6 +131,15 @@ svg.append("defs").append("clipPath")
     .attr("height", containerHeight);  // height of the full chart
 
 
+
+const sharedHoverLine = svg.append("line")
+    .attr("class", "hover-line")
+    .attr("y1", margin.top)
+    .attr("y2", margin.top + height)  // height already sums all row heights + spacings
+    .attr("stroke", "#000")
+    .attr("stroke-width", 1)
+    .attr("pointer-events", "none")
+    .style("display", "none");
 metrics.forEach((metric, i) => {
     const y = d3.scaleLinear()
     .domain([
@@ -302,6 +311,33 @@ if (i !== metrics.length - 1) {
 
         
     });
+
+
+
+
+svg.append("rect")
+    .attr("class", "hover-overlay")
+    .attr("x", margin.left)
+    .attr("y", margin.top)
+    .attr("width", width)
+    .attr("height", height)
+    .style("fill", "none")
+    .style("pointer-events", "all")
+    .on("mousemove", (event) => {
+        const [mouseX] = d3.pointer(event);
+        const date = xScale.invert(mouseX - margin.left);
+
+        // Find the closest year
+        sharedHoverLine
+    .attr("x1", mouseX)
+    .attr("x2", mouseX)
+    .style("display", "block");
+
+    })
+    .on("mouseout", () => {
+        sharedHoverLine.style("display", "none");
+    })
+    .lower();
 
 function zoomed(event) {
     const transform = event.transform;

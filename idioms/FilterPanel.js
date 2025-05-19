@@ -67,7 +67,10 @@ export function createFilterPanel(data, containerId, selectedFiltersFromState, i
         filters[key] = Array.from(filters[key].entries()).sort((a, b) => a[0].localeCompare(b[0]));
     }
 
-    const uniqueCardNames = Array.from(cardNameSet).sort();
+    // Filter data using the selected filters
+const filteredCards = filterData(data, selectedFilters);
+const uniqueCardNames = Array.from(new Set(filteredCards.map(card => card.name))).sort();
+
 
     const inputId = "searchInput_" + Math.random().toString(36).substring(2);
     wrapper.append("input")
@@ -79,14 +82,35 @@ export function createFilterPanel(data, containerId, selectedFiltersFromState, i
         .style("padding", "6px")
         .style("font-size", "16px");
 
-    wrapper.append("datalist")
+wrapper.append("datalist")
         .attr("id", inputId)
         .selectAll("option")
         .data(uniqueCardNames)
         .enter()
         .append("option")
-        .attr("value", d => d);
 
+
+
+
+    const searchInput = wrapper.select(`input[list="${inputId}"]`);
+
+searchInput.on("change", function () {
+    const cardName = this.value.trim();
+    if (!cardName) return;
+
+    // Find the card data object (assuming you still have access to it)
+    const card = data.find(c => c.name === cardName);
+    if (!card) return;
+
+    // Update global state like in scatterplot click
+    updateState({ hoveredCard: card });
+
+    // Optional: visually highlight in scatterplot
+    const scatterSvg = d3.select(".Scatterplot svg");
+    scatterSvg.selectAll(".dots circle")
+        .attr("stroke", d => d.name === card.name ? "#000" : "none")
+        .attr("stroke-width", d => d.name === card.name ? 2.5 : null);
+});
     const priceFields = new Set();
     data.forEach(card => {
         Object.keys(card).forEach(key => {
@@ -399,7 +423,22 @@ wrapper.append("input")
 }
 
 export function updateFilterPanel(originalData, selectedFilters, containerId = ".FilterPanel") {
+    
     selectedFilters = selectedFilters || {};
+
+     const filteredCards = filterData(originalData, selectedFilters);
+    const uniqueCardNames = Array.from(new Set(filteredCards.map(card => card.name))).sort();
+
+    // Update datalist
+    d3.select(containerId)
+      .select("datalist")
+      .selectAll("option")
+      .data(uniqueCardNames, d => d)
+      .join(
+        enter => enter.append("option").attr("value", d => d),
+        update => update.attr("value", d => d),
+        exit => exit.remove()
+      );
     const filters = {
         "Keywords": new Map(),
         "Supertypes": new Map(),
@@ -451,6 +490,9 @@ export function updateFilterPanel(originalData, selectedFilters, containerId = "
 
             values.forEach(v => addToMap(filters[category], v));
         });
+
+        
+
     });
 
     window.requestAnimationFrame(() => {
@@ -502,7 +544,6 @@ export function updateFilterPanel(originalData, selectedFilters, containerId = "
       
         pills.exit().remove();
       });
-    
     
 
 }
