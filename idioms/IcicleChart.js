@@ -439,35 +439,34 @@ zeroLabel.append("text")
     
 }
 
-export function highlightIcicleRect(hovered) {
-    console.log("[IcicleChart] highlightIcicleRect called with:", hovered?.name);
+export function highlightIcicleRect(hoveredCards) {
+    if (!globalRects) return;
 
-    if (!globalRects) {
-        console.warn("[IcicleChart] globalRects is null!");
-        return;
-      }
-      
+    const groupMatches = new Set();
+    const identityMatches = new Set();
+
+    (hoveredCards || []).forEach(card => {
+        if (card.number_of_colours != null) {
+            const group = card.number_of_colours >= 4
+                ? "+4 Colors"
+                : card.number_of_colours === 0
+                    ? "Colorless"
+                    : `${card.number_of_colours} Colors`;
+            groupMatches.add(group);
+        }
+
+        if (card.color_identity) {
+            const identity = card.color_identity.sort().join("-");
+            identityMatches.add(identity);
+        }
+    });
 
     globalRects.classed("highlighted", d => {
-        
-        if (!hovered) return false;
-
-        if (d.depth === 1 && hovered.number_of_colours != null) {
-            const expectedGroup = hovered.number_of_colours >= 4
-                ? "+4 Colors"
-                : hovered.number_of_colours === 0
-                    ? "Colorless"
-                    : `${hovered.number_of_colours} Colors`;
-            return d.data.name === expectedGroup;
-        }
-
-        if (d.depth === 2 && hovered.color_identity) {
-            const identity = hovered.color_identity.sort().join("-");
-            return d.data.name === identity;
-        }
-
+        if (d.depth === 1) return groupMatches.has(d.data.name);
+        if (d.depth === 2) return identityMatches.has(d.data.name);
         return false;
     });
 }
+
 
 

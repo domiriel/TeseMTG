@@ -326,6 +326,7 @@ const formatPrice = d => `${symbol}${d.toFixed(2)}`;
     .data(sampledData, d => d.name)
     .join("circle")
     .attr("r", 2.5)
+    .style("cursor", "pointer")
     .attr("fill", d => d.edhrec_rank ? getGroupColor(d.edhrec_rank) : "transparent")
     .attr("stroke", d => d.edhrec_rank ? "none" : "black")
     .attr("stroke-width", d => d.edhrec_rank ? 0 : 1.2)
@@ -334,15 +335,14 @@ const formatPrice = d => `${symbol}${d.toFixed(2)}`;
     globalDots = dots;
 
 
-        const currentHovered = getState().hoveredCard;
+        const currentHovered = getState().hoveredCards;
 
-        if (currentHovered) {
-            gClip.selectAll("circle")
-                .filter(d => d.name === currentHovered.name)
-                .attr("stroke", "orange")
-                .attr("stroke-width", 1.5)
-                .raise();
-        }
+gClip.selectAll("circle")
+  .filter(d => currentHovered.some(c => c.name === d.name))
+  .attr("stroke", "orange")
+  .attr("stroke-width", 2.5)
+  .raise();
+
         
 
     updatePointPositions(xScale, yScale);
@@ -395,34 +395,28 @@ const formatPrice = d => `${symbol}${d.toFixed(2)}`;
             tooltip.style("display", "none");
         })
         .on("click", function (event, d) {
-            const currentHovered = getState().hoveredCard;
-            const isSameCard = currentHovered && currentHovered.name === d.name;
-        
-            if (isSameCard) {
-                d3.select(this)
-                    .attr("stroke", "none")
-                    .attr("stroke-width", null);
-        
-                updateState({ hoveredCard: null });
-            } else {
-                d3.selectAll(".dots circle")
-                    .attr("stroke", "none")
-                    .attr("stroke-width", null);
-        
-                d3.select(this)
-                    .raise() // ensures it's not hidden behind others
-                    .attr("stroke", "#000")  // high contrast for visibility
-                    .attr("stroke-width", 2.5);
-        
-                updateState({ hoveredCard: d });
-                if (Array.isArray(d.all_sets)) {
-            console.log(`Sets for "${d.name}":`);
-            d.all_sets.forEach(({ name, type }) => {
-                console.log(`- ${name} (${type})`);
-            });
-        }
-            }
-        });
+    const { hoveredCards } = getState();
+    const isAlreadySelected = hoveredCards.some(c => c.name === d.name);
+
+    let newHoveredCards;
+    if (isAlreadySelected) {
+        newHoveredCards = hoveredCards.filter(c => c.name !== d.name);
+        d3.select(this).attr("stroke", "none").attr("stroke-width", null);
+    } else {
+        newHoveredCards = [...hoveredCards, d];
+        d3.select(this)
+            .raise()
+            .attr("stroke", "orange")
+            .attr("stroke-width", 2.5);
+    }
+
+    updateState({ hoveredCards: newHoveredCards });
+
+     d3.selectAll(".dots circle")
+        .attr("stroke", d => newHoveredCards.some(c => c.name === d.name) ? "orange" : "none")
+        .attr("stroke-width", d => newHoveredCards.some(c => c.name === d.name) ? 2.5 : null);
+});
+
         
         
         
@@ -431,7 +425,7 @@ const formatPrice = d => `${symbol}${d.toFixed(2)}`;
 const legendItemHeight = 20;
 const legendSpacing = 0;
 const legendX = margin.left + chartWidth -100;
-const legendY = margin.top - 20;
+const legendY = margin.top;
 
 const legend = svg.append("g")
   .attr("class", "edhrec-legend")
@@ -575,6 +569,7 @@ export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_
         .enter()
         .append("circle")
         .attr("r", 2.5)
+        .style("cursor", "pointer")
         .attr("fill", d => d.edhrec_rank ? getGroupColor(d.edhrec_rank) : "transparent")
         .attr("stroke", d => d.edhrec_rank ? "none" : "black")
         .attr("stroke-width", d => d.edhrec_rank ? 0 : 1.2)
@@ -622,34 +617,24 @@ export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_
             tooltip.style("display", "none");
         })
         .on("click", function (event, d) {
-            const currentHovered = getState().hoveredCard;
-            const isSameCard = currentHovered && currentHovered.name === d.name;
-        
-            if (isSameCard) {
-                d3.select(this)
-                    .attr("stroke", "none")
-                    .attr("stroke-width", null);
-        
-                updateState({ hoveredCard: null });
-            } else {
-                d3.selectAll(".dots circle")
-                    .attr("stroke", "none")
-                    .attr("stroke-width", null);
-        
-                d3.select(this)
-                    .raise() // ensures it's not hidden behind others
-                    .attr("stroke", "#000")  // high contrast for visibility
-                    .attr("stroke-width", 2.5);
-        
-                updateState({ hoveredCard: d });
-                if (Array.isArray(d.all_sets)) {
-            console.log(`Sets for "${d.name}":`);
-            d.all_sets.forEach(({ name, type }) => {
-                console.log(`- ${name} (${type})`);
-            });
-        }
-            }
-        });
+    const { hoveredCards } = getState();
+    const isAlreadySelected = hoveredCards.some(c => c.name === d.name);
+
+    let newHoveredCards;
+    if (isAlreadySelected) {
+        newHoveredCards = hoveredCards.filter(c => c.name !== d.name);
+        d3.select(this).attr("stroke", "none").attr("stroke-width", null);
+    } else {
+        newHoveredCards = [...hoveredCards, d];
+        d3.select(this)
+            .raise()
+            .attr("stroke", "orange")
+            .attr("stroke-width", 2.5);
+    }
+
+    updateState({ hoveredCards: newHoveredCards });
+});
+
 
        globalDots = gClip.selectAll("circle");
 updatePointPositions(xScale, yScale);

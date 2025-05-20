@@ -5,6 +5,7 @@ import { createTimelineView, highlightTimelineSets } from "./idioms/TimelineView
 import { createScatterPlot, updateScatterPlot, prepareScatterData} from "./idioms/Scatterplot.js";
 import { createStackedLineChart } from "./idioms/LineChart.js";
 import { createFilterPanel, updateFilterPanel } from "./idioms/FilterPanel.js";
+import { createHiddenDrawer, updateDrawer } from "./idioms/HiddenDrawer.js";
 function loadCardData() {
   const localPath = "./data/card_details.json";
   const googleDriveURL = "https://drive.google.com/uc?export=download&id=1q3PD40N8nLbpMBknczyxJhDqFahQr2d3";
@@ -20,22 +21,23 @@ function init() {
     d3.json("./data/dataset_card_details.json").then(function (data) {
       const originalData = JSON.parse(JSON.stringify(data));  
     let hoverTimeout = null;
-      getState().onChange("hoveredCard", (hovered) => {
-        if (hoverTimeout) clearTimeout(hoverTimeout);
-        hoverTimeout = setTimeout(() => {
-            
-          highlightAlluvialElements(hovered);
-          highlightIcicleRect(hovered);
-          highlightTimelineSets(hovered);
-        }, 60);
-      });      
+      getState().onChange("hoveredCards", (hoveredCards) => {
+  if (hoverTimeout) clearTimeout(hoverTimeout);
+  hoverTimeout = setTimeout(() => {
+    highlightAlluvialElements(hoveredCards);
+    highlightIcicleRect(hoveredCards);
+    highlightTimelineSets(hoveredCards);
+    updateDrawer(hoveredCards);
+  }, 60);
+});
+ 
       const { selectedFilters, selectedPriceAttribute } = getState();
       const filtered = filterData(originalData, selectedFilters, selectedPriceAttribute);
   
       createIcicleChart(filtered, ".IcicleChart");
       updateFilterPanel(originalData, selectedFilters);
       createAlluvialChart(filtered, ".AlluvialChart", false, selectedPriceAttribute);
-
+      createHiddenDrawer(".HiddenDrawerArea");
       createTimelineView(filtered, ".TimelineView");
       let savedTransform = null;
 

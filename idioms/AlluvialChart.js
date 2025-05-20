@@ -715,11 +715,15 @@ export function highlightAlluvialAllElements(hovered) {
   });
 }
 
-export function highlightAlluvialElements(hovered) {
-  d3.selectAll(".nodes rect").classed("highlighted", function(d) {
-    if (!hovered) return false;
-    return d.name === hovered.rarity?.toLowerCase();
-  });
+export function highlightAlluvialElements(hoveredCards) {
+  const hoveredRarities = new Set(
+    (hoveredCards || []).map(card => card.rarity?.toLowerCase()).filter(Boolean)
+  );
+
+  d3.selectAll(".nodes rect").classed("highlighted", d =>
+    hoveredRarities.has(d.name)
+  );
 }
+
 
 

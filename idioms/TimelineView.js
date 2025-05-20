@@ -356,12 +356,18 @@ function zoomed(event) {
 
 }
 
-export function highlightTimelineSets(hovered) {
-    d3.selectAll(".set-rect").classed("highlighted", function (d) {
-        if (!hovered || !hovered.all_sets) return false;
+export function highlightTimelineSets(hoveredCards) {
+    const hoveredSets = new Set();
 
-        const hoveredSets = hovered.all_sets.map(s => s.name.toLowerCase());
-        return hoveredSets.includes(d.name.toLowerCase());
+    (hoveredCards || []).forEach(card => {
+        (card.all_sets || []).forEach(set => {
+            hoveredSets.add(set.name.toLowerCase());
+        });
     });
+
+    d3.selectAll(".set-rect").classed("highlighted", d =>
+        hoveredSets.has(d.name.toLowerCase())
+    );
 }
+
 

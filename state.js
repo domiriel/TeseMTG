@@ -13,7 +13,7 @@ const state = {
       "Year": new Set(),
     },
     selectedPriceAttribute: "price_usd",
-    hoveredCard: null,
+    hoveredCards: [],
     updateContext: null,
   };
   
