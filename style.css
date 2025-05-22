@@ -94,13 +94,39 @@ body {
   /*.FilterPanel {
     border: 1px solid black; 
   }*/
-  rect.highlighted {
-    stroke: rgb(0, 0, 0);
-    stroke-width: 10px;
+.IcicleChart rect {
+  stroke: #fff;
+  stroke-width: 1px;
+}
+
+.IcicleChart rect.selected {
+    stroke: #007bff;
+    stroke-width: 3px;
+    stroke-opacity: 1;
+    fill-opacity: 1;
+}
+
+.legend-box {
+  stroke: #000 !important;
+}
+
+  .IcicleChart rect.highlighted {
+    stroke:orange;
+    stroke-width: 3px;
     stroke-opacity: 1;
     fill-opacity: 1;
   }
   
+
+  .IcicleChart rect.selected.highlighted {
+  stroke: #805380;
+  stroke-width: 3px;
+  stroke-opacity: 1;
+    fill-opacity: 1;
+}
+
+
+
   .nodes rect.highlighted {
     stroke: orange;
     stroke-width: 3px;

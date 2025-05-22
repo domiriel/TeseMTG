@@ -237,14 +237,12 @@ const levelHeight = chartHeight / depth;
         .attr("width", d => xScale(d.x1) - xScale(d.x0))
         .attr("height", levelHeight-2)
         .attr("fill", d => d.data.color)
-        .style("stroke", "#fff")
         .style("cursor", "pointer")
         .on("click", function(event, d) {
             clicked(event, d, false);
         })
-        .on("dblclick", function(event, d) {
-            clicked(event, d, true);
-        })
+        .on("dblclick", clickedFilter)
+
         
         .on("mouseover", function(event, d) {
     const tooltip = d3.select("#tooltip");
@@ -375,6 +373,39 @@ const levelHeight = chartHeight / depth;
             }, 70);  
         }
     }
+
+    function clickedFilter(event, d) {
+    // Toggle selection class
+    d3.select(event.currentTarget).classed("selected", !d3.select(event.currentTarget).classed("selected"));
+
+    const wasFocused = false; // we don’t care for zoom anymore
+
+    const currentFilters = getState().selectedFilters;
+    const newFilters = structuredClone(currentFilters);
+
+    const isAlreadySelected =
+    (d.depth === 1 && currentFilters.IcicleColorGroups?.has(d.data.name)) ||
+    (d.depth === 2 && currentFilters.IcicleColorIdentity?.has(d.data.name));
+
+if (isAlreadySelected) {
+    newFilters.IcicleColorGroups = new Set();
+    newFilters.IcicleColorIdentity = new Set();
+} else {
+    if (d.depth === 1) {
+        newFilters.IcicleColorGroups = new Set([d.data.name]);
+        newFilters.IcicleColorIdentity = new Set(); 
+    } else if (d.depth === 2) {
+        newFilters.IcicleColorIdentity = new Set([d.data.name]);
+        newFilters.IcicleColorGroups = new Set(); 
+    }
+}
+
+
+    setTimeout(() => {
+        updateState({ selectedFilters: newFilters, updateContext: "IcicleFilter" });
+    }, 70);
+}
+
     
     
     const legendX = margin.left + chartWidth + 15;
@@ -412,6 +443,7 @@ legend.append("text")
 
         legendEntry.append("rect")
             .attr("width", 20)
+            .attr("class", "legend-box")
             .attr("height", rectHeight)
             .attr("fill", interval.color)
             .attr("stroke", "#000");
@@ -442,31 +474,24 @@ zeroLabel.append("text")
 export function highlightIcicleRect(hoveredCards) {
     if (!globalRects) return;
 
-    const groupMatches = new Set();
     const identityMatches = new Set();
+    const mtgColorOrder = { W: 0, U: 1, R: 2, B: 3, G: 4 };
 
     (hoveredCards || []).forEach(card => {
-        if (card.number_of_colours != null) {
-            const group = card.number_of_colours >= 4
-                ? "+4 Colors"
-                : card.number_of_colours === 0
-                    ? "Colorless"
-                    : `${card.number_of_colours} Colors`;
-            groupMatches.add(group);
-        }
-
-        if (card.color_identity) {
-            const identity = card.color_identity.sort().join("-");
+        if (card.color_identity && card.color_identity.length > 0) {
+            const identity = card.color_identity
+                .slice()
+                .sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b])
+                .join("-");
             identityMatches.add(identity);
         }
     });
 
-    globalRects.classed("highlighted", d => {
-        if (d.depth === 1) return groupMatches.has(d.data.name);
-        if (d.depth === 2) return identityMatches.has(d.data.name);
-        return false;
-    });
+    globalRects.classed("highlighted", d =>
+        d.depth === 2 && identityMatches.has(d.data.name)
+    );
 }
+
 
 
 

@@ -1,6 +1,6 @@
-//Issues fixed: 18, 22
+
 import { updateState, getState, saveFilterSettings, loadFilterSettings, generateFilterShareURL} from "../state.js";
-import { filterData } from "../script.js"; // Add this at top if not already
+import { filterData } from "../script.js"; 
 
 const optionMap = new Map();  
 const pillMap = new Map();
@@ -67,7 +67,6 @@ export function createFilterPanel(data, containerId, selectedFiltersFromState, i
         filters[key] = Array.from(filters[key].entries()).sort((a, b) => a[0].localeCompare(b[0]));
     }
 
-    // Filter data using the selected filters
 const filteredCards = filterData(data, selectedFilters);
 const uniqueCardNames = Array.from(new Set(filteredCards.map(card => card.name))).sort();
 
@@ -83,11 +82,12 @@ const uniqueCardNames = Array.from(new Set(filteredCards.map(card => card.name))
         .style("font-size", "16px");
 
 wrapper.append("datalist")
-        .attr("id", inputId)
-        .selectAll("option")
-        .data(uniqueCardNames)
-        .enter()
-        .append("option")
+    .attr("id", inputId)
+    .selectAll("option")
+    .data(uniqueCardNames)
+    .enter()
+    .append("option")
+    .attr("value", d => d);
 
 
 
@@ -98,19 +98,25 @@ searchInput.on("change", function () {
     const cardName = this.value.trim();
     if (!cardName) return;
 
-    // Find the card data object (assuming you still have access to it)
     const card = data.find(c => c.name === cardName);
     if (!card) return;
 
-    // Update global state like in scatterplot click
-    updateState({ hoveredCard: card });
+    const { hoveredCards } = getState();
+    const isAlreadySelected = hoveredCards.some(c => c.name === card.name);
 
-    // Optional: visually highlight in scatterplot
+    let newHoveredCards = isAlreadySelected
+        ? hoveredCards
+        : [...hoveredCards, card];
+
+    updateState({ hoveredCards: newHoveredCards });
+
+    // Immediately reflect in scatterplot
     const scatterSvg = d3.select(".Scatterplot svg");
     scatterSvg.selectAll(".dots circle")
-        .attr("stroke", d => d.name === card.name ? "#000" : "none")
-        .attr("stroke-width", d => d.name === card.name ? 2.5 : null);
+        .attr("stroke", d => newHoveredCards.some(c => c.name === d.name) ? "#000" : "none")
+        .attr("stroke-width", d => newHoveredCards.some(c => c.name === d.name) ? 2.5 : null);
 });
+
     const priceFields = new Set();
     data.forEach(card => {
         Object.keys(card).forEach(key => {
@@ -298,16 +304,17 @@ searchInput.on("change", function () {
         updatePills();
     });
 
-    // SETTINGS SECTION
+
 const settingsSection = wrapper.append("div")
     .attr("class", "filter-section")
     .style("margin-top", "20px")
-    .style("width", "95%");
+    .style("width", "60%");
 
 const settingsHeader = settingsSection.append("div")
     .attr("class", "dropdown-header")
-    .text("Settings")
-    .style("background", "#f0f0f0")
+    .html('Settings <span style="margin-right:6px;">&#9881;</span>')
+    .style("background", "#4681f4")
+    .style("color", "#fff")
     .style("padding", "6px 10px")
     .style("border", "1px solid #ccc")
     .style("border-radius", "6px")
