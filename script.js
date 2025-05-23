@@ -22,14 +22,23 @@ function init() {
       const originalData = JSON.parse(JSON.stringify(data));  
     let hoverTimeout = null;
       getState().onChange("hoveredCards", (hoveredCards) => {
-  if (hoverTimeout) clearTimeout(hoverTimeout);
-  hoverTimeout = setTimeout(() => {
-    highlightAlluvialElements(hoveredCards);
-    highlightIcicleRect(hoveredCards);
-    highlightTimelineSets(hoveredCards);
-    updateDrawer(hoveredCards);
-  }, 60);
-});
+      if (hoverTimeout) clearTimeout(hoverTimeout);
+        hoverTimeout = setTimeout(() => {
+        highlightAlluvialElements(hoveredCards);
+        highlightIcicleRect(hoveredCards);
+        highlightTimelineSets(hoveredCards);
+        updateDrawer(hoveredCards);
+        d3.selectAll(".dots circle")
+  .attr("stroke", d => hoveredCards.some(c => c.name === d.name) ? "orange" : "none")
+  .attr("stroke-width", d => hoveredCards.some(c => c.name === d.name) ? 2.5 : null)
+  .each(function (d) {
+    if (hoveredCards.some(c => c.name === d.name)) {
+      this.parentNode.appendChild(this); // raise
+    }
+  });
+
+        }, 60);
+      });
  
       const { selectedFilters, selectedPriceAttribute } = getState();
       const filtered = filterData(originalData, selectedFilters, selectedPriceAttribute);
@@ -52,7 +61,12 @@ function init() {
 
       createStackedLineChart(filtered, ".LineChart");
       createFilterPanel(originalData, ".FilterPanel", selectedFilters); 
-  
+      
+      highlightAlluvialElements([]);
+      highlightIcicleRect([]);
+      highlightTimelineSets([]);
+      updateDrawer([]);
+
       subscribe((state) => {
         const context = state.updateContext || "default";
         const { selectedFilters, selectedPriceAttribute } = state;
@@ -73,24 +87,11 @@ function init() {
         if (context !== "IcicleFilter") {
           createIcicleChart(filteredData, ".IcicleChart", true);
         }
-
-        
         if (context !== "TimelineFilter") {
           createTimelineView(filteredData, ".TimelineView", true);
           createStackedLineChart(filteredData, ".LineChart", true);
         }
-
-       
         createAlluvialChart(filteredData, ".AlluvialChart", true, selectedPriceAttribute);
-
-        
-        let savedTransform = null;
-        try {
-          const svgNode = d3.select(".Scatterplot svg").node();
-          if (svgNode) savedTransform = d3.zoomTransform(svgNode);
-        } catch (e) {
-          console.warn("Could not read zoom transform:", e);
-        }
 
       const processedData = prepareScatterData(filteredData, selectedPriceAttribute);
       updateScatterPlot(processedData, selectedPriceAttribute);

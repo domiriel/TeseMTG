@@ -3,7 +3,7 @@ import json
 from decimal import Decimal
 from collections import Counter, defaultdict
 
-MTG_SUPERTYPES = {"Basic", "Legendary", "Ongoing", "Snow", "World", "Host", "Elite"}
+MTG_SUPERTYPES = {"Basic", "Legendary", "Ongoing","Token", "Snow", "World", "Host", "Elite"}
 MTG_CARD_TYPES = {
     "Artifact", "Conspiracy", "Creature","Dungeon", "Emblem", "Enchantment","Hero", "Instant","Kindred", "Land", "Phenomenon",
     "Plane", "Planeswalker", "Scheme", "Sorcery", "Vanguard", "Battle"

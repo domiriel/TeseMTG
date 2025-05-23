@@ -81,8 +81,9 @@ export function prepareScatterData(data, selectedPriceAttribute) {
 
     cardMap.forEach(card => {
         card.avg_price = card.prices.length > 0
-            ? card.prices.reduce((sum, p) => sum + p, 0) / card.prices.length
-            : 0;
+    ? Math.max(0.001, card.prices.reduce((sum, p) => sum + p, 0) / card.prices.length)
+    : 0.001; // Smallest possible displayable value
+
         card.all_sets = Array.from(card.all_sets.entries()).map(([name, type]) => ({ name, type }));
     });
 
@@ -161,6 +162,7 @@ const filteredForPlot = allData.filter(card =>
     !excludedSetTypes.has(card.set_type) &&
     !excludedSetNames.some(keyword => card.set_name && card.set_name.includes(keyword)) &&
     !excludedTypes.includes(card.type) &&
+    
     !card.digital
 );
 
@@ -199,7 +201,7 @@ const filteredData = filteredForPlot
     .map(card => cardMap.get(card.name));
 
 
-    const sampledData = filteredData.length > 1000 ? d3.shuffle(filteredData).slice(0, 30000) : filteredData;
+    const sampledData = filteredData;
 
     const container = d3.select(containerId).node();
     const { width, height } = container.getBoundingClientRect();
@@ -219,7 +221,7 @@ const filteredData = filteredForPlot
 
     const originalXScale = d3.scaleLog()
         .domain([
-            Math.max(0.01, d3.min(sampledData, d => d.avg_price || 0.01)),
+            Math.max(0.001, d3.min(sampledData, d => d.avg_price || 0.01)),
             d3.max(sampledData, d => d.avg_price)
         ])
         .range([0, chartWidth]);
@@ -333,17 +335,6 @@ const formatPrice = d => `${symbol}${d.toFixed(2)}`;
     .attr("opacity", 0.8);
 
     globalDots = dots;
-
-
-        const currentHovered = getState().hoveredCards;
-
-gClip.selectAll("circle")
-  .filter(d => currentHovered.some(c => c.name === d.name))
-  .attr("stroke", "orange")
-  .attr("stroke-width", 2.5)
-  .raise();
-
-        
 
     updatePointPositions(xScale, yScale);
 
@@ -633,8 +624,11 @@ export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_
     }
 
     updateState({ hoveredCards: newHoveredCards });
-});
 
+     d3.selectAll(".dots circle")
+        .attr("stroke", d => newHoveredCards.some(c => c.name === d.name) ? "orange" : "none")
+        .attr("stroke-width", d => newHoveredCards.some(c => c.name === d.name) ? 2.5 : null);
+});
 
        globalDots = gClip.selectAll("circle");
 updatePointPositions(xScale, yScale);

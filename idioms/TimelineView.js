@@ -39,7 +39,8 @@ export function createTimelineView(data, containerId, isUpdate = false) {
     const container = d3.select(containerId);
     const containerBounds = container.node().getBoundingClientRect();
 
-    const containerWidth = containerBounds.width * 0.98;
+    const containerWidth = containerBounds.width * 0.89;
+    const searchContainerwidth = containerBounds.width * 0.1;
     const containerHeight = containerBounds.height;
 
     const chartWidth = containerWidth * 0.927;
@@ -56,8 +57,89 @@ export function createTimelineView(data, containerId, isUpdate = false) {
     if (isUpdate) {
         d3.select(containerId).select(".chart-wrapper").remove();
     }
+container.insert("input", ":first-child")
+    .attr("type", "text")
+    .attr("placeholder", "Search set...")
+    .attr("class", "timeline-search-bar")
+    .style("position", "absolute")
+    .style("top", "0px")
+    .style("left", "0px")
+    .style("margin", "10px")
+    .style("padding", "5px")
+    .style("font-size", "14px")
+    .style("width", searchContainerwidth);
 
-    
+container.insert("div", ":nth-child(2)")
+    .attr("class", "search-dropdown")
+    .style("position", "absolute")
+    .style("top", "54px")
+    .style("left", "10px")
+    .style("width", "200px")
+    .style("max-height", "100px")
+    .style("overflow-y", "auto")
+    .style("background", "white")
+    .style("border", "1px solid #ccc")
+    .style("display", "none")
+    .style("z-index", "9999");
+container.select(".timeline-search-bar").on("input", function () {
+    const query = this.value.toLowerCase().trim();
+    const dropdown = container.select(".search-dropdown");
+
+    if (!query) {
+        dropdown.style("display", "none");
+        return;
+    }
+
+    const matches = uniqueSets.filter(d => d.name.toLowerCase().includes(query));
+
+    dropdown.selectAll("div").remove();
+
+    if (matches.length === 0) {
+        dropdown.style("display", "none");
+        return;
+    }
+
+    dropdown.style("display", "block");
+
+    dropdown.selectAll("div")
+        .data(matches)
+        .enter()
+        .append("div")
+        .text(d => d.name)
+        .style("padding", "5px")
+        .style("cursor", "pointer")
+        .style("border-bottom", "1px solid #eee")
+        .on("mouseover", function () {
+            d3.select(this).style("background", "#f0f0f0");
+        })
+        .on("mouseout", function () {
+            d3.select(this).style("background", "white");
+        })
+        .on("click", function (event, d) {
+            container.select(".timeline-search-bar").property("value", d.name);
+            dropdown.style("display", "none");
+
+            d3.selectAll(".set-rect").classed("search-match", false);
+
+            d3.selectAll(".set-rect")
+                .filter(s => s.name === d.name)
+                .classed("search-match", true)
+                .transition()
+                .delay(1000)
+                .on("end", function () {
+                    d3.select(this).classed("search-match", false);
+                });
+
+            const y = yScale(d.setType);
+            scrollContainer.node().scrollTo({
+                top: y - 50,
+                behavior: "smooth"
+            });
+        });
+});
+
+
+
     const wrapper = container.append("div")
         .attr("class", "chart-wrapper")
         .style("position", "relative")
