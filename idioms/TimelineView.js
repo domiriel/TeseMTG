@@ -273,6 +273,15 @@ function updateYearTickStyles() {
         });
 }
 
+function updateSetTypeLabelStyles() {
+    const setTypeFilter = getState().selectedFilters["Set Types"] || new Set();
+
+    d3.selectAll(".set-type-label")
+        .style("fill", d => setTypeFilter.has(d) ? "#007bff" : "black")
+        .style("font-weight", d => setTypeFilter.has(d) ? "bold" : "normal");
+}
+
+
 function updateSetRectOpacity() {
     const yearFilter = getState().selectedFilters["Year"] || new Set();
 
@@ -437,40 +446,65 @@ function updateSetRectOpacity() {
         .attr("font-size", "12px")
         .attr("fill", "black")
         .text(d => d)
+        .on("click", function (event, type) {
+    const currentState = getState();
+    const updatedFilters = {};
+
+    for (const key in currentState.selectedFilters) {
+        updatedFilters[key] = new Set(currentState.selectedFilters[key]);
+    }
+
+    if (!updatedFilters["Set Types"]) {
+        updatedFilters["Set Types"] = new Set();
+    }
+
+    if (updatedFilters["Set Types"].has(type)) {
+        updatedFilters["Set Types"].delete(type);
+    } else {
+        updatedFilters["Set Types"].add(type);
+    }
+
+    updateState({
+        selectedFilters: updatedFilters,
+        updateContext: "TimelineFilter"
+    });
+})
         .on("mouseover", function (event, type) {
     const count = typeCounts.get(type) || 0;
     const tooltip = d3.select("#tooltip")
     .style("display", "block")
     .html(`<strong>${type}</strong><br>${count} sets`);
 
-const tooltipNode = tooltip.node();
-const tooltipWidth = tooltipNode.offsetWidth;
-const tooltipHeight = tooltipNode.offsetHeight;
-const viewportWidth = window.innerWidth;
-const viewportHeight = window.innerHeight;
-const padding = 10;
+    const tooltipNode = tooltip.node();
+    const tooltipWidth = tooltipNode.offsetWidth;
+    const tooltipHeight = tooltipNode.offsetHeight;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const padding = 10;
 
-let left = event.pageX + padding;
-if (left + tooltipWidth > viewportWidth) {
-    left = event.pageX - tooltipWidth - padding;
-}
-if (left < 0) left = padding;
+    let left = event.pageX + padding;
+    if (left + tooltipWidth > viewportWidth) {
+        left = event.pageX - tooltipWidth - padding;
+    }
+    if (left < 0) left = padding;
 
-let top = event.pageY + padding;
-if (top + tooltipHeight > viewportHeight) {
-    top = event.pageY - tooltipHeight - padding;
-}
-if (top < 0) top = padding;
+    let top = event.pageY + padding;
+    if (top + tooltipHeight > viewportHeight) {
+        top = event.pageY - tooltipHeight - padding;
+    }
+    if (top < 0) top = padding;
 
-tooltip.style("left", `${left}px`)
-       .style("top", `${top}px`);
+    tooltip.style("left", `${left}px`)
+        .style("top", `${top}px`);
 
 
-})
-.on("mouseout", () => {
-    d3.select("#tooltip").style("display", "none");
-});
-;
+    })
+    .on("mouseout", () => {
+        d3.select("#tooltip").style("display", "none");
+    });
+    //updateSetTypeLabelStyles();
+
+    ;
 
 
 function clicked(selectedSet) {

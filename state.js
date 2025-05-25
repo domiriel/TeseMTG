@@ -15,6 +15,7 @@ const state = {
     selectedPriceAttribute: "price_usd",
     hoveredCards: [],
     updateContext: null,
+    originalData: null,
   };
   
   const globalListeners = new Set();      // .subscribe()

@@ -654,6 +654,16 @@ export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_
 
        globalDots = gClip.selectAll("circle");
 updatePointPositions(xScale, yScale);
+const { hoveredCards } = getState();
+
+d3.selectAll(".dots circle")
+  .attr("stroke", d => hoveredCards.some(c => c.name === d.name) ? "orange" : "none")
+  .attr("stroke-width", d => hoveredCards.some(c => c.name === d.name) ? 2.5 : null)
+  .each(function (d) {
+    if (hoveredCards.some(c => c.name === d.name)) {
+      this.parentNode.appendChild(this); // bring to front
+    }
+  });
 
 
 

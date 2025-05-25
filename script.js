@@ -1,4 +1,4 @@
-import { getState, subscribe } from "./state.js";
+import { getState, subscribe, updateState } from "./state.js";
 import { createIcicleChart, highlightIcicleRect } from "./idioms/IcicleChart.js";
 import { createAlluvialChart, highlightAlluvialElements} from "./idioms/AlluvialChart.js";
 import { createTimelineView, highlightTimelineSets } from "./idioms/TimelineView.js";
@@ -20,6 +20,7 @@ function loadCardData() {
 function init() {
     d3.json("./data/dataset_card_details.json").then(function (data) {
       const originalData = JSON.parse(JSON.stringify(data));  
+      updateState({ originalData });
     let hoverTimeout = null;
       getState().onChange("hoveredCards", (hoveredCards) => {
       if (hoverTimeout) clearTimeout(hoverTimeout);
@@ -42,8 +43,11 @@ function init() {
  
       const { selectedFilters, selectedPriceAttribute } = getState();
       const filtered = filterData(originalData, selectedFilters, selectedPriceAttribute);
+      const IcicleFiltered = filterData(originalData, selectedFilters, selectedPriceAttribute, [
+  "IcicleColorGroups", "IcicleColorIdentity"
+]);
   
-      createIcicleChart(filtered, ".IcicleChart");
+      createIcicleChart(IcicleFiltered, ".IcicleChart");
       updateFilterPanel(originalData, selectedFilters);
       createAlluvialChart(filtered, ".AlluvialChart", false, selectedPriceAttribute);
       createHiddenDrawer(".HiddenDrawerArea");
@@ -73,7 +77,10 @@ function init() {
 
         
         const filteredData = filterData(originalData, selectedFilters, selectedPriceAttribute);
-
+        const IcicleFiltered = filterData(originalData, selectedFilters, selectedPriceAttribute, [
+  "IcicleColorGroups", "IcicleColorIdentity"]);
+        const TimelineFiltered = filterData(originalData, selectedFilters, selectedPriceAttribute, ["Set Types", "Set Names", "Year"
+]);
         
         if (window._prevFilteredLength === filteredData.length &&
             window._prevPriceAttribute === selectedPriceAttribute &&
@@ -85,11 +92,11 @@ function init() {
 
        
         if (context !== "IcicleFilter") {
-          createIcicleChart(filteredData, ".IcicleChart", true);
+          createIcicleChart(IcicleFiltered, ".IcicleChart", true);
         }
         if (context !== "TimelineFilter") {
-          createTimelineView(filteredData, ".TimelineView", true);
-          createStackedLineChart(filteredData, ".LineChart", true);
+          createTimelineView(TimelineFiltered, ".TimelineView", true);
+          createStackedLineChart(TimelineFiltered, ".LineChart", true);
         }
         createAlluvialChart(filteredData, ".AlluvialChart", true, selectedPriceAttribute);
 
@@ -114,13 +121,29 @@ function init() {
     });
   
     window.addEventListener("resize", () => {
-      init();
+      console.log("Window resized, updating charts...");
+      const { selectedFilters, selectedPriceAttribute } = getState();
+      const { hoveredCards } = getState();
+      const filtered = filterData(getState().originalData, selectedFilters, selectedPriceAttribute);
+      createAlluvialChart(filtered, ".AlluvialChart", true, selectedPriceAttribute);
+      createTimelineView(filtered, ".TimelineView", true);
+      createStackedLineChart(filtered, ".LineChart", true);
+      createIcicleChart(filtered, ".IcicleChart", true);
+      updateScatterPlot(prepareScatterData(filtered, selectedPriceAttribute), selectedPriceAttribute);
+      createFilterPanel(getState().originalData, ".FilterPanel", selectedFilters); 
+
+highlightAlluvialElements(hoveredCards);
+highlightIcicleRect(hoveredCards);
+highlightTimelineSets(hoveredCards);
+updateDrawer(hoveredCards);
+console.log("Charts updated after resize.");
+
     });
   }
   
 
 
-  export function filterData(data, selectedFilters, selectedPriceAttribute) {
+  export function filterData(data, selectedFilters, selectedPriceAttribute, ignoreFilters = []) {
     return data.filter(card => {
       if (selectedFilters["IcicleColorGroups"]?.size > 0) {
         const groupLabel = card.number_of_colours >= 4
@@ -151,26 +174,26 @@ function init() {
         }
       }
   
-      for (const [category, values] of Object.entries(selectedFilters || {})) {
-        if (!values || values.size === 0) continue;
-        if (["IcicleColorGroups", "IcicleColorIdentity", "Year"].includes(category)) continue;
-  
-        const cardValue = extractCardValue(card, category);
-        if (!cardValue) return false;
-  
-        const isSplittable = ["Supertypes", "Types", "Subtypes"].includes(category);
-        const cardValues = Array.isArray(cardValue)
-          ? cardValue.map(v => v.trim().toLowerCase())
-          : (isSplittable
-              ? cardValue.split(/[\s/]+/).map(v => v.trim().toLowerCase())
-              : [cardValue.trim().toLowerCase()]);
-  
-        const filterValues = new Set(Array.from(values).map(v => v.trim().toLowerCase()));
-        const match = cardValues.some(v => filterValues.has(v));
-        if (!match) return false;
-      }
-  
-      return true;
+      for (const [category, values] of Object.entries(selectedFilters)) {
+      if (!values || values.size === 0) continue;
+      if (ignoreFilters.includes(category)) continue;
+
+      const cardValue = extractCardValue(card, category);
+      if (!cardValue) return false;
+
+      const isSplittable = ["Supertypes", "Types", "Subtypes"].includes(category);
+      const cardValues = Array.isArray(cardValue)
+        ? cardValue.map(v => v.trim().toLowerCase())
+        : (isSplittable
+            ? cardValue.split(/[\s/]+/).map(v => v.trim().toLowerCase())
+            : [cardValue.trim().toLowerCase()]);
+
+      const filterValues = new Set(Array.from(values).map(v => v.trim().toLowerCase()));
+      const match = cardValues.some(v => filterValues.has(v));
+      if (!match) return false;
+    }
+
+    return true;
     });
   }
   
