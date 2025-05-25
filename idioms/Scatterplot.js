@@ -363,6 +363,7 @@ const formatPrice = d => `${symbol}${d.toFixed(2)}`;
                     : selectedPriceAttribute.includes("thx")
                     ? ""
                     : "$"}${d.avg_price.toFixed(2)}<br>
+                All Sets: ${d.all_sets.map(set => `${set.name} (${set.type})`).join("<br>")}<br>
             </div>
         </div>
     `);
@@ -425,7 +426,7 @@ const legend = svg.append("g")
 // Title
 legend.append("text")
   .attr("x", 0)
-  .attr("y", 135)
+  .attr("y", 150)
   .text("EDHREC Rank")
   .attr("fill", "#000")
   .style("font-size", "12px")
@@ -451,6 +452,26 @@ colorGroups.forEach((group, i) => {
     .style("font-size", "12px")
     .attr("fill", "#000");
 });
+// Add 'No EDHREC Rank' legend item
+const noRankEntry = legend.append("g")
+  .attr("transform", `translate(0, ${(colorGroups.length + 1) * (legendItemHeight + legendSpacing)})`);
+
+noRankEntry.append("circle")
+  .attr("r", 6)
+  .attr("cx", 9)
+  .attr("cy", legendItemHeight / 2)
+  .attr("fill", "transparent")
+  .attr("stroke", "black")
+  .attr("stroke-width", 1.2);
+
+noRankEntry.append("text")
+  .attr("x", 26)
+  .attr("y", legendItemHeight / 2)
+  .attr("dy", "0.35em")
+  .text("No Rank")
+  .style("font-size", "12px")
+  .attr("fill", "#000");
+
 
         
         
@@ -585,6 +606,7 @@ export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_
                     : selectedPriceAttribute.includes("thx")
                     ? ""
                     : "$"}${d.avg_price.toFixed(2)}<br>
+                    All Sets: ${d.all_sets.map(set => `${set.name} (${set.type})`).join("<br>")}<br>
             </div>
         </div>
     `);

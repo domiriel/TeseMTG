@@ -1,6 +1,7 @@
 
 import { updateState, getState } from "../state.js";
 let globalRects = null;  
+let clickTimeout = null;
 
 const colorScale = [
     { range: [0, 20], color: "#efefef" },
@@ -239,9 +240,18 @@ const levelHeight = chartHeight / depth;
         .attr("fill", d => d.data.color)
         .style("cursor", "pointer")
         .on("click", function(event, d) {
-            clicked(event, d, false);
-        })
-        .on("dblclick", clickedFilter)
+    // Delay the single-click logic
+    clearTimeout(clickTimeout);
+    clickTimeout = setTimeout(() => {
+        clicked(event, d, false);  // Zoom only after delay
+    }, 150); // typical double-click threshold
+})
+.on("dblclick", function(event, d) {
+    // Prevent single-click logic from firing
+    clearTimeout(clickTimeout);
+    clickedFilter(event, d);  // Apply filter immediately
+})
+
 
         
         .on("mouseover", function(event, d) {

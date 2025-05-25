@@ -27,6 +27,21 @@ export function createTimelineView(data, containerId, isUpdate = false) {
 
  
     let uniqueSets = Array.from(setMap.values()).sort((a, b) => a.releaseDate - b.releaseDate);
+    const yearTypeCounts = new Map();
+const typeCounts = new Map();
+
+uniqueSets.forEach(set => {
+    const year = set.releaseDate.getFullYear().toString();
+    const type = set.setType;
+
+    if (!yearTypeCounts.has(year)) yearTypeCounts.set(year, new Map());
+    if (!yearTypeCounts.get(year).has(type)) yearTypeCounts.get(year).set(type, 0);
+    yearTypeCounts.get(year).set(type, yearTypeCounts.get(year).get(type) + 1);
+
+    if (!typeCounts.has(type)) typeCounts.set(type, 0);
+    typeCounts.set(type, typeCounts.get(type) + 1);
+});
+
 
   
     let allSetTypes = Array.from(new Set(uniqueSets.map(set => set.setType))).sort();
@@ -177,35 +192,72 @@ container.select(".timeline-search-bar").on("input", function () {
             .style("text-anchor", "middle")
             .style("cursor", "pointer")
             .on("click", function (event, d) {
+                const year = d.getFullYear().toString();
+                const currentState = getState();
+                const updatedFilters = {};
+
+                for (const key in currentState.selectedFilters) {
+                    updatedFilters[key] = new Set(currentState.selectedFilters[key]);
+                }
+
+                if (!updatedFilters["Year"]) {
+                    updatedFilters["Year"] = new Set();
+                }
+
+                const isSelected = updatedFilters["Year"].has(year);
+
+                if (isSelected) {
+                    updatedFilters["Year"].delete(year);
+                } else {
+                    updatedFilters["Year"].add(year);
+                }
+
+                updateState({
+                    selectedFilters: updatedFilters,
+                    updateContext: "TimelineFilter"
+                });
+
+                
+                updateYearTickStyles();
+                updateSetRectOpacity();  
+            })
+            .on("mouseover", function (event, d) {
+    const tooltip = d3.select("#tooltip");
     const year = d.getFullYear().toString();
-    const currentState = getState();
-    const updatedFilters = {};
+    const types = yearTypeCounts.get(year);
+    const tooltipHtml = types
+        ? `<strong>${year}</strong><br>${Array.from(types.entries()).map(([t, count]) => `${t}: ${count}`).join("<br>")}`
+        : `<strong>${year}</strong><br>No sets`;
 
-    for (const key in currentState.selectedFilters) {
-        updatedFilters[key] = new Set(currentState.selectedFilters[key]);
-    }
+    tooltip.style("display", "block").html(tooltipHtml);
 
-    if (!updatedFilters["Year"]) {
-        updatedFilters["Year"] = new Set();
-    }
+   const tooltipNode = tooltip.node();
+const tooltipWidth = tooltipNode.offsetWidth;
+const tooltipHeight = tooltipNode.offsetHeight;
+const viewportWidth = window.innerWidth;
+const viewportHeight = window.innerHeight;
+const padding = 10;
 
-    const isSelected = updatedFilters["Year"].has(year);
+let left = event.pageX + padding;
+if (left + tooltipWidth > viewportWidth) {
+    left = event.pageX - tooltipWidth - padding;
+}
+if (left < 0) left = padding;
 
-    if (isSelected) {
-        updatedFilters["Year"].delete(year);
-    } else {
-        updatedFilters["Year"].add(year);
-    }
+let top = event.pageY + padding;
+if (top + tooltipHeight > viewportHeight) {
+    top = event.pageY - tooltipHeight - padding;
+}
+if (top < 0) top = padding;
 
-    updateState({
-        selectedFilters: updatedFilters,
-        updateContext: "TimelineFilter"
-    });
+tooltip.style("left", `${left}px`)
+       .style("top", `${top}px`);
 
-    // Update styles after state update
-    updateYearTickStyles();
-    updateSetRectOpacity();  // New function to control set opacity
+})
+.on("mouseout", () => {
+    d3.select("#tooltip").style("display", "none");
 });
+
 
 function updateYearTickStyles() {
     const yearFilter = getState().selectedFilters["Year"] || new Set();
@@ -384,7 +436,41 @@ function updateSetRectOpacity() {
         .attr("text-anchor", "end")
         .attr("font-size", "12px")
         .attr("fill", "black")
-        .text(d => d);
+        .text(d => d)
+        .on("mouseover", function (event, type) {
+    const count = typeCounts.get(type) || 0;
+    const tooltip = d3.select("#tooltip")
+    .style("display", "block")
+    .html(`<strong>${type}</strong><br>${count} sets`);
+
+const tooltipNode = tooltip.node();
+const tooltipWidth = tooltipNode.offsetWidth;
+const tooltipHeight = tooltipNode.offsetHeight;
+const viewportWidth = window.innerWidth;
+const viewportHeight = window.innerHeight;
+const padding = 10;
+
+let left = event.pageX + padding;
+if (left + tooltipWidth > viewportWidth) {
+    left = event.pageX - tooltipWidth - padding;
+}
+if (left < 0) left = padding;
+
+let top = event.pageY + padding;
+if (top + tooltipHeight > viewportHeight) {
+    top = event.pageY - tooltipHeight - padding;
+}
+if (top < 0) top = padding;
+
+tooltip.style("left", `${left}px`)
+       .style("top", `${top}px`);
+
+
+})
+.on("mouseout", () => {
+    d3.select("#tooltip").style("display", "none");
+});
+;
 
 
 function clicked(selectedSet) {
