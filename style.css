@@ -179,15 +179,26 @@ body {
 
 #toggleDrawerButton {
   position: fixed;
-  top: 10px;
-  right: 10px;
+  top: 200px;
+  right: 300px; /* Adjust to align with hidden drawer */
   z-index: 9999;
-  padding: 8px 14px;
-  background-color: #333;
-  color: white;
-  border: none;
-  border-radius: 5px;
+  background-color: #e0e0e0;
+  color: black;
+  border: 1px solid #ccc;
+  border-radius: 8px 0 0 8px;
+  padding: 6px 10px;
+  font-size: 14px;
   cursor: pointer;
+  box-shadow: -2px 0 5px rgba(0, 0, 0, 0.1);
+  transition: right 0.3s ease;
+}
+
+.drawer.visible + #toggleDrawerButton {
+  right: 300px; /* keep aligned */
+}
+
+.drawer + #toggleDrawerButton {
+  right: 0px; /* when drawer is hidden, show at edge */
 }
 
 

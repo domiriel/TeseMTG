@@ -1,24 +1,28 @@
 let drawerContainer = null;
-let drawerButton = null; // ← new
-
+let drawerButton = null; 
+import { updateState, getState } from "../state.js";
 export function createHiddenDrawer(containerSelector = "body") {
   const container = d3.select(containerSelector);
 
-  drawerButton = container.append("button") // ← save ref
-    .attr("id", "toggleDrawerButton")
-    .text("Show Selected Cards (0)")
-    .on("click", () => {
-      const drawer = d3.select("#hiddenDrawer");
-      const isVisible = drawer.classed("visible");
-      drawer.classed("visible", !isVisible);
-      updateButtonLabel(cardsInDrawer.length); // ← also update label on toggle
-    });
-
+  // Drawer first
   drawerContainer = container.append("div")
     .attr("id", "hiddenDrawer")
     .attr("class", "drawer")
     .html(`<div id="cardImages"></div>`);
+
+  // Then button separately
+  drawerButton = container.append("button")
+    .attr("id", "toggleDrawerButton")
+    .on("click", () => {
+      const isVisible = drawerContainer.classed("visible");
+      drawerContainer.classed("visible", !isVisible);
+      updateButtonLabel(cardsInDrawer.length);
+    });
+
+  updateButtonLabel(0);
 }
+
+
 
 
 // Call this to update hovered card images
@@ -27,30 +31,54 @@ let cardsInDrawer = []; // store current list
 export function updateDrawer(cards = []) {
   if (!drawerContainer) return;
 
-  cardsInDrawer = cards; // store for reuse
-  updateButtonLabel(cards.length); // ← update count in label
+  cardsInDrawer = cards;
+  updateButtonLabel(cards.length);
 
   const cardArea = drawerContainer.select("#cardImages");
 
-  const images = cardArea.selectAll("img")
-    .data(cards, d => d.name);
+  // Clear and redraw all
+  cardArea.selectAll("*").remove();
 
-  images.exit().remove();
-  images.attr("src", d => d.image_normal);
+  cards.forEach((card, index) => {
+    const cardWrapper = cardArea.append("div")
+      .style("position", "relative")
+      .style("margin-bottom", "12px");
 
-  images.enter()
-    .append("img")
-    .attr("src", d => d.image_normal)
-    .attr("alt", d => d.name)
-     .style("width", "100%")
-    .style("align-self", "center")
-    .style("margin-bottom", "10px")
-    .style("border-radius", "8px")
-    .style("box-shadow", "0 2px 8px rgba(0, 0, 0, 0.2)");
+    cardWrapper.append("img")
+      .attr("src", card.image_normal)
+      .attr("alt", card.name)
+      .style("width", "100%")
+      .style("border-radius", "8px")
+      .style("box-shadow", "0 2px 8px rgba(0, 0, 0, 0.2)");
+
+    // Add the ❌ button
+    cardWrapper.append("button")
+      .text("✕")
+      .attr("title", "Remove this card")
+      .style("position", "absolute")
+      .style("top", "5px")
+      .style("right", "5px")
+      .style("background", "#ff4444")
+      .style("color", "white")
+      .style("border", "none")
+      .style("border-radius", "50%")
+      .style("width", "24px")
+      .style("height", "24px")
+      .style("cursor", "pointer")
+      .style("font-weight", "bold")
+      .on("click", () => {
+         const newHoveredCards = cardsInDrawer.filter(c => c.name !== card.name);
+    updateState({ hoveredCards: newHoveredCards });
+      });
+  });
 }
+
 
 function updateButtonLabel(count) {
-  if (drawerButton) {
-    drawerButton.text(`Show Selected Cards (${count})`);
+  if (drawerButton && drawerContainer) {
+    const isVisible = drawerContainer.classed("visible");
+    const arrow = isVisible ? "→" : "←"; // ← to open, → to close
+    drawerButton.html(`${arrow} (${count})`);
   }
 }
+
