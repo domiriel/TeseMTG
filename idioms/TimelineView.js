@@ -55,7 +55,7 @@ uniqueSets.forEach(set => {
     const containerBounds = container.node().getBoundingClientRect();
 
     const containerWidth = containerBounds.width * 0.89;
-    const searchContainerwidth = containerBounds.width * 0.1;
+    const searchContainerwidth = containerBounds.width * 0.07;
     const containerHeight = containerBounds.height;
 
     const chartWidth = containerWidth * 0.927;
@@ -78,9 +78,12 @@ container.insert("input", ":first-child")
     .attr("class", "timeline-search-bar")
     .style("position", "absolute")
     .style("top", "0px")
-    .style("left", "0px")
+    .style("left", "-4px")
     .style("margin", "10px")
+    .style("white-space", "nowrap")
+    .style("z-index", "9999")
     .style("padding", "5px")
+    .style("overflow", "visible")
     .style("font-size", "14px")
     .style("width", searchContainerwidth);
 

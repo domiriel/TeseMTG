@@ -18,6 +18,7 @@ function loadCardData() {
 }
 
 function init() {
+  showLoader();
     d3.json("./data/dataset_card_details.json").then(function (data) {
       const originalData = JSON.parse(JSON.stringify(data));  
       updateState({ originalData });
@@ -25,20 +26,26 @@ function init() {
       getState().onChange("hoveredCards", (hoveredCards) => {
       if (hoverTimeout) clearTimeout(hoverTimeout);
         hoverTimeout = setTimeout(() => {
+        showLoader();
+
         highlightAlluvialElements(hoveredCards);
         highlightIcicleRect(hoveredCards);
         highlightTimelineSets(hoveredCards);
         updateDrawer(hoveredCards);
-        d3.selectAll(".dots circle")
-  .attr("stroke", d => hoveredCards.some(c => c.name === d.name) ? "orange" : "none")
-  .attr("stroke-width", d => hoveredCards.some(c => c.name === d.name) ? 2.5 : null)
-  .each(function (d) {
-    if (hoveredCards.some(c => c.name === d.name)) {
-      this.parentNode.appendChild(this); // raise
-    }
-  });
 
-        }, 60);
+        d3.selectAll(".dots circle")
+          .attr("stroke", d => hoveredCards.some(c => c.name === d.name) ? "orange" : "none")
+          .attr("stroke-width", d => hoveredCards.some(c => c.name === d.name) ? 2.5 : null)
+          .each(function (d) {
+            if (hoveredCards.some(c => c.name === d.name)) {
+              this.parentNode.appendChild(this); // raise
+            }
+          });
+
+        // Delay hiding to allow animation to show without flickering
+        setTimeout(hideLoader, 150);
+      }, 60);
+
       });
  
       const { selectedFilters, selectedPriceAttribute } = getState();
@@ -70,8 +77,9 @@ function init() {
       highlightIcicleRect([]);
       highlightTimelineSets([]);
       updateDrawer([]);
-
+        hideLoader();
       subscribe((state) => {
+        showLoader();
         const context = state.updateContext || "default";
         const { selectedFilters, selectedPriceAttribute } = state;
 
@@ -112,7 +120,7 @@ function init() {
           updateFilterPanel(originalData, selectedFilters, ".FilterPanel");
 
         }, 10);
-        
+        hideLoader();
       });
 
       
@@ -198,7 +206,21 @@ console.log("Charts updated after resize.");
   }
   
   
-  
+  function showLoader() {
+  d3.select("#inlineLoader").style("display", "inline-block");
+}
+
+function hideLoader(delay = 0) {
+  if (delay > 0) {
+    setTimeout(() => {
+      d3.select("#inlineLoader").style("display", "none");
+    }, delay);
+  } else {
+    d3.select("#inlineLoader").style("display", "none");
+  }
+}
+
+
   
   
 
