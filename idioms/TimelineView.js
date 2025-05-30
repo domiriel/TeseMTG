@@ -1,5 +1,6 @@
 
 import { updateState, getState } from "../state.js";
+import { updateFilterPanel } from "./FilterPanel.js";
 function updateYearTickStyles() {
     const yearFilter = getState().selectedFilters["Year"] || new Set();
     d3.selectAll(".x-axis .tick text")
@@ -220,7 +221,7 @@ container.select(".timeline-search-bar").on("input", function () {
                     updateContext: "TimelineFilter"
                 });
 
-                
+                updateFilterPanel(getState().originalData, updatedFilters);
                 updateYearTickStyles();
                 updateSetRectOpacity();  
             })

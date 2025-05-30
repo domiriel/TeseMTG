@@ -104,7 +104,8 @@ const tooltip = d3.select("#tooltip");
             .domain([new Date(xExtent[0].getTime()), new Date(xExtent[1].getTime())])
             .range([10, width]);
         
-        
+        window._lineChartXScale = xScale;
+
 
 
     const allYears = groupedData.map(d => d.year);
@@ -376,5 +377,45 @@ function zoomed(event) {
     });
 }
 
+
 }
 
+export function highlightLineChart(hoveredCards) {
+    const svg = d3.select(".LineChart svg");
+    if (svg.empty()) return;
+
+    const years = new Set(
+        hoveredCards.map(card => {
+            const date = new Date(card.release_date);
+            return new Date(date.getFullYear(), 0, 1).getTime(); 
+        })
+    );
+
+    svg.selectAll(".highlight-hover-line").remove();
+
+    // Add new highlight lines
+    years.forEach(time => {
+        svg.append("line")
+            .attr("class", "highlight-hover-line")
+            .attr("x1", d => {
+                const x = getXCoordFromYear(new Date(time), svg);
+                return x;
+            })
+            .attr("x2", d => {
+                const x = getXCoordFromYear(new Date(time), svg);
+                return x;
+            })
+            .attr("y1", +svg.select(".hover-line").attr("y1"))
+            .attr("y2", +svg.select(".hover-line").attr("y2"))
+            .attr("stroke", "orange")
+            .attr("stroke-width", 1.5)
+            .attr("stroke-dasharray", "4 2")
+            .lower();
+    });
+}
+
+function getXCoordFromYear(date, svg) {
+    if (!window._lineChartXScale) return 0;
+    const marginLeft = +svg.select(".stacked-line-wrapper svg g").attr("transform")?.match(/translate\(([\d.]+)/)?.[1] || 0;
+    return window._lineChartXScale(date) + marginLeft;
+}

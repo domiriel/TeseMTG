@@ -405,7 +405,7 @@ sankeyGenerator.update(sankeyData);
       }
     
       updateState({ selectedFilters: updatedFilters });
-      updateFilterPanel(getState().originalData, updatedFilters); // Ensure panel reflects the change
+      updateFilterPanel(getState().originalData, updatedFilters); 
 
     });
     

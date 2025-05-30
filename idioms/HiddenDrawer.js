@@ -68,9 +68,39 @@ export function updateDrawer(cards = []) {
       .style("font-weight", "bold")
       .on("click", () => {
          const newHoveredCards = cardsInDrawer.filter(c => c.name !== card.name);
-    updateState({ hoveredCards: newHoveredCards });
+         updateState({ hoveredCards: newHoveredCards });
       });
+    cardWrapper.append("button")
+  .text(`Show Sets (${card.all_sets?.length || 0})`)
+  .style("margin-top", "6px")
+  .style("padding", "4px 8px")
+  .style("font-size", "13px")
+  .style("background", "#007bff")
+  .style("color", "white")
+  .style("border", "none")
+  .style("border-radius", "4px")
+  .style("cursor", "pointer")
+  .on("click", () => {
+    if (!Array.isArray(card.all_sets)) return;
+
+    const currentState = getState();
+    const newSetFilter = new Set(currentState.selectedFilters["Set Names"] || []);
+
+    card.all_sets.forEach(set => newSetFilter.add(set.name));
+     updateState({
+      selectedFilters: {
+        ...currentState.selectedFilters,
+        "Set Names": newSetFilter
+      },
+      updateContext: "TimelineFilter"
+    });
+     const selectedSetNames = newSetFilter;
+    d3.selectAll(".set-rect")
+      .attr("fill", d => selectedSetNames.has(d.name) ? "#007bff" : "#C3C3C3");
+    });
   });
+
+
 }
 
 

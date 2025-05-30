@@ -39,6 +39,7 @@ export function createFilterPanel(data, containerId, selectedFiltersFromState, i
         "Types": new Map(),
         "Subtypes": new Map(),
         "Set Types": new Map(),
+        "Set Names": new Map(),
         "Originality": new Map(),
         "Rarity": new Map()
     };
@@ -59,6 +60,8 @@ export function createFilterPanel(data, containerId, selectedFiltersFromState, i
         if (card.type) card.type.split(/[\s/]+/).forEach(t => addToMap(filters["Types"], t));
         if (card.subtype) card.subtype.split(/[\s/]+/).forEach(s => addToMap(filters["Subtypes"], s));
         if (card.set_type) addToMap(filters["Set Types"], card.set_type);
+        if (card.set_name) addToMap(filters["Set Names"], card.set_name);
+
         if (card.originality) addToMap(filters["Originality"], card.originality);
         if (card.rarity) addToMap(filters["Rarity"], card.rarity);
     });
@@ -98,15 +101,20 @@ searchInput.on("change", function () {
     const cardName = this.value.trim();
     if (!cardName) return;
 
-    const card = data.find(c => c.name === cardName);
-    if (!card) return;
+   const circle = d3.selectAll(".Scatterplot .dots circle")
+    .filter(d => d.name === cardName)
+    .node();
 
-    const { hoveredCards } = getState();
-    const isAlreadySelected = hoveredCards.some(c => c.name === card.name);
+if (!circle) return;
 
-    let newHoveredCards = isAlreadySelected
-        ? hoveredCards
-        : [...hoveredCards, card];
+const card = d3.select(circle).datum();
+
+const { hoveredCards } = getState();
+const isAlreadySelected = hoveredCards.some(c => c.name === card.name);
+
+let newHoveredCards = isAlreadySelected
+    ? hoveredCards
+    : [...hoveredCards, card];
 
     updateState({ hoveredCards: newHoveredCards });
 
@@ -248,7 +256,17 @@ searchInput.on("change", function () {
                     for (const key in selectedFilters) {
                         updatedFilters[key] = new Set(selectedFilters[key]);
                     }
-                    updateState({ selectedFilters: updatedFilters });
+                    updateState({ 
+    selectedFilters: updatedFilters,
+    updateContext: d.category === "Set Names" ? "TimelineFilter" : undefined
+                    });
+                    if (d.category === "Set Names") {
+                    d3.selectAll(".set-rect")
+                        .attr("fill", rectData =>
+                        selectedFilters["Set Names"].has(rectData.name) ? "#007bff" : "#C3C3C3"
+                        );
+                    }
+
                     updatePills();
                     updateFilterStyles();
                     clearTimeout(window._filterPanelTimeout);
@@ -452,6 +470,7 @@ export function updateFilterPanel(originalData, selectedFilters, containerId = "
         "Types": new Map(),
         "Subtypes": new Map(),
         "Set Types": new Map(),
+        "Set Names": new Map(),
         "Originality": new Map(),
         "Rarity": new Map(),
         "IcicleColorGroups": new Map(),

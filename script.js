@@ -3,7 +3,7 @@ import { createIcicleChart, highlightIcicleRect } from "./idioms/IcicleChart.js"
 import { createAlluvialChart, highlightAlluvialElements} from "./idioms/AlluvialChart.js";
 import { createTimelineView, highlightTimelineSets } from "./idioms/TimelineView.js";
 import { createScatterPlot, updateScatterPlot, prepareScatterData} from "./idioms/Scatterplot.js";
-import { createStackedLineChart } from "./idioms/LineChart.js";
+import { createStackedLineChart, highlightLineChart } from "./idioms/LineChart.js";
 import { createFilterPanel, updateFilterPanel } from "./idioms/FilterPanel.js";
 import { createHiddenDrawer, updateDrawer } from "./idioms/HiddenDrawer.js";
 function loadCardData() {
@@ -31,6 +31,7 @@ function init() {
         highlightAlluvialElements(hoveredCards);
         highlightIcicleRect(hoveredCards);
         highlightTimelineSets(hoveredCards);
+        highlightLineChart(hoveredCards);
         updateDrawer(hoveredCards);
 
         d3.selectAll(".dots circle")
@@ -76,6 +77,7 @@ function init() {
       highlightAlluvialElements([]);
       highlightIcicleRect([]);
       highlightTimelineSets([]);
+      highlightLineChart([]);
       updateDrawer([]);
         hideLoader();
       subscribe((state) => {
@@ -143,6 +145,7 @@ function init() {
 highlightAlluvialElements(hoveredCards);
 highlightIcicleRect(hoveredCards);
 highlightTimelineSets(hoveredCards);
+highlightLineChart(hoveredCards);
 updateDrawer(hoveredCards);
 console.log("Charts updated after resize.");
 
