@@ -12,7 +12,7 @@ const state = {
       "Set Names": new Set(),
       "Year": new Set(),
     },
-    selectedPriceAttribute: "price_usd",
+    selectedPriceAttribute: "price_eur",
     hoveredCards: [],
     updateContext: null,
     originalData: null,

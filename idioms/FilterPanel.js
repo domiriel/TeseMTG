@@ -326,11 +326,11 @@ let newHoveredCards = isAlreadySelected
 const settingsSection = wrapper.append("div")
     .attr("class", "filter-section")
     .style("margin-top", "20px")
-    .style("width", "60%");
+    .style("width", "80%");
 
 const settingsHeader = settingsSection.append("div")
     .attr("class", "dropdown-header")
-    .html('Settings <span style="margin-right:6px;">&#9881;</span>')
+    .html('Settings <span style="margin-right:10px;">&#9881;</span>')
     .style("background", "#4681f4")
     .style("color", "#fff")
     .style("padding", "6px 10px")

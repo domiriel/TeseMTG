@@ -302,28 +302,45 @@ const levelHeight = chartHeight / depth;
           
     
         const labels = zoomGroup.selectAll("text")
-        .data(root.descendants().slice(1))
-        .enter()
-        .append("text")
-        .attr("x", d => (xScale(d.x0) + xScale(d.x1)) / 2)
-        .attr("y", d => yScale(d.depth))
-        .attr("dy", "0.35em")
-        .attr("text-anchor", "middle")
-        .attr("fill", "#000")
-        .attr("pointer-events", "none")
-        .style("font-size", d => {
-            const rectWidth = xScale(d.x1) - xScale(d.x0);
-            const baseSize = 15;
-            if (rectWidth < 40) return `${(14)}px`;
-            return `${baseSize}px`;
-        })
-        .style("opacity", d => {
-            const rectWidth = xScale(d.x1) - xScale(d.x0);
-            const textLength = d.data.name.replaceAll("-", "").length * 6;
-            return (rectWidth > textLength) ? 1 : 0;
-        })
-        
-        .text(d => d.data.name.replaceAll("-", ""));
+    .data(root.descendants().slice(1))
+    .enter()
+    .append("text")
+    .attr("x", d => (xScale(d.x0) + xScale(d.x1)) / 2)
+    .attr("y", d => yScale(d.depth))
+    .attr("dy", "0.35em")
+    .attr("text-anchor", "middle")
+    .attr("fill", "#000")
+    .attr("pointer-events", "none")
+    .attr("transform", d => {
+        if (d.depth === 2) {
+            const x = (xScale(d.x0) + xScale(d.x1)) / 2;
+            const y = yScale(d.depth);
+            return `rotate(-90, ${x}, ${y})`; // rotate around its center
+        }
+        return null;
+    })
+    .style("font-size", d => {
+        const rectWidth = xScale(d.x1) - xScale(d.x0);
+        const baseSize = 15;
+        if (rectWidth < 40) return `${14}px`;
+        return `${baseSize}px`;
+    })
+    .style("opacity", d => {
+    const rectWidth = xScale(d.x1) - xScale(d.x0);
+    const rectHeight = levelHeight - 2;
+    const textLength = d.data.name.replaceAll("-", "").length * 6;
+
+    if (d.depth === 2) {
+        // vertical text — fits height
+        return (rectHeight > textLength && rectWidth > 9) ? 1 : 0;
+    } else {
+        // horizontal text — fits width
+        return (rectWidth > textLength && rectHeight > 12) ? 1 : 0;
+    }
+})
+
+    .text(d => d.data.name.replaceAll("-", ""));
+
       
     
     
@@ -355,6 +372,11 @@ const levelHeight = chartHeight / depth;
             }
         })
             .attr("y", d => yScale(d.depth))
+            .attr("transform", d => {
+        const x = (xScale(d.x0) + xScale(d.x1)) / 2;
+        const y = yScale(d.depth);
+        return d.depth === 2 ? `rotate(-90, ${x}, ${y})` : null;
+    })
             .style("opacity", d => {
                 const rectWidth = xScale(d.x1) - xScale(d.x0);
                 const rectHeight = levelHeight - 2;
