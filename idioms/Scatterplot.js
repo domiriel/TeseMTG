@@ -22,31 +22,6 @@ function updatePointPositions(xScale, yScale) {
 }
 
 
-function generateLogTicks2(min, max) {
-    const ticks = [];
-
-    
-    const rangeSpan = Math.log10(max) - Math.log10(min);
-
-    
-    const bases = rangeSpan < 1
-        ? [1, 2, 3, 4, 5, 6, 7, 8, 9] 
-        : [1, 2, 3, 5];              
-
-    const minExp = Math.floor(Math.log10(min));
-    const maxExp = Math.ceil(Math.log10(max));
-
-    for (let e = minExp; e <= maxExp; e++) {
-        for (let base of bases) {
-            const value = base * Math.pow(10, e);
-            if (value >= min && value <= max) {
-                ticks.push(value);
-            }
-        }
-    }
-
-    return ticks;
-}
 export function prepareScatterData(data, selectedPriceAttribute) {
     const excludedSetTypes = new Set(["promo", "funny", "memorabilia", "alchemy", "token", "minigame"]);
     const excludedSetNames = ["Arena", "Alchemy", "Digital"];
@@ -92,46 +67,6 @@ export function prepareScatterData(data, selectedPriceAttribute) {
         .map(card => cardMap.get(card.name));
 }
 
-function generateLogTicks(min, max) {
-    const ticks = [];
-    const logSpan = Math.log10(max) - Math.log10(min);
-
-    if (logSpan < 0.5) {
-        
-        const step = (max - min) / 10;
-        for (let i = min; i <= max; i += step) {
-            ticks.push(i);
-        }
-    } else if (logSpan < 1) {
-        
-        const bases = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-        const minExp = Math.floor(Math.log10(min));
-        const maxExp = Math.ceil(Math.log10(max));
-        for (let e = minExp; e <= maxExp; e++) {
-            for (let base of bases) {
-                const value = base * Math.pow(10, e);
-                if (value >= min && value <= max) {
-                    ticks.push(value);
-                }
-            }
-        }
-    } else {
-        
-        const bases = [1, 2, 3, 5];
-        const minExp = Math.floor(Math.log10(min));
-        const maxExp = Math.ceil(Math.log10(max));
-        for (let e = minExp; e <= maxExp; e++) {
-            for (let base of bases) {
-                const value = base * Math.pow(10, e);
-                if (value >= min && value <= max) {
-                    ticks.push(value);
-                }
-            }
-        }
-    }
-
-    return ticks;
-}
 
 
 
