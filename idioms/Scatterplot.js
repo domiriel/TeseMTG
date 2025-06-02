@@ -220,8 +220,11 @@ const filteredData = filteredForPlot
     const g = svg.append("g").attr("transform", `translate(${margin.left - 8.5}, ${margin.top})`);
 
 const originalXScale = d3.scaleLog()
-    .domain([paddedXMin, paddedXMax])
-    .range([0, chartWidth]);
+        .domain([
+            Math.max(0.001, d3.min(sampledData, d => d.avg_price || 0.01)),
+            d3.max(sampledData, d => d.avg_price)
+        ])
+        .range([0, chartWidth]);
 
 
         const minComplexity = d3.min(sampledData, d => d.complexity);
