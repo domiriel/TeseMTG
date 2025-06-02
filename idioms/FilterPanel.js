@@ -1,5 +1,5 @@
 
-import { updateState, getState, saveFilterSettings, loadFilterSettings, generateFilterShareURL} from "../state.js";
+import { updateState, getState, saveFilterSettings, loadFilterSettings, generateFilterShareURL, resetState} from "../state.js";
 import { filterData } from "../script.js"; 
 
 const optionMap = new Map();  
@@ -143,7 +143,7 @@ let newHoveredCards = isAlreadySelected
         .style("text-align", "left");
 
     resetWrapper.append("button")
-        .text("Reset Filters")
+        .text("Clear Filters")
         .style("padding", "6px 12px")
         .style("font-size", "14px")
         .style("background-color", "#dc3545")
@@ -161,6 +161,22 @@ let newHoveredCards = isAlreadySelected
             updateState({ selectedFilters: clearedFilters });
             createFilterPanel(data, containerId, clearedFilters, true);
         });
+
+
+    resetWrapper.append("button")
+    .text("Reset State")
+    .style("padding", "6px 12px")
+    .style("font-size", "14px")
+    .style("background-color", "#6c757d")
+    .style("color", "#fff")
+    .style("border", "none")
+    .style("border-radius", "4px")
+    .style("cursor", "pointer")
+    .style("margin-top", "8px")
+    .on("click", () => {
+        resetState();  // calls the new reset function in state.js
+        createFilterPanel(data, containerId, getState().selectedFilters, true);
+    });
 
     Object.entries(filters).forEach(([category, values]) => {
         const section = wrapper.append("div")

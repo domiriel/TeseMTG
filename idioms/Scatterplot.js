@@ -219,12 +219,10 @@ const filteredData = filteredForPlot
 
     const g = svg.append("g").attr("transform", `translate(${margin.left - 8.5}, ${margin.top})`);
 
-    const originalXScale = d3.scaleLog()
-        .domain([
-            Math.max(0.001, d3.min(sampledData, d => d.avg_price || 0.01)),
-            d3.max(sampledData, d => d.avg_price)
-        ])
-        .range([0, chartWidth]);
+const originalXScale = d3.scaleLog()
+    .domain([paddedXMin, paddedXMax])
+    .range([0, chartWidth]);
+
 
         const minComplexity = d3.min(sampledData, d => d.complexity);
         const maxComplexity = d3.max(sampledData, d => d.complexity);
@@ -250,16 +248,19 @@ const formatPrice = d => `${symbol}${d.toFixed(2)}`;
         .attr("class", "y-axis");
 
     const numTicks = 12;
-    function updateAxes() {
-        const logMin = Math.log10(xScale.domain()[0]);
-        const logMax = Math.log10(xScale.domain()[1]);
-        const ticks = d3.range(numTicks).map(i => Math.pow(10, logMin + i / (numTicks - 1) * (logMax - logMin)));
+    function updateAxes(symbol) {
+    const logMin = Math.log10(xScale.domain()[0]);
+    const logMax = Math.log10(xScale.domain()[1]);
+    const ticks = d3.range(numTicks).map(i => Math.pow(10, logMin + i / (numTicks - 1) * (logMax - logMin)));
 
-        xAxisG.call(d3.axisBottom(xScale).tickValues(ticks).tickFormat(formatPrice));
-        yAxisG.call(d3.axisLeft(yScale).ticks(numTicks));
-    }
+    const formatPrice = d => `${symbol}${d.toFixed(2)}`;
+    xAxisG.call(d3.axisBottom(xScale).tickValues(ticks).tickFormat(formatPrice));
+    yAxisG.call(d3.axisLeft(yScale).ticks(numTicks));
+}
 
-    updateAxes();
+
+    updateAxes(symbol);
+
 
     svg.append("text")
         .attr("class", "x-axis-label")
@@ -315,7 +316,7 @@ const formatPrice = d => `${symbol}${d.toFixed(2)}`;
         .append("rect")
         .attr("x", 0)
         .attr("y", 0)
-        .attr("width", chartWidth)
+        .attr("width", chartWidth + 20)
         .attr("height", chartHeight);
 
     const gDot = g.append("g")
@@ -500,7 +501,7 @@ noRankEntry.append("text")
                 xScale.domain(newX.domain());
                 yScale.domain(newY.domain());
 
-                updateAxes();
+                updateAxes(symbol);
                 updatePointPositions(xScale, yScale);
 
                 
@@ -547,7 +548,7 @@ svg.node().__scales__ = {
     d3.select("#reset-button").on("click", resetZoom);
 }
 
-export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_usd") {
+export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_eur") {
     const svg = d3.select(".Scatterplot svg");
     if (svg.empty()) return;
 
@@ -563,19 +564,34 @@ export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_
     const g = svg.select("g");
     const gClip = g.select(".dots .clip-group");
 
-    // ✅ Only now it's safe to remove the old dots
-    gClip.selectAll("circle").remove();
+    // 1️⃣ Update the original xScale domain based on new price attribute
+    const newMinPrice = Math.max(0.001, d3.min(filteredData, d => d.avg_price));
+    const newMaxPrice = d3.max(filteredData, d => d.avg_price);
+    originalXScale.domain([newMinPrice, newMaxPrice]);
 
-    const symbol = getSymbolFromAttribute(selectedPriceAttribute);
-    const tooltip = d3.select("#tooltip");
-
+    // 2️⃣ Apply the current zoom transform to the new domain
     const transform = d3.zoomTransform(svg.node());
     const newX = transform.rescaleX(originalXScale);
-    const newY = transform.rescaleY(originalYScale);
     xScale.domain(newX.domain());
-    yScale.domain(newY.domain());
-    updateAxes();
 
+    // 3️⃣ Format symbol and update axes
+    const symbol = getSymbolFromAttribute(selectedPriceAttribute);
+    updateAxes(symbol);
+
+    // 4️⃣ Update x-axis label
+    svg.select(".x-axis-label")
+        .text(() => {
+            if (selectedPriceAttribute.includes("eur")) return "Price (€)";
+            if (selectedPriceAttribute.includes("thx")) return "Price";
+            return "Price ($)";
+        });
+
+    // 5️⃣ Clear old dots
+    gClip.selectAll("circle").remove();
+
+    const tooltip = d3.select("#tooltip");
+
+    // 6️⃣ Add new dots
     gClip.selectAll("circle")
         .data(filteredData, d => d.name)
         .enter()
@@ -588,29 +604,25 @@ export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_
         .attr("opacity", 0.8)
         .attr("cx", d => xScale(d.avg_price))
         .attr("cy", d => yScale(d.complexity))
-       .on("mouseover", function (event, d) {
-        tooltip.style("display", "block")
-    .html(`
-        <div style="display: flex; gap: 12px; align-items: flex-start;">
-            <img src="${d.image_normal}" alt="${d.name}" width="200" style="border-radius: 4px; box-shadow: 0 0 4px rgba(0,0,0,0.5);" />
-            <div>
-                <strong>${d.name}</strong><br>
-                Complexity: ${d.complexity}<br>
-                EDH Rank: ${d.edhrec_rank || "N/A"}<br>
-                Supertypes: ${d.supertype}<br>
-                Type: ${d.type}<br>
-                Subtype: ${d.subtype}<br>
-                Colors: ${d.color_identity}<br>
-                Avg Price: ${selectedPriceAttribute.includes("eur")
-                    ? "€"
-                    : selectedPriceAttribute.includes("thx")
-                    ? ""
-                    : "$"}${d.avg_price.toFixed(2)}<br>
-                    All Sets: ${d.all_sets.map(set => `${set.name} (${set.type})`).join("<br>")}<br>
-            </div>
-        </div>
-    `);
- })
+        .on("mouseover", function (event, d) {
+            tooltip.style("display", "block")
+            .html(`
+                <div style="display: flex; gap: 12px; align-items: flex-start;">
+                    <img src="${d.image_normal}" alt="${d.name}" width="200" style="border-radius: 4px; box-shadow: 0 0 4px rgba(0,0,0,0.5);" />
+                    <div>
+                        <strong>${d.name}</strong><br>
+                        Complexity: ${d.complexity}<br>
+                        EDH Rank: ${d.edhrec_rank || "N/A"}<br>
+                        Supertypes: ${d.supertype}<br>
+                        Type: ${d.type}<br>
+                        Subtype: ${d.subtype}<br>
+                        Colors: ${d.color_identity}<br>
+                        Avg Price: ${symbol}${d.avg_price.toFixed(2)}<br>
+                        All Sets: ${d.all_sets.map(set => `${set.name} (${set.type})`).join("<br>")}<br>
+                    </div>
+                </div>
+            `);
+        })
         .on("mousemove", function (event) {
             const tooltipNode = tooltip.node();
             const tooltipWidth = tooltipNode.offsetWidth;
@@ -623,54 +635,52 @@ export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_
                 left = pageX - tooltipWidth - padding;
             }
 
-            tooltip.style("left", left + "px")
-                .style("top", (pageY + padding) + "px");
+            tooltip.style("left", `${left}px`)
+                   .style("top", `${pageY + padding}px`);
         })
         .on("mouseout", function () {
             tooltip.style("display", "none");
         })
         .on("click", function (event, d) {
+            const { hoveredCards } = getState();
+            const isAlreadySelected = hoveredCards.some(c => c.name === d.name);
+
+            let newHoveredCards;
+            if (isAlreadySelected) {
+                newHoveredCards = hoveredCards.filter(c => c.name !== d.name);
+                d3.select(this).attr("stroke", "none").attr("stroke-width", null);
+            } else {
+                newHoveredCards = [...hoveredCards, d];
+                d3.select(this)
+                    .raise()
+                    .attr("stroke", "orange")
+                    .attr("stroke-width", 2.5);
+            }
+
+            updateState({ hoveredCards: newHoveredCards });
+
+            d3.selectAll(".dots circle")
+                .attr("stroke", d => newHoveredCards.some(c => c.name === d.name) ? "orange" : "none")
+                .attr("stroke-width", d => newHoveredCards.some(c => c.name === d.name) ? 2.5 : null);
+        });
+
+    // 7️⃣ Update global dots reference and position them
+    globalDots = gClip.selectAll("circle");
+    updatePointPositions(xScale, yScale);
+
+    // 8️⃣ Highlight selected cards
     const { hoveredCards } = getState();
-    const isAlreadySelected = hoveredCards.some(c => c.name === d.name);
-
-    let newHoveredCards;
-    if (isAlreadySelected) {
-        newHoveredCards = hoveredCards.filter(c => c.name !== d.name);
-        d3.select(this).attr("stroke", "none").attr("stroke-width", null);
-    } else {
-        newHoveredCards = [...hoveredCards, d];
-        d3.select(this)
-            .raise()
-            .attr("stroke", "orange")
-            .attr("stroke-width", 2.5);
-    }
-
-    updateState({ hoveredCards: newHoveredCards });
-
-     d3.selectAll(".dots circle")
-        .attr("stroke", d => newHoveredCards.some(c => c.name === d.name) ? "orange" : "none")
-        .attr("stroke-width", d => newHoveredCards.some(c => c.name === d.name) ? 2.5 : null);
-});
-
-       globalDots = gClip.selectAll("circle");
-updatePointPositions(xScale, yScale);
-const { hoveredCards } = getState();
-
-d3.selectAll(".dots circle")
-  .attr("stroke", d => hoveredCards.some(c => c.name === d.name) ? "orange" : "none")
-  .attr("stroke-width", d => hoveredCards.some(c => c.name === d.name) ? 2.5 : null)
-  .each(function (d) {
-    if (hoveredCards.some(c => c.name === d.name)) {
-      this.parentNode.appendChild(this); // bring to front
-    }
-  });
-
-
-
-
-
-        
+    d3.selectAll(".dots circle")
+        .attr("stroke", d => hoveredCards.some(c => c.name === d.name) ? "orange" : "none")
+        .attr("stroke-width", d => hoveredCards.some(c => c.name === d.name) ? 2.5 : null)
+        .each(function (d) {
+            if (hoveredCards.some(c => c.name === d.name)) {
+                this.parentNode.appendChild(this); // bring to front
+            }
+        });
 }
+
+
 
 
 
