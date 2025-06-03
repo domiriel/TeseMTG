@@ -17,6 +17,11 @@ let globalDots = null;
 
 function updatePointPositions(xScale, yScale) {
     if (!globalDots) return;
+    globalDots.each((d, i) => {
+        if (isNaN(d.avg_price) || d.avg_price === undefined) {
+            console.log("🚨 NaN or undefined avg_price detected!", d);
+        }
+    });
     globalDots.attr("cx", d => xScale(d.avg_price))
               .attr("cy", d => yScale(d.complexity));
 }
@@ -55,12 +60,25 @@ export function prepareScatterData(data, selectedPriceAttribute) {
     });
 
     cardMap.forEach(card => {
-        card.avg_price = card.prices.length > 0
-    ? Math.max(0.001, card.prices.reduce((sum, p) => sum + p, 0) / card.prices.length)
-    : 0.001; // Smallest possible displayable value
+    card.avg_price = card.prices.length > 0
+        ? card.prices.reduce((sum, p) => sum + p, 0) / card.prices.length
+        : 0;
 
-        card.all_sets = Array.from(card.all_sets.entries()).map(([name, type]) => ({ name, type }));
-    });
+    // 🚨 Replace 0 with placeholder min value (to be consistent in main function)
+    if (card.avg_price <= 0 ) {
+    card.was_price_invalid = true;
+    card.avg_price = 0.001;
+} else {
+    card.was_price_invalid = false;
+}
+
+
+    if (isNaN(card.avg_price)) {
+        console.log("🚨 Invalid avg_price detected in prepareScatterData:", card);
+    }
+
+    card.all_sets = Array.from(card.all_sets.entries()).map(([name, type]) => ({ name, type }));
+});
 
     return filteredForPlot
         .filter(card => cardMap.has(card.name))
@@ -127,6 +145,17 @@ cardMap.forEach(card => {
     card.avg_price = card.prices.length > 0
         ? card.prices.reduce((sum, p) => sum + p, 0) / card.prices.length
         : 0;
+     if (isNaN(card.avg_price)) {
+    console.log("Invalid avg_price detected", card);
+  }
+
+
+  if (card.avg_price <= 0 ) {
+        card.was_price_invalid = true;
+        card.avg_price = 0.001;
+    } else {
+        card.was_price_invalid = false;
+    }
     card.all_sets = Array.from(card.all_sets.entries()).map(([name, type]) => ({ name, type }));
 });
 
@@ -137,6 +166,16 @@ const filteredData = filteredForPlot
 
 
     const sampledData = filteredData;
+
+    const minPrice = d3.min(sampledData, d => d.avg_price);
+const safeMinPrice = Math.max(0.001, minPrice);
+
+sampledData.forEach(d => {
+    if (d.avg_price <= 0 || isNaN(d.avg_price)) {
+        console.log(`🚨 Replacing invalid avg_price for ${d.name}: was ${d.avg_price}, set to ${safeMinPrice}`);
+        d.avg_price = safeMinPrice;
+    }
+});
 
     const container = d3.select(containerId).node();
     const { width, height } = container.getBoundingClientRect();
@@ -155,11 +194,12 @@ const filteredData = filteredForPlot
     const g = svg.append("g").attr("transform", `translate(${margin.left - 8.5}, ${margin.top})`);
 
 const originalXScale = d3.scaleLog()
-        .domain([
-            Math.max(0.001, d3.min(sampledData, d => d.avg_price || 0.01)),
-            d3.max(sampledData, d => d.avg_price)
-        ])
-        .range([0, chartWidth]);
+    .domain([
+        safeMinPrice,
+        d3.max(sampledData, d => d.avg_price)
+    ])
+    .range([0, chartWidth]);
+
 
 
         const minComplexity = d3.min(sampledData, d => d.complexity);
@@ -175,7 +215,7 @@ const originalXScale = d3.scaleLog()
     const yScale = originalYScale.copy();
 
     const symbol = getSymbolFromAttribute(selectedPriceAttribute); 
-const formatPrice = d => `${symbol}${d.toFixed(2)}`;
+
 
 
     const xAxisG = g.append("g")
@@ -186,15 +226,19 @@ const formatPrice = d => `${symbol}${d.toFixed(2)}`;
         .attr("class", "y-axis");
 
     const numTicks = 12;
-    function updateAxes(symbol) {
+ function updateAxes(symbol) {
     const logMin = Math.log10(xScale.domain()[0]);
     const logMax = Math.log10(xScale.domain()[1]);
     const ticks = d3.range(numTicks).map(i => Math.pow(10, logMin + i / (numTicks - 1) * (logMax - logMin)));
 
-    const formatPrice = d => `${symbol}${d.toFixed(2)}`;
+    const formatPrice = d => {
+        if (Math.abs(d - 0.001) < 1e-3) return '(NaN)';
+        return `${symbol}${d.toFixed(3)}`;
+    };
     xAxisG.call(d3.axisBottom(xScale).tickValues(ticks).tickFormat(formatPrice));
     yAxisG.call(d3.axisLeft(yScale).ticks(numTicks));
 }
+
 
 
     updateAxes(symbol);
@@ -211,7 +255,34 @@ const formatPrice = d => `${symbol}${d.toFixed(2)}`;
             if (selectedPriceAttribute.includes("eur")) return "Price (€)";
             if (selectedPriceAttribute.includes("thx")) return "Price";
             return "Price ($)";
-        });
+        })
+        .on("mouseover", (event) => {
+        d3.select("#tooltip")
+            .style("display", "block")
+            .html(() => {
+                if (selectedPriceAttribute.includes("eur")) return "Price data is sourced from <b>Cardmarket</b> (EUR).";
+                if (selectedPriceAttribute.includes("usd")) return "Price data is sourced from <b>TCGplayer</b> (USD).";
+                if (selectedPriceAttribute.includes("thx")) return "Price data is sourced from <b>Scryfall</b>.";
+                return "Price data source unknown.";
+            });
+    })
+    .on("mousemove", (event) => {
+        const tooltip = d3.select("#tooltip");
+        const tooltipWidth = tooltip.node().offsetWidth;
+        const padding = 10;
+        let left = event.pageX + padding;
+        if (left + tooltipWidth > window.innerWidth) {
+            left = event.pageX - tooltipWidth - padding;
+        }
+
+        tooltip
+            .style("left", `${left}px`)
+            .style("top", `${event.pageY + padding}px`);
+    })
+    .on("mouseout", () => {
+        d3.select("#tooltip").style("display", "none");
+    });
+        ;
         
 
         svg.append("text")
@@ -273,7 +344,14 @@ const formatPrice = d => `${symbol}${d.toFixed(2)}`;
     .attr("stroke-width", d => d.edhrec_rank ? 0 : 1.2)
     .attr("opacity", 0.8);
 
+sampledData.forEach((d, i) => {
+    if (isNaN(d.avg_price) || d.avg_price <= 0 || typeof d.avg_price !== 'number') {
+        console.log(`🚨 Invalid avg_price in sampledData at index ${i}:`, d.name, d.avg_price);
+    }
+});
     globalDots = dots;
+console.log("🛠️ xScale domain:", xScale.domain());
+console.log("🛠️ globalDots count:", globalDots.size());
 
     updatePointPositions(xScale, yScale);
 
@@ -297,11 +375,7 @@ const formatPrice = d => `${symbol}${d.toFixed(2)}`;
                 Type: ${d.type}<br>
                 Subtype: ${d.subtype}<br>
                 Colors: ${d.color_identity}<br>
-                Avg Price: ${selectedPriceAttribute.includes("eur")
-                    ? "€"
-                    : selectedPriceAttribute.includes("thx")
-                    ? ""
-                    : "$"}${d.avg_price.toFixed(2)}<br>
+                Avg Price: ${d.was_price_invalid ? "NaN" : symbol + d.avg_price.toFixed(3)}<br>
                 All Sets: ${d.all_sets.map(set => `${set.name} (${set.type})`).join("<br>")}<br>
             </div>
         </div>
@@ -555,7 +629,7 @@ export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_
                         Type: ${d.type}<br>
                         Subtype: ${d.subtype}<br>
                         Colors: ${d.color_identity}<br>
-                        Avg Price: ${symbol}${d.avg_price.toFixed(2)}<br>
+                        Avg Price: ${d.was_price_invalid ? "NaN" : symbol + d.avg_price.toFixed(3)}<br>
                         All Sets: ${d.all_sets.map(set => `${set.name} (${set.type})`).join("<br>")}<br>
                     </div>
                 </div>
