@@ -168,7 +168,11 @@ const filteredData = filteredForPlot
     const sampledData = filteredData;
 
     const minPrice = d3.min(sampledData, d => d.avg_price);
+const maxPrice = d3.max(sampledData, d => d.avg_price);
 const safeMinPrice = Math.max(0.001, minPrice);
+const pricePadding = (maxPrice - safeMinPrice) * 0.01; // 5% padding
+const paddedMinPrice = 0.0009
+const paddedMaxPrice = maxPrice + pricePadding;
 
 sampledData.forEach(d => {
     if (d.avg_price <= 0 || isNaN(d.avg_price)) {
@@ -195,8 +199,8 @@ sampledData.forEach(d => {
 
 const originalXScale = d3.scaleLog()
     .domain([
-        safeMinPrice,
-        d3.max(sampledData, d => d.avg_price)
+        paddedMinPrice,
+        paddedMaxPrice
     ])
     .range([0, chartWidth]);
 
@@ -226,10 +230,17 @@ const originalXScale = d3.scaleLog()
         .attr("class", "y-axis");
 
     const numTicks = 12;
- function updateAxes(symbol) {
+function updateAxes(symbol) {
     const logMin = Math.log10(xScale.domain()[0]);
     const logMax = Math.log10(xScale.domain()[1]);
-    const ticks = d3.range(numTicks).map(i => Math.pow(10, logMin + i / (numTicks - 1) * (logMax - logMin)));
+
+    // Instead of linearly interpolating ticks, force the first tick to be the fallback value
+    let ticks = d3.range(numTicks).map(i => Math.pow(10, logMin + i / (numTicks - 1) * (logMax - logMin)));
+
+    // Force the first tick to align with fallback dots (0.001)
+    if (ticks.length > 0 && ticks[0] < 0.001) {
+        ticks[0] = 0.001;
+    }
 
     const formatPrice = d => {
         if (Math.abs(d - 0.001) < 1e-3) return '(NaN)';
@@ -590,7 +601,6 @@ export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_
     const symbol = getSymbolFromAttribute(selectedPriceAttribute);
     updateAxes(symbol);
 
-    // 4️⃣ Update x-axis label
     svg.select(".x-axis-label")
         .text(() => {
             if (selectedPriceAttribute.includes("eur")) return "Price (€)";
@@ -598,12 +608,10 @@ export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_
             return "Price ($)";
         });
 
-    // 5️⃣ Clear old dots
     gClip.selectAll("circle").remove();
 
     const tooltip = d3.select("#tooltip");
 
-    // 6️⃣ Add new dots
     gClip.selectAll("circle")
         .data(filteredData, d => d.name)
         .enter()
