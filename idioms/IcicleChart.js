@@ -4,11 +4,11 @@ let globalRects = null;
 let clickTimeout = null;
 
 const colorScale = [
-    { range: [0, 20], color: "#efefef" },
-    { range: [21, 40], color: "#dadada" },
-    { range: [41, 60], color: "#C3C3C3" },
-    { range: [61, 80], color: "#a9a9a9" },
-    { range: [81, 100], color: "#787878" }
+    { range: [0, 20], color: "#efe6dc" },
+    { range: [21, 40], color: "#dac9b9" },
+    { range: [41, 60], color: "#bcab9a" },
+    { range: [61, 80], color: "#8a7a6a" },
+    { range: [81, 100], color: "#594a3a" }
 ];
 
 const colorScaleBlue = [

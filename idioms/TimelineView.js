@@ -229,11 +229,16 @@ container.select(".timeline-search-bar").on("input", function () {
     const tooltip = d3.select("#tooltip");
     const year = d.getFullYear().toString();
     const types = yearTypeCounts.get(year);
+    let totalSets = 0;
+    if (types) {
+        totalSets = Array.from(types.values()).reduce((sum, count) => sum + count, 0);
+    }
     const tooltipHtml = types
-        ? `<strong>${year}</strong><br>${Array.from(types.entries()).map(([t, count]) => `${t}: ${count}`).join("<br>")}`
+        ? `<strong>${year}</strong><br> <strong> Total Sets: ${totalSets} </strong><br>${Array.from(types.entries()).map(([t, count]) => `${t}: ${count}`).join("<br>")}`
         : `<strong>${year}</strong><br>No sets`;
 
     tooltip.style("display", "block").html(tooltipHtml);
+
 
    const tooltipNode = tooltip.node();
 const tooltipWidth = tooltipNode.offsetWidth;

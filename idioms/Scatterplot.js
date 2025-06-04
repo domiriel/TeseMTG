@@ -350,9 +350,10 @@ function updateAxes(symbol) {
     .join("circle")
     .attr("r", 2.5)
     .style("cursor", "pointer")
-    .attr("fill", d => d.edhrec_rank ? getGroupColor(d.edhrec_rank) : "transparent")
-    .attr("stroke", d => d.edhrec_rank ? "none" : "black")
-    .attr("stroke-width", d => d.edhrec_rank ? 0 : 1.2)
+    .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
+.style("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
+.style("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
+
     .attr("opacity", 0.8);
 
 sampledData.forEach((d, i) => {
@@ -429,8 +430,12 @@ console.log("🛠️ globalDots count:", globalDots.size());
     updateState({ hoveredCards: newHoveredCards });
 
      d3.selectAll(".dots circle")
-        .attr("stroke", d => newHoveredCards.some(c => c.name === d.name) ? "orange" : "none")
-        .attr("stroke-width", d => newHoveredCards.some(c => c.name === d.name) ? 2.5 : null);
+  .style("stroke", d => newHoveredCards.some(c => c.name === d.name)
+    ? "orange"
+    : (+d.edhrec_rank > 0 ? "none" : "black"))
+  .style("stroke-width", d => newHoveredCards.some(c => c.name === d.name)
+    ? 2.5
+    : (+d.edhrec_rank > 0 ? 0 : 1.2));
 });
 
         
@@ -572,6 +577,9 @@ svg.node().__scales__ = {
 }
 
 export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_eur") {
+
+    console.log("Filtered Data:", filteredData.filter(d => d.edhrec_rank == 0));
+
     const svg = d3.select(".Scatterplot svg");
     if (svg.empty()) return;
 
@@ -618,9 +626,10 @@ export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_
         .append("circle")
         .attr("r", 2.5)
         .style("cursor", "pointer")
-        .attr("fill", d => d.edhrec_rank ? getGroupColor(d.edhrec_rank) : "transparent")
-        .attr("stroke", d => d.edhrec_rank ? "none" : "black")
-        .attr("stroke-width", d => d.edhrec_rank ? 0 : 1.2)
+       .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
+    .style("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
+.style("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
+
         .attr("opacity", 0.8)
         .attr("cx", d => xScale(d.avg_price))
         .attr("cy", d => yScale(d.complexity))
@@ -680,8 +689,12 @@ export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_
             updateState({ hoveredCards: newHoveredCards });
 
             d3.selectAll(".dots circle")
-                .attr("stroke", d => newHoveredCards.some(c => c.name === d.name) ? "orange" : "none")
-                .attr("stroke-width", d => newHoveredCards.some(c => c.name === d.name) ? 2.5 : null);
+  .style("stroke", d => newHoveredCards.some(c => c.name === d.name)
+    ? "orange"
+    : (+d.edhrec_rank > 0 ? "none" : "black"))
+  .style("stroke-width", d => newHoveredCards.some(c => c.name === d.name)
+    ? 2.5
+    : (+d.edhrec_rank > 0 ? 0 : 1.2));
         });
 
     // 7️⃣ Update global dots reference and position them
@@ -690,14 +703,18 @@ export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_
 
     // 8️⃣ Highlight selected cards
     const { hoveredCards } = getState();
-    d3.selectAll(".dots circle")
-        .attr("stroke", d => hoveredCards.some(c => c.name === d.name) ? "orange" : "none")
-        .attr("stroke-width", d => hoveredCards.some(c => c.name === d.name) ? 2.5 : null)
-        .each(function (d) {
-            if (hoveredCards.some(c => c.name === d.name)) {
-                this.parentNode.appendChild(this); // bring to front
-            }
-        });
+d3.selectAll(".dots circle")
+  .style("stroke", d => hoveredCards.some(c => c.name === d.name)
+    ? "orange"
+    : (+d.edhrec_rank > 0 ? "none" : "black"))
+  .style("stroke-width", d => hoveredCards.some(c => c.name === d.name)
+    ? 2.5
+    : (+d.edhrec_rank > 0 ? 0 : 1.2))
+  .each(function (d) {
+    if (hoveredCards.some(c => c.name === d.name)) {
+      this.parentNode.appendChild(this); // bring to front
+    }
+  });
 }
 
 

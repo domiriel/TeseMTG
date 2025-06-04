@@ -61,11 +61,11 @@ function formatPriceLabel(priceAttr) {
 }*/
 
 function getDiscreteColor(percentage) {
-  if (percentage < 20) return "#efefef";
-  if (percentage < 40) return "#dadada";
-  if (percentage < 60) return "#c3c3c3";
-  if (percentage < 80) return "#a9a9a9";
-  return "#787878"; 
+  if (percentage < 20) return "#efe6dc";
+  if (percentage < 40) return "#dac9b9";
+  if (percentage < 60) return "#bcab9a";
+  if (percentage < 80) return "#8a7a6a";
+  return "#594a3a"; 
 }
 
 
