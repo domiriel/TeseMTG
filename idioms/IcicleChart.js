@@ -240,16 +240,16 @@ const levelHeight = chartHeight / depth;
         .attr("fill", d => d.data.color)
         .style("cursor", "pointer")
         .on("click", function(event, d) {
-    // Delay the single-click logic
+
     clearTimeout(clickTimeout);
     clickTimeout = setTimeout(() => {
-        clicked(event, d, false);  // Zoom only after delay
-    }, 150); // typical double-click threshold
+        clicked(event, d, false);  
+    }, 150); 
 })
 .on("dblclick", function(event, d) {
-    // Prevent single-click logic from firing
+
     clearTimeout(clickTimeout);
-    clickedFilter(event, d);  // Apply filter immediately
+    clickedFilter(event, d);  
 })
 
 
@@ -315,7 +315,7 @@ const levelHeight = chartHeight / depth;
         if (d.depth === 2) {
             const x = (xScale(d.x0) + xScale(d.x1)) / 2;
             const y = yScale(d.depth);
-            return `rotate(-90, ${x}, ${y})`; // rotate around its center
+            return `rotate(-90, ${x}, ${y})`; 
         }
         return null;
     })
@@ -331,10 +331,10 @@ const levelHeight = chartHeight / depth;
     const textLength = d.data.name.replaceAll("-", "").length * 6;
 
     if (d.depth === 2) {
-        // vertical text — fits height
+
         return (rectHeight > textLength && rectWidth > 9) ? 1 : 0;
     } else {
-        // horizontal text — fits width
+
         return (rectWidth > textLength && rectHeight > 12) ? 1 : 0;
     }
 })
@@ -365,7 +365,7 @@ const levelHeight = chartHeight / depth;
         labels.transition(t)
         .attr("x", d => {
             if (d.depth === 1 && focus.depth === 2 && focus.parent === d) {
-                // If it's the parent of the focused node, center it above the child
+
                 return (xScale(focus.x0) + xScale(focus.x1)) / 2;
             } else {
                 return (xScale(d.x0) + xScale(d.x1)) / 2;
@@ -407,10 +407,10 @@ const levelHeight = chartHeight / depth;
     }
 
     function clickedFilter(event, d) {
-    // Toggle selection class
+
     d3.select(event.currentTarget).classed("selected", !d3.select(event.currentTarget).classed("selected"));
 
-    const wasFocused = false; // we don’t care for zoom anymore
+    const wasFocused = false; 
 
     const currentFilters = getState().selectedFilters;
     const newFilters = structuredClone(currentFilters);

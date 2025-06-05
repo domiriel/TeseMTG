@@ -360,7 +360,7 @@ function updateSetRectOpacity() {
         .attr("y", d => yScale(d.setType) - 5)
         .attr("width", 8)
         .attr("height", 8)
-        .attr("fill", "#C3C3C3")
+        .attr("fill", "#bcab9a")
         .attr("stroke", "black")
         .on("mouseover", function (event, d) {
     const tooltip = d3.select("#tooltip");
@@ -439,7 +439,7 @@ function updateSetRectOpacity() {
         const selectedSetNames = getState().selectedFilters["Set Names"] || new Set();
 
         squares.attr("fill", d =>
-            selectedSetNames.has(d.name) ? "#007bff" : "#C3C3C3"
+            selectedSetNames.has(d.name) ? "#007bff" : "#bcab9a"
         );
         
     

@@ -1,11 +1,11 @@
 
 import { updateState, getState } from "../state.js";
 const colorGroups = [
-    { range: [1, 5691], color: "#787878" },  
-    { range: [5692, 11382], color:  "#a9a9a9" },
-    { range: [11383, 17074], color: "#c3c3c3" },
-    { range: [17075, 22765], color: "#dadada"},
-    { range: [22766, 28456], color: "#efefef" }  
+    { range: [1, 5691], color: "#594A3A" },  
+    { range: [5692, 11382], color:  "#8a7a6a" },
+    { range: [11383, 17074], color: "#bcab9a" },
+    { range: [17075, 22765], color: "#dac9b9"},
+    { range: [22766, 28456], color: "#efe6dc" }  
 ];
 function getSymbolFromAttribute(attr) {
     if (attr.includes("eur")) return "€";

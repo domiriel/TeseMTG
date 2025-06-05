@@ -53,9 +53,9 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
 
 
     const metrics = [
-        { key: "reprints", label: "Func. Reprints", color: "#c3c3c3" },
-        { key: "avgComplexity", label: "Avg. Complexity", color: "#c3c3c3" },
-        { key: "avgCMC", label: "Avg. MV", color: "#c3c3c3" }
+        { key: "reprints", label: "Func. Reprints", color: "#bcab9a" },
+        { key: "avgComplexity", label: "Avg. Complexity", color: "#bcab9a" },
+        { key: "avgCMC", label: "Avg. MV", color: "#bcab9a" }
     ];
     
     const container = d3.select(containerId);
@@ -128,15 +128,15 @@ svg.append("defs").append("clipPath")
     .append("rect")
     .attr("x", 0)
     .attr("y", 0)
-    .attr("width", width + 20)  // width of the chart area
-    .attr("height", containerHeight);  // height of the full chart
+    .attr("width", width + 20)  
+    .attr("height", containerHeight);  
 
 
 
 const sharedHoverLine = svg.append("line")
     .attr("class", "hover-line")
     .attr("y1", margin.top)
-    .attr("y2", margin.top + height)  // height already sums all row heights + spacings
+    .attr("y2", margin.top + height)  
     .attr("stroke", "#000")
     .attr("stroke-width", 1)
     .attr("pointer-events", "none")
@@ -192,7 +192,7 @@ clippedGroup.selectAll("circle")
         const allMetrics = metrics.map(m => {
             const value = d[m.key];
             const formatted = m.key === "reprints"
-                ? Math.round(value)            // no decimals for reprints
+                ? Math.round(value)             
                 : (value?.toFixed(2) ?? "N/A");
             return `<strong>${m.label}:</strong> ${formatted}`;
         }).join("<br/>");
@@ -328,7 +328,6 @@ svg.append("rect")
         const [mouseX] = d3.pointer(event);
         const date = xScale.invert(mouseX - margin.left);
 
-        // Find the closest year
         sharedHoverLine
     .attr("x1", mouseX)
     .attr("x2", mouseX)
@@ -344,19 +343,19 @@ function zoomed(event) {
     const transform = event.transform;
     const newXScale = transform.rescaleX(xScale);
 
-    // Update paths
+
     linePaths.forEach(({ line, path }) => {
         path.attr("d", line.x(d => newXScale(d.year)));
     });
 
-    // Update circles
+
     circleGroups.forEach(({ group, yScale, metric }) => {
         group.selectAll("circle")
             .attr("cx", d => newXScale(d.year))
             .attr("cy", d => yScale(d[metric.key]));
     });
 
-    // Update x-axes
+
     xAxisGroups.forEach(({ g, isBottom }) => {
         g.call(d3.axisBottom(newXScale)
             .tickValues(allYears)
@@ -393,7 +392,7 @@ export function highlightLineChart(hoveredCards) {
 
     svg.selectAll(".highlight-hover-line").remove();
 
-    // Add new highlight lines
+
     years.forEach(time => {
         svg.append("line")
             .attr("class", "highlight-hover-line")

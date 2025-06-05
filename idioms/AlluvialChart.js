@@ -1,20 +1,20 @@
-//Issues fixed: 4
+
 import { updateState, getState } from "../state.js";
 import { updateFilterPanel } from "./FilterPanel.js"; 
 const nodeColorScale = d3.scaleSequential()
-    .interpolator(d3.interpolateRgb("#F0F0F0", "#373737")); // Soft to dark green
+    .interpolator(d3.interpolateRgb("#F0F0F0", "#373737")); 
 
 let localChartFilters = {
   Originality: new Set(),
   Rarity: new Set()
 };
-let localLinkFilters = new Set(); // each entry will be a string like "original|common"
+let localLinkFilters = new Set(); 
 
 function formatPriceLabel(priceAttr) {
     return priceAttr
-      .replace("price_", "") // remove prefix
-      .replace(/_/g, " ")    // replace underscores with spaces
-      .toUpperCase();        // uppercase
+      .replace("price_", "") 
+      .replace(/_/g, " ")    
+      .toUpperCase();        
   }
     
   function formatPriceSymbol(attr) {
@@ -375,7 +375,7 @@ sankeyGenerator.update(sankeyData);
     localLinkFilters.add(key);
   }
 
-  applyLocalLinkAndNodeFilter();// hide/show based on link filter
+  applyLocalLinkAndNodeFilter();
 })
 
 
@@ -415,14 +415,14 @@ sankeyGenerator.update(sankeyData);
   const activeSources = new Set();
   const activeTargets = new Set();
 
-  // Collect node names from active links
+
   activeLinks.forEach(linkKey => {
     const [source, target] = linkKey.split("|");
     activeSources.add(source);
     activeTargets.add(target);
   });
 
-  // Apply to links
+
   d3.selectAll(".links path").each(function(d) {
     const key = `${d.source.name}|${d.target.name}`;
     const show = localLinkFilters.size === 0 || localLinkFilters.has(key);
@@ -432,7 +432,7 @@ sankeyGenerator.update(sankeyData);
       .classed("alluvial-visible", show);
   });
 
-  // Apply to nodes
+
   d3.selectAll(".nodes rect").each(function(d) {
     const isLeft = d.x0 === 0;
     const show = localLinkFilters.size === 0 ||
@@ -444,7 +444,7 @@ sankeyGenerator.update(sankeyData);
       .classed("alluvial-visible", show);
   });
 
-  // Optional: also dim labels if you want
+
   d3.selectAll(".nodes text").each(function(d) {
     const isLeft = d.x0 === 0;
     const show = localLinkFilters.size === 0 ||
@@ -504,14 +504,14 @@ sankeyGenerator.update(sankeyData);
   const category = d.x0 === 0 ? "Originality" : "Rarity";
   const name = d.name;
 
-  // Toggle filter
+
   if (localChartFilters[category].has(name)) {
     localChartFilters[category].delete(name);
   } else {
     localChartFilters[category].add(name);
   }
 
-  applyLocalChartFilter(); // update visibility
+  applyLocalChartFilter(); 
 })
 
     .on("dblclick", function(event, d) {
@@ -531,7 +531,7 @@ sankeyGenerator.update(sankeyData);
       }
       
       updateState({ selectedFilters: updatedFilters });
-      updateFilterPanel(getState().originalData, updatedFilters); // Ensure panel reflects the change
+      updateFilterPanel(getState().originalData, updatedFilters); 
 
     });
   
@@ -579,7 +579,7 @@ sankeyGenerator.update(sankeyData);
   .attr("font-size", "12px")
   .attr("fill", "#000")
   .style("cursor", "help")
-  .style("pointer-events", "auto") // Allow interaction
+  .style("pointer-events", "auto") 
   .on("mouseover", function(event, d) {
     const explanations = {
       "original": `<strong>Original Card</strong><br>This is the first-ever printing of a card, typically from its debut set.`,
