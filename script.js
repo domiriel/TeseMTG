@@ -83,14 +83,14 @@ function init() {
       subscribe((state) => {
         showLoader();
         const context = state.updateContext || "default";
-        const { selectedFilters, selectedPriceAttribute } = state;
+        const { selectedFilters, selectedPriceAttribute, freeTextSearch } = state;
 
         
-        const filteredData = filterData(originalData, selectedFilters, selectedPriceAttribute);
+        const filteredData = filterData(originalData, selectedFilters, selectedPriceAttribute,[], freeTextSearch);
         const IcicleFiltered = filterData(originalData, selectedFilters, selectedPriceAttribute, [
-  "IcicleColorGroups", "IcicleColorIdentity"]);
+  "IcicleColorGroups", "IcicleColorIdentity"], freeTextSearch);
         const TimelineFiltered = filterData(originalData, selectedFilters, selectedPriceAttribute, ["Set Types", "Set Names", "Year"
-]);
+], freeTextSearch);
         
         if (window._prevFilteredLength === filteredData.length &&
             window._prevPriceAttribute === selectedPriceAttribute &&
@@ -154,7 +154,18 @@ console.log("Charts updated after resize.");
   
 
 
-  export function filterData(data, selectedFilters, selectedPriceAttribute, ignoreFilters = []) {
+  export function filterData(data, selectedFilters, selectedPriceAttribute, ignoreFilters = [], freeTextSearch = '' ) {
+      if (freeTextSearch) {
+    const searchLower = freeTextSearch.toLowerCase();
+    data = data.filter(card => {
+      return (
+        card.name?.toLowerCase().includes(searchLower) ||
+        (card.keywords && card.keywords.some(k => k.toLowerCase().includes(searchLower))) ||
+        (card.subtype && card.subtype.toLowerCase().includes(searchLower))
+      );
+    });
+  }
+
     return data.filter(card => {
       if (selectedFilters["IcicleColorGroups"]?.size > 0) {
         const groupLabel = card.number_of_colours >= 4

@@ -81,7 +81,7 @@ const uniqueCardNames = Array.from(new Set(filteredCards.map(card => card.name))
     wrapper.append("input")
         .attr("type", "text")
         .attr("list", inputId)
-        .attr("placeholder", "Search cards...")
+        .attr("placeholder", "Select a card...")
         .style("width", "85%")
         .style("margin-bottom", "12px")
         .style("padding", "6px")
@@ -95,6 +95,19 @@ wrapper.append("datalist")
     .append("option")
     .attr("value", d => d);
 
+wrapper.append("input")
+  .attr("type", "text")
+  .attr("placeholder", "Search by card name, keywords, or subtype...")
+  .style("width", "85%")
+  .style("margin-bottom", "12px")
+  .style("padding", "6px")
+  .style("font-size", "16px")
+  .on("keydown", function (event) {
+    if (event.key === "Enter") {
+      const searchText = this.value.trim();
+      updateState({ freeTextSearch: searchText });
+    }
+  });
 
 
 
