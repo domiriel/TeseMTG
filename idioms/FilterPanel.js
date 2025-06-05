@@ -41,7 +41,8 @@ export function createFilterPanel(data, containerId, selectedFiltersFromState, i
         "Set Types": new Map(),
         "Set Names": new Map(),
         "Originality": new Map(),
-        "Rarity": new Map()
+        "Rarity": new Map(),
+        "Foil Status": new Map(),
     };
 
     const selectedFilters = selectedFiltersFromState;
@@ -64,6 +65,8 @@ export function createFilterPanel(data, containerId, selectedFiltersFromState, i
 
         if (card.originality) addToMap(filters["Originality"], card.originality);
         if (card.rarity) addToMap(filters["Rarity"], card.rarity);
+        if (card.foil_status) addToMap(filters["Foil Status"], card.foil_status);
+
     });
 
     for (const key in filters) {
@@ -490,7 +493,8 @@ export function updateFilterPanel(originalData, selectedFilters, containerId = "
         "Originality": new Map(),
         "Rarity": new Map(),
         "IcicleColorGroups": new Map(),
-        "IcicleColorIdentity": new Map()
+        "IcicleColorIdentity": new Map(),
+        "Foil Status": new Map(),
     };
 
     Object.keys(filters).forEach(category => {
@@ -601,6 +605,7 @@ function extractCardValue(card, category) {
         case "Originality": return card.originality;
         case "Rarity": return card.rarity;
         case "Set Names": return card.set_name;
+        case "Foil Status": return card.foil_status;
         case "Year": return card.release_date ? new Date(card.release_date).getFullYear().toString() : null;
         case "IcicleColorGroups":
             if (card.number_of_colours >= 4) return "+4 Colors";

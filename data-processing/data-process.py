@@ -111,6 +111,20 @@ with open(output_file, 'w') as outfile:
         color_identity_count[tuple(sorted(color_identity))] += 1
         rarity_count[card.get('rarity', 'unknown')] += 1
 
+
+        # Determine foil_status
+        price_usd = float(card.get('prices', {}).get('usd', 0) or 0)
+        price_usd_foil = float(card.get('prices', {}).get('usd_foil', 0) or 0)
+        price_eur = float(card.get('prices', {}).get('eur', 0) or 0)
+        price_eur_foil = float(card.get('prices', {}).get('eur_foil', 0) or 0)
+
+        if (price_usd == 0 and price_eur == 0) and (price_usd_foil > 0 or price_eur_foil > 0):
+            foil_status = 'always_foil'
+        elif (price_usd_foil == 0 and price_eur_foil == 0):
+            foil_status = 'always_non_foil'
+        else:
+            foil_status = 'can_be_foil'
+
         originality = determine_originality(card)
         originality_count[originality] += 1
 
@@ -124,7 +138,6 @@ with open(output_file, 'w') as outfile:
                     "name": face.get('name'),
                     "mana_cost": face.get('mana_cost', ''),
                     "type_line": face.get('type_line', ''),
-                    "oracle_text": face.get('oracle_text', ''),
                     "image_normal": face.get('image_uris', {}).get('normal', ''),
                   
 
@@ -134,7 +147,6 @@ with open(output_file, 'w') as outfile:
                 "name": card.get('name'),
                 "mana_cost": card.get('mana_cost', ''),
                 "type_line": card.get('type_line', ''),
-                "oracle_text": card.get('oracle_text', ''),
                 "image_normal": image_uris.get('normal', ''),
 
             })
@@ -163,6 +175,7 @@ with open(output_file, 'w') as outfile:
             "set_type": card.get('set_type', 'Unknown'),
             "image_normal": image_uris.get('normal', ''),
             "faces": faces_data,
+            "foil_status": foil_status,
 
         }
 

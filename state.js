@@ -11,6 +11,7 @@ const state = {
       "IcicleColorIdentity": new Set(),
       "Set Names": new Set(),
       "Year": new Set(),
+      "Foil Status": new Set()
     },
     selectedPriceAttribute: "price_eur",
     hoveredCards: [],
@@ -117,7 +118,8 @@ export function resetState() {
       "IcicleColorGroups": new Set(),
       "IcicleColorIdentity": new Set(),
       "Set Names": new Set(),
-      "Year": new Set()
+      "Year": new Set(),
+      "Foil Sattus": new Set()
     },
     selectedPriceAttribute: "price_eur",
     hoveredCards: [],

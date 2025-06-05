@@ -253,6 +253,7 @@ function hideLoader(delay = 0) {
           return "Colorless";
         }
         return card.color_identity.sort().join("-");  
+      case "Foil Status": return card.foil_status;
         
       default: return null;
     }
