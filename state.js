@@ -17,6 +17,7 @@ const state = {
     hoveredCards: [],
     updateContext: null,
     originalData: null,
+    freeTextSearch: "",
   };
   
   const globalListeners = new Set();      // .subscribe()
