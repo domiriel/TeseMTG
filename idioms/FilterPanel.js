@@ -203,7 +203,7 @@ let newHoveredCards = isAlreadySelected
         section.append("div")
             .attr("class", "dropdown-header")
             .text(category)
-            .style("background", "#f0f0f0")
+            .style("background", "#bcab9a")
             .style("padding", "6px 10px")
             .style("border", "1px solid #ccc")
             .style("border-radius", "6px")
@@ -295,7 +295,7 @@ let newHoveredCards = isAlreadySelected
                     if (d.category === "Set Names") {
                     d3.selectAll(".set-rect")
                         .attr("fill", rectData =>
-                        selectedFilters["Set Names"].has(rectData.name) ? "#007bff" : "#C3C3C3"
+                        selectedFilters["Set Names"].has(rectData.name) ? "#007bff" : "#bcab9a"
                         );
                     }
 
