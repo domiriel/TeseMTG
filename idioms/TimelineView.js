@@ -350,7 +350,15 @@ function updateSetRectOpacity() {
             .attr("stroke-width", 2);
     });
 
- 
+    const extraBrushPadding = 20;
+const brush = d3.brush()
+    .extent([[0, -extraBrushPadding], [chartWidth, adjustedChartHeight + extraBrushPadding]])
+    .on("end", brushed);
+
+chartGroup.append("g")
+    .attr("class", "brush")
+    .call(brush);
+
     const squares = chartGroup.selectAll(".set-square")
         .data(uniqueSets)
         .enter()
@@ -564,6 +572,66 @@ function zoomed(event) {
 
 }
 
+function brushed(event) {
+    if (!event.selection) return;
+
+    const [[x0, y0], [x1, y1]] = event.selection;
+
+    const selected = [];
+        d3.selectAll(".set-rect").each(function (d) {
+        const rect = d3.select(this);
+        const x = +rect.attr("x");
+        const y = +rect.attr("y");
+        const width = +rect.attr("width");
+        const height = +rect.attr("height");
+
+        if (
+            x + width >= x0 &&
+            x <= x1 &&
+            y + height >= y0 &&
+            y <= y1
+        ) {
+            selected.push(d.name);
+        }
+    });
+
+
+    const currentState = getState();
+    const updatedFilters = {};
+
+    for (const key in currentState.selectedFilters) {
+        updatedFilters[key] = new Set(currentState.selectedFilters[key]);
+    }
+
+    if (!updatedFilters["Set Names"]) {
+        updatedFilters["Set Names"] = new Set();
+    }
+
+    let changed = false;
+
+    selected.forEach(name => {
+        if (!updatedFilters["Set Names"].has(name)) {
+            updatedFilters["Set Names"].add(name);
+            changed = true;
+        }
+    });
+
+    if (changed) {
+        updateState({
+            selectedFilters: updatedFilters,
+            updateContext: "TimelineFilter"
+        });
+
+        updateSetRectOpacity();
+
+        d3.selectAll(".set-rect")
+            .attr("fill", d =>
+                updatedFilters["Set Names"].has(d.name) ? "#007bff" : "#bcab9a"
+            );
+    }
+
+    d3.select(chartGroup.select(".brush").node()).call(brush.move, null); // Clear brush
+}
 
 }
 

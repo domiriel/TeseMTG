@@ -267,7 +267,57 @@ clippedGroup.selectAll("circle")
     });
 });
 
+const brush = d3.brushX()
+    .extent([[0, 0], [width, height]])
+    .on("end", brushed);
+
+svg.append("g")
+    .attr("class", "brush")
+    .attr("transform", `translate(${margin.left}, ${margin.top})`)
+    .call(brush).lower();
     
+function brushed(event) {
+    if (!event.selection) return;
+
+    const [x0, x1] = event.selection;
+    const startDate = xScale.invert(x0);
+    const endDate = xScale.invert(x1);
+
+    const selectedYears = new Set(
+        groupedData
+            .filter(d => d.year >= startDate && d.year <= endDate)
+            .map(d => d.year.getFullYear().toString())
+    );
+
+    // Clone current state
+    const currentState = getState();
+    const updatedFilters = {};
+
+    for (const key in currentState.selectedFilters) {
+        updatedFilters[key] = new Set(currentState.selectedFilters[key]);
+    }
+
+    selectedYears.forEach(year => {
+        if (updatedFilters["Year"].has(year)) {
+            updatedFilters["Year"].delete(year);
+        } else {
+            updatedFilters["Year"].add(year);
+        }
+    });
+
+    d3.selectAll("circle.data-point")
+        .attr("opacity", function() {
+            const year = this.getAttribute("data-year");
+            return updatedFilters["Year"].size === 0 || updatedFilters["Year"].has(year) ? 1 : 0.5;
+        });
+
+    updateState({
+        selectedFilters: updatedFilters,
+        updateContext: "TimelineFilter"
+    });
+    d3.select(this).call(brush.move, null);
+
+}
   circleGroups.push({ group: g, yScale: y, metric });  
     ;
 
@@ -338,6 +388,11 @@ svg.append("rect")
         sharedHoverLine.style("display", "none");
     })
     .lower();
+
+
+
+
+
 
 function zoomed(event) {
     const transform = event.transform;

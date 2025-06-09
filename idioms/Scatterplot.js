@@ -64,7 +64,7 @@ export function prepareScatterData(data, selectedPriceAttribute) {
         ? card.prices.reduce((sum, p) => sum + p, 0) / card.prices.length
         : 0;
 
-    // 🚨 Replace 0 with placeholder min value (to be consistent in main function)
+
     if (card.avg_price <= 0 ) {
     card.was_price_invalid = true;
     card.avg_price = 0.001;
@@ -110,7 +110,7 @@ export function createScatterPlot(data, containerId, isUpdate = false, selectedP
     const excludedTypes = ["Emblem", "Token"];
 
 
-    const allData = data; // include digital for metadata
+    const allData = data; 
 const filteredForPlot = allData.filter(card =>
     !excludedSetTypes.has(card.set_type) &&
     !excludedSetNames.some(keyword => card.set_name && card.set_name.includes(keyword)) &&
@@ -121,7 +121,7 @@ const filteredForPlot = allData.filter(card =>
 
 const cardMap = new Map();
 
-// Include *all* sets in all_sets, but only non-digital prices in avg_price
+
 allData.forEach(card => {
     if (!cardMap.has(card.name)) {
         cardMap.set(card.name, {
@@ -134,7 +134,7 @@ allData.forEach(card => {
         cardMap.get(card.name).all_sets.set(card.set_name, card.set_type);
     }
 
-    // Only collect price for non-digital cards
+
     const price = isNaN(card[selectedPriceAttribute]) || card[selectedPriceAttribute] === null ? 0 : card[selectedPriceAttribute];
     if (!card.digital && !isNaN(card.complexity)) {
         cardMap.get(card.name).prices.push(price);
@@ -159,7 +159,7 @@ cardMap.forEach(card => {
     card.all_sets = Array.from(card.all_sets.entries()).map(([name, type]) => ({ name, type }));
 });
 
-// Only show non-digital cards in the plot
+
 const filteredData = filteredForPlot
     .filter(card => cardMap.has(card.name))
     .map(card => cardMap.get(card.name));
@@ -170,7 +170,7 @@ const filteredData = filteredForPlot
     const minPrice = d3.min(sampledData, d => d.avg_price);
 const maxPrice = d3.max(sampledData, d => d.avg_price);
 const safeMinPrice = Math.max(0.001, minPrice);
-const pricePadding = (maxPrice - safeMinPrice) * 0.01; // 5% padding
+const pricePadding = (maxPrice - safeMinPrice) * 0.01;
 const paddedMinPrice = 0.0009
 const paddedMaxPrice = maxPrice + pricePadding;
 
@@ -208,7 +208,7 @@ const originalXScale = d3.scaleLog()
 
         const minComplexity = d3.min(sampledData, d => d.complexity);
         const maxComplexity = d3.max(sampledData, d => d.complexity);
-        const yPadding = (maxComplexity - minComplexity) * 0.01; // 5% padding
+        const yPadding = (maxComplexity - minComplexity) * 0.01; 
         
         const originalYScale = d3.scaleLinear()
             .domain([minComplexity - yPadding, maxComplexity + yPadding])
@@ -234,10 +234,10 @@ function updateAxes(symbol) {
     const logMin = Math.log10(xScale.domain()[0]);
     const logMax = Math.log10(xScale.domain()[1]);
 
-    // Instead of linearly interpolating ticks, force the first tick to be the fallback value
+
     let ticks = d3.range(numTicks).map(i => Math.pow(10, logMin + i / (numTicks - 1) * (logMax - logMin)));
 
-    // Force the first tick to align with fallback dots (0.001)
+
     if (ticks.length > 0 && ticks[0] < 0.001) {
         ticks[0] = 0.001;
     }
@@ -345,6 +345,60 @@ function updateAxes(symbol) {
 
     const gClip = gDot.append("g").attr("class", "clip-group");
 
+    const brushOverlay = g.append("g")
+    .attr("class", "brush-overlay")
+    .attr("clip-path", "url(#chart-clip)");
+
+const brush = d3.brush()
+    .extent([[0, 0], [chartWidth, chartHeight]])
+    .on("start", () => svg.on(".zoom", null))
+    .on("end", function(event) {
+        svg.call(zoom); // Re-enable zoom
+        if (!event.selection) return;
+
+        const [[x0, y0], [x1, y1]] = event.selection;
+
+        const brushedCards = sampledData.filter(d => {
+            const cx = xScale(d.avg_price);
+            const cy = yScale(d.complexity);
+            return cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1;
+        });
+
+        const { hoveredCards } = getState();
+        const updatedHovered = new Map(hoveredCards.map(c => [c.name, c]));
+        for (const card of brushedCards) {
+            if (updatedHovered.has(card.name)) {
+                updatedHovered.delete(card.name);
+            } else {
+                updatedHovered.set(card.name, card);
+            }
+        }
+
+        const newHoveredCards = Array.from(updatedHovered.values());
+        updateState({ hoveredCards: newHoveredCards });
+
+        d3.selectAll(".dots circle")
+            .style("stroke", d => newHoveredCards.some(c => c.name === d.name)
+                ? "orange"
+                : (+d.edhrec_rank > 0 ? "none" : "black"))
+            .style("stroke-width", d => newHoveredCards.some(c => c.name === d.name)
+                ? 2.5
+                : (+d.edhrec_rank > 0 ? 0 : 1.2))
+            .each(function (d) {
+                if (newHoveredCards.some(c => c.name === d.name)) {
+                    this.parentNode.appendChild(this);
+                }
+            });
+
+        // ✅ Remove selection box after brush
+        brushOverlay.call(brush.move, null);
+    });
+
+
+
+brushOverlay.call(brush).lower();
+
+
     const dots = gClip.selectAll("circle")
     .data(sampledData, d => d.name)
     .join("circle")
@@ -361,6 +415,7 @@ sampledData.forEach((d, i) => {
         console.log(`🚨 Invalid avg_price in sampledData at index ${i}:`, d.name, d.avg_price);
     }
 });
+
     globalDots = dots;
 console.log("🛠️ xScale domain:", xScale.domain());
 console.log("🛠️ globalDots count:", globalDots.size());
@@ -452,7 +507,7 @@ const legend = svg.append("g")
   .attr("class", "edhrec-legend")
   .attr("transform", `translate(${legendX}, ${legendY})`);
 
-// Title
+
 legend.append("text")
   .attr("x", 0)
   .attr("y", 150)
@@ -481,7 +536,7 @@ colorGroups.forEach((group, i) => {
     .style("font-size", "12px")
     .attr("fill", "#000");
 });
-// Add 'No EDHREC Rank' legend item
+
 const noRankEntry = legend.append("g")
   .attr("transform", `translate(0, ${(colorGroups.length + 1) * (legendItemHeight + legendSpacing)})`);
 
@@ -504,7 +559,8 @@ noRankEntry.append("text")
 
         
         
-        
+
+
     let zoomTimeout = null;
     const ZOOM_DELAY = 60; 
 
@@ -543,7 +599,7 @@ noRankEntry.append("text")
             svg.call(zoom.transform, savedTransform);
         }
         
-        // Wait 1 frame (~16ms) before revealing chart
+
         setTimeout(() => {
             d3.select(containerId).style("visibility", "visible");
         }, 20);
@@ -595,17 +651,17 @@ export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_
     const g = svg.select("g");
     const gClip = g.select(".dots .clip-group");
 
-    // 1️⃣ Update the original xScale domain based on new price attribute
+
     const newMinPrice = Math.max(0.001, d3.min(filteredData, d => d.avg_price));
     const newMaxPrice = d3.max(filteredData, d => d.avg_price);
     originalXScale.domain([newMinPrice, newMaxPrice]);
 
-    // 2️⃣ Apply the current zoom transform to the new domain
+
     const transform = d3.zoomTransform(svg.node());
     const newX = transform.rescaleX(originalXScale);
     xScale.domain(newX.domain());
 
-    // 3️⃣ Format symbol and update axes
+
     const symbol = getSymbolFromAttribute(selectedPriceAttribute);
     updateAxes(symbol);
 
@@ -697,11 +753,11 @@ export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_
     : (+d.edhrec_rank > 0 ? 0 : 1.2));
         });
 
-    // 7️⃣ Update global dots reference and position them
+
     globalDots = gClip.selectAll("circle");
     updatePointPositions(xScale, yScale);
 
-    // 8️⃣ Highlight selected cards
+
     const { hoveredCards } = getState();
 d3.selectAll(".dots circle")
   .style("stroke", d => hoveredCards.some(c => c.name === d.name)
@@ -712,7 +768,7 @@ d3.selectAll(".dots circle")
     : (+d.edhrec_rank > 0 ? 0 : 1.2))
   .each(function (d) {
     if (hoveredCards.some(c => c.name === d.name)) {
-      this.parentNode.appendChild(this); // bring to front
+      this.parentNode.appendChild(this); 
     }
   });
 }
