@@ -1,6 +1,6 @@
 
 import { updateState, getState, saveFilterSettings, loadFilterSettings, generateFilterShareURL, resetState} from "../state.js";
-import { filterData } from "../script.js"; 
+import { filterData, getFilteredData } from "../script.js"; 
 
 const optionMap = new Map();  
 const pillMap = new Map();
@@ -72,9 +72,10 @@ export function createFilterPanel(data, containerId, selectedFiltersFromState, i
     for (const key in filters) {
         filters[key] = Array.from(filters[key].entries()).sort((a, b) => a[0].localeCompare(b[0]));
     }
-
-const filteredCards = filterData(data, selectedFilters);
+console.log("A")
+const { default: filteredCards } = getFilteredData(data, selectedFilters);
 const uniqueCardNames = Array.from(new Set(filteredCards.map(card => card.name))).sort();
+
 
 
     const inputId = "searchInput_" + Math.random().toString(36).substring(2);
@@ -482,8 +483,9 @@ wrapper.append("input")
 export function updateFilterPanel(originalData, selectedFilters, containerId = ".FilterPanel") {
     
     selectedFilters = selectedFilters || {};
+console.log("B")
+const { default: filteredCards } = getFilteredData(originalData, selectedFilters);
 
-     const filteredCards = filterData(originalData, selectedFilters);
     const uniqueCardNames = Array.from(new Set(filteredCards.map(card => card.name))).sort();
 
     // Update datalist

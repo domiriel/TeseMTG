@@ -187,8 +187,7 @@ sampledData.forEach(d => {
     const chartWidth = width - margin.left - margin.right;
     const chartHeight = height - margin.top - margin.bottom;
 
-    d3.select(containerId)
-  .style("visibility", "hidden");
+
 
     const svg = d3.select(containerId)
         .append("svg")
@@ -600,9 +599,7 @@ noRankEntry.append("text")
         }
         
 
-        setTimeout(() => {
-            d3.select(containerId).style("visibility", "visible");
-        }, 20);
+
         
     
 

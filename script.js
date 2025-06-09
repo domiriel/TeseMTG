@@ -19,6 +19,19 @@ function loadCardData() {
 
 function init() {
   showLoader();
+  if (!d3.select("#tooltip").node()) {
+    d3.select("body")
+      .append("div")
+      .attr("id", "tooltip")
+      .style("position", "absolute")
+      .style("background", "rgba(0, 0, 0, 0.7)")
+      .style("color", "white")
+      .style("padding", "5px")
+      .style("border-radius", "3px")
+      .style("font-size", "12px")
+      .style("pointer-events", "none")
+      .style("display", "none");
+  }
     d3.json("./data/dataset_card_details.json").then(function (data) {
       const originalData = JSON.parse(JSON.stringify(data));  
       updateState({ originalData });
@@ -49,27 +62,20 @@ function init() {
 
       });
  
-      const { selectedFilters, selectedPriceAttribute } = getState();
-      const filtered = filterData(originalData, selectedFilters, selectedPriceAttribute);
-      const IcicleFiltered = filterData(originalData, selectedFilters, selectedPriceAttribute, [
-  "IcicleColorGroups", "IcicleColorIdentity"
-]);
+      const { selectedFilters, selectedPriceAttribute, freeTextSearch } = getState();
+const { default: filtered, icicle: IcicleFiltered, timeline: TimelineFiltered } = 
+  getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
+
+
   
       createIcicleChart(IcicleFiltered, ".IcicleChart");
       updateFilterPanel(originalData, selectedFilters);
       createAlluvialChart(filtered, ".AlluvialChart", false, selectedPriceAttribute);
       createHiddenDrawer(".HiddenDrawerArea");
       createTimelineView(filtered, ".TimelineView");
-      let savedTransform = null;
 
-      try {
-          const svgNode = d3.select(".Scatterplot svg").node();
-          if (svgNode) savedTransform = d3.zoomTransform(svgNode);
-        } catch (e) {
-          console.warn("Could not read zoom transform:", e);
-        }
 
-      createScatterPlot(filtered, ".Scatterplot", false, selectedPriceAttribute, savedTransform);
+      createScatterPlot(filtered, ".Scatterplot", false, selectedPriceAttribute);
 
       createStackedLineChart(filtered, ".LineChart");
       createFilterPanel(originalData, ".FilterPanel", selectedFilters); 
@@ -86,11 +92,9 @@ function init() {
         const { selectedFilters, selectedPriceAttribute, freeTextSearch } = state;
 
         
-        const filteredData = filterData(originalData, selectedFilters, selectedPriceAttribute,[], freeTextSearch);
-        const IcicleFiltered = filterData(originalData, selectedFilters, selectedPriceAttribute, [
-  "IcicleColorGroups", "IcicleColorIdentity"], freeTextSearch);
-        const TimelineFiltered = filterData(originalData, selectedFilters, selectedPriceAttribute, ["Set Types", "Set Names", "Year"
-], freeTextSearch);
+const { default: filteredData, icicle: IcicleFiltered, timeline: TimelineFiltered } = 
+  getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
+
         
         if (window._prevFilteredLength === filteredData.length &&
             window._prevPriceAttribute === selectedPriceAttribute &&
@@ -132,14 +136,16 @@ function init() {
   
     window.addEventListener("resize", () => {
       console.log("Window resized, updating charts...");
-      const { selectedFilters, selectedPriceAttribute } = getState();
+      const { selectedFilters, selectedPriceAttribute, freeTextSearch } = getState();
       const { hoveredCards } = getState();
-      const filtered = filterData(getState().originalData, selectedFilters, selectedPriceAttribute);
-      createAlluvialChart(filtered, ".AlluvialChart", true, selectedPriceAttribute);
-      createTimelineView(filtered, ".TimelineView", true);
-      createStackedLineChart(filtered, ".LineChart", true);
-      createIcicleChart(filtered, ".IcicleChart", true);
-      updateScatterPlot(prepareScatterData(filtered, selectedPriceAttribute), selectedPriceAttribute);
+      const originalData = getState().originalData;
+      const { default: filteredData, icicle: IcicleFiltered, timeline: TimelineFiltered } = 
+      getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
+      createAlluvialChart(filteredData, ".AlluvialChart", true, selectedPriceAttribute);
+      createTimelineView(TimelineFiltered, ".TimelineView", true);
+      createStackedLineChart(filteredData, ".LineChart", true);
+      createIcicleChart(IcicleFiltered, ".IcicleChart", true);
+      updateScatterPlot(prepareScatterData(filteredData, selectedPriceAttribute), selectedPriceAttribute);
       createFilterPanel(getState().originalData, ".FilterPanel", selectedFilters); 
 
 highlightAlluvialElements(hoveredCards);
@@ -154,8 +160,14 @@ console.log("Charts updated after resize.");
   
 
 
-  export function filterData(data, selectedFilters, selectedPriceAttribute, ignoreFilters = [], freeTextSearch = '' ) {
-      if (freeTextSearch) {
+export function filterData(
+  data,
+  selectedFilters,
+  selectedPriceAttribute,
+  freeTextSearch = ""
+) {
+  // Pre-filter by free text
+  if (freeTextSearch) {
     const searchLower = freeTextSearch.toLowerCase();
     data = data.filter(card => {
       return (
@@ -166,58 +178,79 @@ console.log("Charts updated after resize.");
     });
   }
 
-    return data.filter(card => {
-      if (selectedFilters["IcicleColorGroups"]?.size > 0) {
-        const groupLabel = card.number_of_colours >= 4
-          ? "+4 Colors"
-          : card.number_of_colours === 0
-            ? "Colorless"
-            : `${card.number_of_colours} Colors`;
-  
-        if (!selectedFilters["IcicleColorGroups"].has(groupLabel)) {
-          return false;
-        }
-      }
-  
-      if (selectedFilters["IcicleColorIdentity"]?.size > 0) {
-        const identity = Array.isArray(card.color_identity)
-          ? card.color_identity.sort().join("-") || "Colorless"
-          : "Colorless";
-  
-        if (!selectedFilters["IcicleColorIdentity"].has(identity)) {
-          return false;
-        }
-      }
-  
-      if (selectedFilters["Year"]?.size > 0) {
-        const releaseYear = new Date(card.release_date).getFullYear().toString();
-        if (!selectedFilters["Year"].has(releaseYear)) {
-          return false;
-        }
-      }
-  
-      for (const [category, values] of Object.entries(selectedFilters)) {
-      if (!values || values.size === 0) continue;
-      if (ignoreFilters.includes(category)) continue;
+  // Define contexts with their ignoreFilters
+  const contexts = {
+    default: [],
+    icicle: ["IcicleColorGroups", "IcicleColorIdentity"],
+    timeline: ["Set Types", "Set Names", "Year"],
+  };
 
-      const cardValue = extractCardValue(card, category);
-      if (!cardValue) return false;
+  // Prepare filtered results for each context
+  const results = {
+    default: [],
+    icicle: [],
+    timeline: [],
+  };
 
-      const isSplittable = ["Supertypes", "Types", "Subtypes"].includes(category);
-      const cardValues = Array.isArray(cardValue)
-        ? cardValue.map(v => v.trim().toLowerCase())
-        : (isSplittable
-            ? cardValue.split(/[\s/]+/).map(v => v.trim().toLowerCase())
-            : [cardValue.trim().toLowerCase()]);
-
-      const filterValues = new Set(Array.from(values).map(v => v.trim().toLowerCase()));
-      const match = cardValues.some(v => filterValues.has(v));
-      if (!match) return false;
+  data.forEach(card => {
+    for (const [context, ignoreFilters] of Object.entries(contexts)) {
+      if (shouldIncludeCard(card, selectedFilters, ignoreFilters)) {
+        results[context].push(card);
+      }
     }
+  });
+  console.log("Filtered data for all contexts:", results);
+  return results;
+}
 
-    return true;
-    });
+// Helper: test if a single card passes the filters (except those ignored)
+function shouldIncludeCard(card, selectedFilters, ignoreFilters) {
+  // IcicleColorGroups
+  if (selectedFilters["IcicleColorGroups"]?.size > 0 && !ignoreFilters.includes("IcicleColorGroups")) {
+    const groupLabel = card.number_of_colours >= 4
+      ? "+4 Colors"
+      : card.number_of_colours === 0
+        ? "Colorless"
+        : `${card.number_of_colours} Colors`;
+    if (!selectedFilters["IcicleColorGroups"].has(groupLabel)) return false;
   }
+
+  // IcicleColorIdentity
+  if (selectedFilters["IcicleColorIdentity"]?.size > 0 && !ignoreFilters.includes("IcicleColorIdentity")) {
+    const identity = Array.isArray(card.color_identity)
+      ? card.color_identity.sort().join("-") || "Colorless"
+      : "Colorless";
+    if (!selectedFilters["IcicleColorIdentity"].has(identity)) return false;
+  }
+
+  // Year
+  if (selectedFilters["Year"]?.size > 0 && !ignoreFilters.includes("Year")) {
+    const releaseYear = new Date(card.release_date).getFullYear().toString();
+    if (!selectedFilters["Year"].has(releaseYear)) return false;
+  }
+
+  // Other categories
+  for (const [category, values] of Object.entries(selectedFilters)) {
+    if (!values || values.size === 0) continue;
+    if (ignoreFilters.includes(category)) continue;
+
+    const cardValue = extractCardValue(card, category);
+    if (!cardValue) return false;
+
+    const isSplittable = ["Supertypes", "Types", "Subtypes"].includes(category);
+    const cardValues = Array.isArray(cardValue)
+      ? cardValue.map(v => v.trim().toLowerCase())
+      : (isSplittable
+          ? cardValue.split(/[\s/]+/).map(v => v.trim().toLowerCase())
+          : [cardValue.trim().toLowerCase()]);
+
+    const filterValues = new Set(Array.from(values).map(v => v.trim().toLowerCase()));
+    if (!cardValues.some(v => filterValues.has(v))) return false;
+  }
+
+  return true;
+}
+
   
   
   function showLoader() {
@@ -269,7 +302,59 @@ function hideLoader(delay = 0) {
       default: return null;
     }
   }
-  
+  export function getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch = "") {
+  const state = getState();
+  const lastInputs = state.lastFilterInputs || {};
+
+  const inputsMatch = 
+    shallowCompareFilters(selectedFilters, lastInputs.selectedFilters) &&
+    selectedPriceAttribute === lastInputs.selectedPriceAttribute &&
+    freeTextSearch === lastInputs.freeTextSearch;
+
+  if (inputsMatch && state.lastFilteredData) {
+    console.log("✅ Using cached filtered data!");
+    return state.lastFilteredData;
+  }
+console.log("❌ Recomputing filtered data...");
+  const filteredResults = filterData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
+
+  updateState({
+    lastFilterInputs: { 
+      selectedFilters: cloneFilters(selectedFilters),
+      selectedPriceAttribute,
+      freeTextSearch
+    },
+    lastFilteredData: filteredResults
+  });
+
+  return filteredResults;
+}
+
+// Helper: shallow compare two filter sets
+function shallowCompareFilters(a, b) {
+  if (!a || !b) return false;
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  return aKeys.every(key => {
+    const aSet = a[key];
+    const bSet = b[key];
+    if (aSet?.size !== bSet?.size) return false;
+    for (const val of aSet) {
+      if (!bSet.has(val)) return false;
+    }
+    return true;
+  });
+}
+
+// Helper: deep clone filter sets
+function cloneFilters(filters) {
+  const cloned = {};
+  for (const key in filters) {
+    cloned[key] = new Set(filters[key]);
+  }
+  return cloned;
+}
   
     init();
     

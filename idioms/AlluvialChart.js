@@ -1,14 +1,29 @@
 
 import { updateState, getState } from "../state.js";
 import { updateFilterPanel } from "./FilterPanel.js"; 
-const nodeColorScale = d3.scaleSequential()
-    .interpolator(d3.interpolateRgb("#F0F0F0", "#373737")); 
 
+  const customOrder = [
+    "original", "reprint", "functional reprint",
+    "common", "uncommon", "rare", "mythic", "special", "bonus"];
+
+function getDiscreteColor(percentage) {
+  if (percentage < 20) return "#efe6dc";
+  if (percentage < 40) return "#dac9b9";
+  if (percentage < 60) return "#bcab9a";
+  if (percentage < 80) return "#8a7a6a";
+  return "#594a3a"; 
+}
+  
 let localChartFilters = {
   Originality: new Set(),
   Rarity: new Set()
 };
 let localLinkFilters = new Set(); 
+
+
+function applyColorScale(selection, attrName, priceRange) {
+  selection.attr(attrName, d => getNodeColor(d.avgPrice, priceRange.min, priceRange.max));
+}
 
 function formatPriceLabel(priceAttr) {
     return priceAttr
@@ -22,51 +37,9 @@ function formatPriceLabel(priceAttr) {
     if (attr.toLowerCase().includes("eur")) return "€";
     return "";
   }
-   
-  function applyFisheyeEffect(rects, xScale, yScale, event) {
-    const [mouseX, mouseY] = d3.pointer(event);
-
-    rects.each(function (d) {
-        
-        let x = xScale(d.x0);
-        let y = yScale(d.y0);
-        let width = xScale(d.x1) - xScale(d.x0);
-        let height = yScale(d.y1) - yScale(d.y0);
-
-        
-        let dx = Math.abs(mouseX - (x + width / 2));
-        let dy = Math.abs(mouseY - (y + height / 2));
-        let distance = Math.sqrt(dx * dx + dy * dy);
-
-        
-        let scale = Math.max(1.2, 3 - (distance / 150)); 
-
-        d3.select(this)
-            .transition()
-            .duration(100)
-            .attr("x", x - (width * (scale - 1)) / 2)
-            .attr("y", y - (height * (scale - 1)) / 2)
-            .attr("width", width * scale)
-            .attr("height", height * scale);
-    });
-}
   
 
-/*function getDiscreteColor(percentage) {
-  if (percentage < 20) return "#f0f0f0";
-  if (percentage < 40) return "#cbcbcb";
-  if (percentage < 60) return "#9c9c9c";
-  if (percentage < 80) return "#6a6a6a";
-  return "#373737"; 
-}*/
 
-function getDiscreteColor(percentage) {
-  if (percentage < 20) return "#efe6dc";
-  if (percentage < 40) return "#dac9b9";
-  if (percentage < 60) return "#bcab9a";
-  if (percentage < 80) return "#8a7a6a";
-  return "#594a3a"; 
-}
 
 
 
@@ -192,9 +165,7 @@ export function createAlluvialChart(data, containerId, isUpdate = false, selecte
     avgPrice: rarityPriceCounts[rarity] > 0 ? rarityPriceSums[rarity] / rarityPriceCounts[rarity] : 0
   }));
   
-  const customOrder = [
-    "original", "reprint", "functional reprint",
-    "common", "uncommon", "rare", "mythic", "special", "bonus"];
+
 
 
 
@@ -287,20 +258,6 @@ leftNodes.forEach(node => {
 sankeyGenerator.update(sankeyData);
 
 
-
-  if (!d3.select("#tooltip").node()) {
-    d3.select("body")
-      .append("div")
-      .attr("id", "tooltip")
-      .style("position", "absolute")
-      .style("background", "rgba(0, 0, 0, 0.7)")
-      .style("color", "white")
-      .style("padding", "5px")
-      .style("border-radius", "3px")
-      .style("font-size", "12px")
-      .style("pointer-events", "none")
-      .style("display", "none");
-  }
   const tooltip = d3.select("#tooltip");
   
 
@@ -320,7 +277,7 @@ sankeyGenerator.update(sankeyData);
       .enter()
       .append("path")
       .attr("d", d3.sankeyLinkHorizontal())
-      .attr("stroke", d => getNodeColor(d.avgPrice, sharedPriceRange.min, sharedPriceRange.max))
+      .call(sel=> applyColorScale(sel, "stroke", sharedPriceRange))
       .attr("stroke-opacity", 0.5)
       .attr("fill", "none")
       .attr("stroke-width", d => Math.max(1, d.width))
@@ -472,7 +429,7 @@ sankeyGenerator.update(sankeyData);
     .attr("y", d => d.y0)
     .attr("width", d => d.x1 - d.x0)
     .attr("height", d => d.y1 - d.y0)
-    .attr("fill", d => getNodeColor(d.avgPrice, sharedPriceRange.min, sharedPriceRange.max)) 
+    .call(sel => applyColorScale(sel, "fill", sharedPriceRange))
     .attr("stroke", "#000")
     .on("mouseover", function(event, d) {
       tooltip.style("display", "block")
