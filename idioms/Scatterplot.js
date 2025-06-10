@@ -17,11 +17,6 @@ let globalDots = null;
 
 function updatePointPositions(xScale, yScale) {
     if (!globalDots) return;
-    globalDots.each((d, i) => {
-        if (isNaN(d.avg_price) || d.avg_price === undefined) {
-            console.log("🚨 NaN or undefined avg_price detected!", d);
-        }
-    });
     globalDots.attr("cx", d => xScale(d.avg_price))
               .attr("cy", d => yScale(d.complexity));
 }
@@ -73,9 +68,7 @@ export function prepareScatterData(data, selectedPriceAttribute) {
 }
 
 
-    if (isNaN(card.avg_price)) {
-        console.log("🚨 Invalid avg_price detected in prepareScatterData:", card);
-    }
+
 
     card.all_sets = Array.from(card.all_sets.entries()).map(([name, type]) => ({ name, type }));
 });
@@ -145,9 +138,7 @@ cardMap.forEach(card => {
     card.avg_price = card.prices.length > 0
         ? card.prices.reduce((sum, p) => sum + p, 0) / card.prices.length
         : 0;
-     if (isNaN(card.avg_price)) {
-    console.log("Invalid avg_price detected", card);
-  }
+
 
 
   if (card.avg_price <= 0 ) {
@@ -176,7 +167,6 @@ const paddedMaxPrice = maxPrice + pricePadding;
 
 sampledData.forEach(d => {
     if (d.avg_price <= 0 || isNaN(d.avg_price)) {
-        console.log(`🚨 Replacing invalid avg_price for ${d.name}: was ${d.avg_price}, set to ${safeMinPrice}`);
         d.avg_price = safeMinPrice;
     }
 });
@@ -411,13 +401,10 @@ brushOverlay.call(brush).lower();
 
 sampledData.forEach((d, i) => {
     if (isNaN(d.avg_price) || d.avg_price <= 0 || typeof d.avg_price !== 'number') {
-        console.log(`🚨 Invalid avg_price in sampledData at index ${i}:`, d.name, d.avg_price);
     }
 });
 
     globalDots = dots;
-console.log("🛠️ xScale domain:", xScale.domain());
-console.log("🛠️ globalDots count:", globalDots.size());
 
     updatePointPositions(xScale, yScale);
 
@@ -631,7 +618,7 @@ svg.node().__scales__ = {
 
 export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_eur") {
 
-    console.log("Filtered Data:", filteredData.filter(d => d.edhrec_rank == 0));
+
 
     const svg = d3.select(".Scatterplot svg");
     if (svg.empty()) return;

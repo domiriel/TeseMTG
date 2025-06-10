@@ -34,6 +34,7 @@ function init() {
   }
     d3.json("./data/dataset_card_details.json").then(function (data) {
       const originalData = JSON.parse(JSON.stringify(data));  
+      const groupedData = buildGroupedData(originalData);
       updateState({ originalData });
     let hoverTimeout = null;
       getState().onChange("hoveredCards", (hoveredCards) => {
@@ -135,7 +136,7 @@ const { default: filteredData, icicle: IcicleFiltered, timeline: TimelineFiltere
     });
   
     window.addEventListener("resize", () => {
-      console.log("Window resized, updating charts...");
+
       const { selectedFilters, selectedPriceAttribute, freeTextSearch } = getState();
       const { hoveredCards } = getState();
       const originalData = getState().originalData;
@@ -153,7 +154,7 @@ highlightIcicleRect(hoveredCards);
 highlightTimelineSets(hoveredCards);
 highlightLineChart(hoveredCards);
 updateDrawer(hoveredCards);
-console.log("Charts updated after resize.");
+
 
     });
   }
@@ -164,18 +165,47 @@ export function filterData(
   data,
   selectedFilters,
   selectedPriceAttribute,
-  freeTextSearch = ""
+  freeTextSearch = "",
+  groupedData = null
 ) {
-  // Pre-filter by free text
+  // Pre-filter by free text search first (on entire dataset or after group filtering)
+  let filteredSet = new Set(data);
+
+  if (groupedData) {
+    for (const [category, values] of Object.entries(selectedFilters)) {
+      if (!values || values.size === 0) continue;
+
+      const categoryGroup = groupedData[category];
+      if (!categoryGroup) continue;
+
+      let matched = new Set();
+      values.forEach(value => {
+        const normalizedValue = value.toLowerCase();
+        const group = categoryGroup.get(normalizedValue);
+        if (group) {
+          group.forEach(card => matched.add(card));
+        }
+      });
+
+      filteredSet = intersectSets(filteredSet, matched);
+    }
+  } else {
+    // Fallback to the slow version if groupedData is not provided
+    filteredSet = new Set(
+      data.filter(card => shouldIncludeCard(card, selectedFilters, []))
+    );
+  }
+
+  // Apply free text search
   if (freeTextSearch) {
     const searchLower = freeTextSearch.toLowerCase();
-    data = data.filter(card => {
+    filteredSet = new Set([...filteredSet].filter(card => {
       return (
         card.name?.toLowerCase().includes(searchLower) ||
         (card.keywords && card.keywords.some(k => k.toLowerCase().includes(searchLower))) ||
         (card.subtype && card.subtype.toLowerCase().includes(searchLower))
       );
-    });
+    }));
   }
 
   // Define contexts with their ignoreFilters
@@ -192,16 +222,25 @@ export function filterData(
     timeline: [],
   };
 
-  data.forEach(card => {
-    for (const [context, ignoreFilters] of Object.entries(contexts)) {
-      if (shouldIncludeCard(card, selectedFilters, ignoreFilters)) {
-        results[context].push(card);
-      }
+  for (const card of filteredSet) {
+    results.default.push(card);
+    if (shouldIncludeCard(card, selectedFilters, contexts.icicle)) {
+      results.icicle.push(card);
     }
-  });
-  console.log("Filtered data for all contexts:", results);
+    if (shouldIncludeCard(card, selectedFilters, contexts.timeline)) {
+      results.timeline.push(card);
+    }
+  }
+
+
   return results;
 }
+
+// Helper for intersecting two sets
+function intersectSets(setA, setB) {
+  return new Set([...setA].filter(x => setB.has(x)));
+}
+
 
 // Helper: test if a single card passes the filters (except those ignored)
 function shouldIncludeCard(card, selectedFilters, ignoreFilters) {
@@ -272,7 +311,70 @@ function hideLoader(delay = 0) {
   
 
   
-  
+  function buildGroupedData(data) {
+  const grouped = {
+    Originality: new Map(),
+    Rarity: new Map(),
+    Supertypes: new Map(),
+    Types: new Map(),
+    Subtypes: new Map(),
+    "Set Types": new Map(),
+    "Set Names": new Map(),
+    Year: new Map(),
+    IcicleColorGroups: new Map(),
+    IcicleColorIdentity: new Map(),
+    "Foil Status": new Map()
+  };
+
+  data.forEach(card => {
+    for (const category of Object.keys(grouped)) {
+      const values = extractCardValues(card, category);
+      values.forEach(value => {
+        if (!grouped[category].has(value)) {
+          grouped[category].set(value, []);
+        }
+        grouped[category].get(value).push(card);
+      });
+    }
+  });
+  return grouped;
+}
+
+
+
+function extractCardValues(card, category) {
+  switch (category) {
+    case "Originality":
+      return card.originality ? [card.originality.toLowerCase()] : [];
+    case "Rarity":
+      return card.rarity ? [card.rarity.toLowerCase()] : [];
+    case "Supertypes":
+      return card.supertype ? card.supertype.split(/[\s/]+/).map(v => v.trim().toLowerCase()) : [];
+    case "Types":
+      return card.type ? card.type.split(/[\s/]+/).map(v => v.trim().toLowerCase()) : [];
+    case "Subtypes":
+      return card.subtype ? card.subtype.split(/[\s/]+/).map(v => v.trim().toLowerCase()) : [];
+    case "Set Types":
+      return card.set_type ? [card.set_type.toLowerCase()] : [];
+    case "Set Names":
+      return card.set_name ? [card.set_name.toLowerCase()] : [];
+    case "Year":
+      if (!card.release_date) return [];
+      return [new Date(card.release_date).getFullYear().toString()];
+    case "IcicleColorGroups":
+      if (card.number_of_colours >= 4) return ["+4 colors"];
+      if (card.number_of_colours === 0) return ["colorless"];
+      return [`${card.number_of_colours} colors`];
+    case "IcicleColorIdentity":
+      if (!Array.isArray(card.color_identity) || card.color_identity.length === 0) return ["colorless"];
+      return [card.color_identity.sort().join("-")];
+    case "Foil Status":
+      return card.foil_status ? [card.foil_status.toLowerCase()] : [];
+    default:
+      return [];
+  }
+}
+
   function extractCardValue(card, category) {
     switch (category) {
       case "Keywords": return card.keywords;
@@ -312,10 +414,10 @@ function hideLoader(delay = 0) {
     freeTextSearch === lastInputs.freeTextSearch;
 
   if (inputsMatch && state.lastFilteredData) {
-    console.log("✅ Using cached filtered data!");
+
     return state.lastFilteredData;
   }
-console.log("❌ Recomputing filtered data...");
+
   const filteredResults = filterData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
 
   updateState({

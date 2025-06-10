@@ -66,79 +66,58 @@ function getNodeColor(price, minPrice, maxPrice) {
   return getDiscreteColor(percentage); 
 }
 
-export function createAlluvialChart(data, containerId, isUpdate = false, selectedPriceAttribute = "price_usd") {
+export function createAlluvialChart(data, containerId, isUpdate = false, selectedPriceAttribute = "price_eur") {
+const container = d3.select(containerId);
+const { width, height } = container.node().getBoundingClientRect();
+const svgWidth = width;
+const svgHeight = height;
+const screenSize = d3.select("body").node().getBoundingClientRect();
 
-  d3.select(containerId).selectAll("*").remove();
-
- 
-  const originalitySet = new Set();
-  const raritySet = new Set();
   
+const marginLeftOffset = getMarginLeftOffset(screenSize.width);
+const chartWidth = svgWidth * 0.85
+const chartHeight = svgHeight * 0.75
+const chartXOffset = (svgWidth - chartWidth) / 2 - 40; 
+const chartYOffset = (svgHeight - chartHeight) / 2; 
 
-
-  data.forEach(card => {
-    if (card.originality) {
-      originalitySet.add(card.originality.toLowerCase());
-    }
-    if (card.rarity) {
-      raritySet.add(card.rarity.toLowerCase());
-    }
+const margin = { top: 20, right: 60, bottom: 20, left: (svgWidth - chartWidth)/2 - marginLeftOffset }; 
+const originalitySet = new Set();
+const raritySet = new Set();
+data.forEach(card => {
+    if (card.originality) originalitySet.add(card.originality.toLowerCase());
+    if (card.rarity) raritySet.add(card.rarity.toLowerCase());
   });
-  
-  
-  const originalityCategories = Array.from(originalitySet).sort();
-  const rarityCategories = Array.from(raritySet).sort();
-  
-  
-  const origPriceSums = {};
-  const origPriceCounts = {};
-  originalityCategories.forEach(orig => {
-    origPriceSums[orig] = 0;
-    origPriceCounts[orig] = 0;
-  });
-  
-  const rarityPriceSums = {};
-  const rarityPriceCounts = {};
-  rarityCategories.forEach(rarity => {
-    rarityPriceSums[rarity] = 0;
-    rarityPriceCounts[rarity] = 0;
-  });
-  
-  
-  let linkCounts = {};
-  const linkPriceSums = {};
-  const linkPriceCounts = {};
 
-  const priceAttr = selectedPriceAttribute;
+const originalityCategories = Array.from(originalitySet).sort();
+const rarityCategories = Array.from(raritySet).sort();
+  
+const priceAttr = selectedPriceAttribute;
+const origPriceSums = {}, origPriceCounts = {},
+        rarityPriceSums = {}, rarityPriceCounts = {},
+        linkCounts = {}, linkPriceSums = {}, linkPriceCounts = {};
+  
+originalityCategories.forEach(o => (origPriceSums[o] = origPriceCounts[o] = 0));
+rarityCategories.forEach(r => (rarityPriceSums[r] = rarityPriceCounts[r] = 0));
 
-  data.forEach(card => {
-    const orig = card.originality ? card.originality.toLowerCase() : "";
-    const rarity = card.rarity ? card.rarity.toLowerCase() : "";
-    
-    if (originalitySet.has(orig) && raritySet.has(rarity)) {
-      const key = `${orig}|${rarity}`;
-      linkCounts[key] = (linkCounts[key] || 0) + 1;
-      
-      let price = parseFloat(card[priceAttr]);
 
-      if (!isNaN(price)) {
-        linkPriceSums[key] = (linkPriceSums[key] || 0) + price;
-        linkPriceCounts[key] = (linkPriceCounts[key] || 0) + 1;
-      }
-    }
-    
-    
-    let price = parseFloat(card[priceAttr]);
 
+
+   data.forEach(card => {
+    const orig = card.originality?.toLowerCase() || "";
+    const rarity = card.rarity?.toLowerCase() || "";
+    if (!originalitySet.has(orig) || !raritySet.has(rarity)) return;
+
+    const key = `${orig}|${rarity}`;
+    linkCounts[key] = (linkCounts[key] || 0) + 1;
+
+    const price = parseFloat(card[priceAttr]);
     if (!isNaN(price)) {
-      if (origPriceSums.hasOwnProperty(orig)) {
-        origPriceSums[orig] += price;
-        origPriceCounts[orig] += 1;
-      }
-      if (rarityPriceSums.hasOwnProperty(rarity)) {
-        rarityPriceSums[rarity] += price;
-        rarityPriceCounts[rarity] += 1;
-      }
+      linkPriceSums[key] = (linkPriceSums[key] || 0) + price;
+      linkPriceCounts[key] = (linkPriceCounts[key] || 0) + 1;
+      origPriceSums[orig] += price;
+      origPriceCounts[orig] += 1;
+      rarityPriceSums[rarity] += price;
+      rarityPriceCounts[rarity] += 1;
     }
   });
   
@@ -155,145 +134,87 @@ export function createAlluvialChart(data, containerId, isUpdate = false, selecte
   });
   
   
-  const origNodes = originalityCategories.map(orig => ({
-    name: orig,
-    avgPrice: origPriceCounts[orig] > 0 ? origPriceSums[orig] / origPriceCounts[orig] : 0
-  }));
+  const nodes = [
+    ...originalityCategories.map(o => ({
+      name: o,
+      avgPrice: origPriceCounts[o] ? origPriceSums[o] / origPriceCounts[o] : 0
+    })),
+    ...rarityCategories.map(r => ({
+      name: r,
+      avgPrice: rarityPriceCounts[r] ? rarityPriceSums[r] / rarityPriceCounts[r] : 0
+    }))
+  ].sort((a, b) => customOrder.indexOf(a.name) - customOrder.indexOf(b.name));
   
-  const rarityNodes = rarityCategories.map(rarity => ({
-    name: rarity,
-    avgPrice: rarityPriceCounts[rarity] > 0 ? rarityPriceSums[rarity] / rarityPriceCounts[rarity] : 0
-  }));
-  
-
-
-
-
-    const nodes = origNodes.concat(rarityNodes).sort((a, b) => {
-      return customOrder.indexOf(a.name) - customOrder.indexOf(b.name);
-  });
-  
-  const nodeIndexMap = {};
-nodes.forEach((node, index) => {
-    nodeIndexMap[node.name] = index;
-});
-
-
-  
-  const links = [];
-originalityCategories.forEach(orig => {
-    rarityCategories.forEach(rarity => {
-        const key = `${orig}|${rarity}`;
-        links.push({
-            source: nodeIndexMap[orig], 
-            target: nodeIndexMap[rarity], 
-            value: linkCounts[key],
-            avgPrice: linkPriceCounts[key] > 0 ? linkPriceSums[key] / linkPriceCounts[key] : 0
-        });
-    });
-});
+  const nodeIndexMap = Object.fromEntries(nodes.map((n, i) => [n.name, i]));
+  const links = originalityCategories.flatMap(orig =>
+    rarityCategories.map(rarity => {
+      const key = `${orig}|${rarity}`;
+      return {
+        source: nodeIndexMap[orig],
+        target: nodeIndexMap[rarity],
+        value: linkCounts[key] || 0,
+        avgPrice: linkPriceCounts[key] ? linkPriceSums[key] / linkPriceCounts[key] : 0
+      };
+    })
+  );
   
  
-  const container = d3.select(containerId).node();
-  const{width, height} = container.getBoundingClientRect();
-
   
-  const svgWidth = width;
-  const svgHeight = height;
 
- 
-  if (isUpdate) {
-    d3.select(containerId).select("svg").remove();
+ let svg = container.select("svg");
+  if (svg.empty()) {
+    svg = container.append("svg").attr("width", svgWidth).attr("height", svgHeight);
   }
-  
-  const screenSize = d3.select("body").node().getBoundingClientRect();
+  svg.selectAll("g").remove();
+  const sankeyGroup = svg.append("g").attr("transform", `translate(${chartXOffset}, ${chartYOffset})`);
 
-  
- const marginLeftOffset = getMarginLeftOffset(screenSize.width);
-const chartHeight = svgHeight *0.75
-const chartWidth = svgWidth * 0.85
-
-const margin = { top: 20, right: 60, bottom: 20, left: (svgWidth - chartWidth)/2 - marginLeftOffset }; 
-
-
-const chartXOffset = (svgWidth - chartWidth) / 2 - 40; 
-const chartYOffset = (svgHeight - chartHeight) / 2; 
-  
-  const svg = d3.select(containerId)
-  .append("svg")
-  .attr("width", svgWidth)
-  .attr("height", svgHeight)
-  .append("g")
-  .attr("transform", `translate(${chartXOffset}, ${chartYOffset})`); 
- ;
-
-
- const sankeyGroup = svg.append("g");
- 
-
-  const sankeyGenerator = d3.sankey()
-    .nodeWidth(20)
-    .nodePadding(20)
-    .extent([[0, 0], [chartWidth, chartHeight]]);
-  
-  const sankeyData = sankeyGenerator({
-    nodes: nodes.map(d => Object.assign({}, d)),
-    links: links.map(d => Object.assign({}, d))
+  const sankey = d3.sankey().nodeWidth(20).nodePadding(20).extent([[0, 0], [chartWidth, chartHeight]]);
+  const sankeyData = sankey({
+    nodes: nodes.map(d => ({ ...d })),
+    links: links.map(d => ({ ...d }))
   });
-  
 
-const leftNodes = sankeyData.nodes.filter(n => n.x0 === d3.min(sankeyData.nodes, d => d.x0));
-
-
+  const leftNodes = sankeyData.nodes.filter(n => n.x0 === d3.min(sankeyData.nodes, d => d.x0));
 const totalLeftHeight = d3.max(leftNodes, d => d.y1) - d3.min(leftNodes, d => d.y0);
-
-
 const offset = (chartHeight - totalLeftHeight) / 2;
-
-
 leftNodes.forEach(node => {
   node.y0 += offset;
   node.y1 += offset;
 });
-sankeyGenerator.update(sankeyData);
-
-
-  const tooltip = d3.select("#tooltip");
+sankey.update(sankeyData); 
   
+const allPrices = [...sankeyData.nodes.map(d => d.avgPrice), ...sankeyData.links.map(d => d.avgPrice)];
+const priceRange = { min: d3.min(allPrices), max: d3.max(allPrices) };
 
-  const priceRangeLinks = getPriceRange(sankeyData.links);
-  const priceRangeNodes = getPriceRange(sankeyData.nodes);  
+const tooltip = d3.select("#tooltip");
 
-  const allPrices = [...sankeyData.nodes.map(d => d.avgPrice), ...sankeyData.links.map(d => d.avgPrice)];
-  const sharedPriceRange = {
-    min: d3.min(allPrices),
-    max: d3.max(allPrices)
-};
- 
-      sankeyGroup.append("g")
-      .attr("class", "links")
-      .selectAll("path")
-      .data(sankeyData.links.sort((a, b) => b.width - a.width)) 
-      .enter()
-      .append("path")
-      .attr("d", d3.sankeyLinkHorizontal())
-      .call(sel=> applyColorScale(sel, "stroke", sharedPriceRange))
-      .attr("stroke-opacity", 0.5)
-      .attr("fill", "none")
-      .attr("stroke-width", d => Math.max(1, d.width))
-      .on("mouseover", function(event, d) {
-        tooltip.style("display", "block")
-               .html(`From: ${d.source.name}<br>To: ${d.target.name}<br>Cards: ${d.value}<br>Avg Price: $${d.avgPrice.toFixed(2)}`);
-    
-        
-        d3.selectAll(".nodes rect")
-          .filter(node => node.name === d.source.name || node.name === d.target.name)
-          .transition()
-          .duration(200)
-          .attr("transform", d => `translate(${d.x0 + (d.x1 - d.x0) / 2}, ${d.y0 + (d.y1 - d.y0) / 2}) scale(1.2) translate(${- (d.x0 + (d.x1 - d.x0) / 2)}, ${- (d.y0 + (d.y1 - d.y0) / 2)})`)
-          .attr("stroke-width", 3); 
+sankeyGroup.selectAll(".link")
+    .data(sankeyData.links, d => `${d.source.name}|${d.target.name}`)
+    .data(sankeyData.links.sort((a, b) => b.width - a.width))
+    .join(
+      enter => enter.append("path")
+        .attr("class", "link")
+        .attr("d", d3.sankeyLinkHorizontal())
+        .attr("fill", "none")
+        .attr("stroke-opacity", 0.5)
+        .attr("stroke-width", d => Math.max(1, d.width))
+        .call(sel => applyColorScale(sel, "stroke", priceRange))
+.on("mouseover", function(event, d) {
+  tooltip.style("display", "block")
+         .html(`From: ${d.source.name}<br>To: ${d.target.name}<br>Cards: ${d.value}<br>Avg Price: $${d.avgPrice.toFixed(2)}`);
+  
+  d3.selectAll("g.node rect")
+    .filter(node => node.name === d.source.name || node.name === d.target.name)
+    .transition()
+    .duration(200)
+    .attr("transform", node => {
+      const centerX = node.x0 + (node.x1 - node.x0) / 2;
+      const centerY = node.y0 + (node.y1 - node.y0) / 2;
+      return `translate(${centerX}, ${centerY}) scale(1.2) translate(${-centerX}, ${-centerY})`;
     })
-    .on("mousemove", function(event) {
+    .attr("stroke-width", 3);
+})
+        .on("mousemove", function(event) {
   const tooltipWidth = tooltip.node().offsetWidth;
   const tooltipHeight = tooltip.node().offsetHeight;
 
@@ -311,19 +232,17 @@ sankeyGenerator.update(sankeyData);
     .style("left", `${x}px`)
     .style("top", `${y}px`);
 })
+.on("mouseout", function(event, d) {
+  tooltip.style("display", "none");
 
-    .on("mouseout", function(event, d) {
-        tooltip.style("display", "none");
-    
-        
-        d3.selectAll(".nodes rect")
-          .filter(node => node.name === d.source.name || node.name === d.target.name)
-          .transition()
-          .duration(200)
-          .attr("transform", "scale(1)") 
-          .attr("stroke-width", 1); 
-    })
-    .on("click", function(event, d) {
+  d3.selectAll("g.node rect")
+    .filter(node => node.name === d.source.name || node.name === d.target.name)
+    .transition()
+    .duration(200)
+    .attr("transform", null)
+    .attr("stroke-width", 1);
+})
+        .on("click", function(event, d) {
   const key = `${d.source.name}|${d.target.name}`;
 
   if (localLinkFilters.has(key)) {
@@ -334,9 +253,7 @@ sankeyGenerator.update(sankeyData);
 
   applyLocalLinkAndNodeFilter();
 })
-
-
-    .on("dblclick", function(event, d) {
+        .on("dblclick", function(event, d) {
       const currentState = getState();
       const updatedFilters = {};
     
@@ -364,7 +281,18 @@ sankeyGenerator.update(sankeyData);
       updateState({ selectedFilters: updatedFilters });
       updateFilterPanel(getState().originalData, updatedFilters); 
 
-    });
+    }),
+      update => update
+        .attr("d", d3.sankeyLinkHorizontal())
+        .attr("stroke-width", d => Math.max(1, d.width))
+        .call(sel => applyColorScale(sel, "stroke", priceRange)),
+      exit => exit.remove()
+    );
+
+
+
+
+
     
     
   function applyLocalLinkAndNodeFilter() {
@@ -380,7 +308,7 @@ sankeyGenerator.update(sankeyData);
   });
 
 
-  d3.selectAll(".links path").each(function(d) {
+  d3.selectAll("path.link").each(function(d) {
     const key = `${d.source.name}|${d.target.name}`;
     const show = localLinkFilters.size === 0 || localLinkFilters.has(key);
 
@@ -390,7 +318,7 @@ sankeyGenerator.update(sankeyData);
   });
 
 
-  d3.selectAll(".nodes rect").each(function(d) {
+  d3.selectAll("g.node rect").each(function(d) {
     const isLeft = d.x0 === 0;
     const show = localLinkFilters.size === 0 ||
                  (isLeft && activeSources.has(d.name)) ||
@@ -402,7 +330,7 @@ sankeyGenerator.update(sankeyData);
   });
 
 
-  d3.selectAll(".nodes text").each(function(d) {
+  d3.selectAll("g.node text").each(function(d) {
     const isLeft = d.x0 === 0;
     const show = localLinkFilters.size === 0 ||
                  (isLeft && activeSources.has(d.name)) ||
@@ -416,26 +344,24 @@ sankeyGenerator.update(sankeyData);
 
 
   
-  const node = sankeyGroup.append("g")
-    .attr("class", "nodes")
-    .selectAll("g")
-    .data(sankeyData.nodes)
-    .enter()
-    .append("g");
-  
-  
-  node.append("rect")
-    .attr("x", d => d.x0)
-    .attr("y", d => d.y0)
-    .attr("width", d => d.x1 - d.x0)
-    .attr("height", d => d.y1 - d.y0)
-    .call(sel => applyColorScale(sel, "fill", sharedPriceRange))
-    .attr("stroke", "#000")
-    .on("mouseover", function(event, d) {
+const nodeGroups = sankeyGroup.selectAll(".node")
+    .data(sankeyData.nodes, d => d.name)
+    .join(
+      enter => {
+        const g = enter.append("g").attr("class", "node");
+        g.append("rect")
+          .attr("x", d => Math.round(d.x0))
+          .attr("y", d => Math.round(d.y0))
+          .attr("width", d => d.x1 - d.x0)
+          .attr("height", d => d.y1 - d.y0)
+          .style("shape-rendering", "crispEdges")
+          .attr("stroke", "#000")
+          .call(sel => applyColorScale(sel, "fill", priceRange))
+          .on("mouseover", function(event, d) {
       tooltip.style("display", "block")
              .html(`Category: ${d.name}<br>Total cards: ${d.value}<br>Avg Price: $${d.avgPrice.toFixed(2)}`);
     })
-    .on("mousemove", function(event) {
+          .on("mousemove", function(event) {
   const tooltipWidth = tooltip.node().offsetWidth;
   const tooltipHeight = tooltip.node().offsetHeight;
 
@@ -453,11 +379,10 @@ sankeyGenerator.update(sankeyData);
     .style("left", `${x}px`)
     .style("top", `${y}px`);
 })
-
-    .on("mouseout", function() {
+          .on("mouseout", function() {
       tooltip.style("display", "none");
     })
-.on("click", function(event, d) {
+          .on("click", function(event, d) {
   const category = d.x0 === 0 ? "Originality" : "Rarity";
   const name = d.name;
 
@@ -471,7 +396,7 @@ sankeyGenerator.update(sankeyData);
   applyLocalChartFilter(); 
 })
 
-    .on("dblclick", function(event, d) {
+          .on("dblclick", function(event, d) {
       const category = d.x0 === 0 ? "Originality" : "Rarity"; 
       const currentState = getState();
       const updatedFilters = {};
@@ -491,53 +416,25 @@ sankeyGenerator.update(sankeyData);
       updateFilterPanel(getState().originalData, updatedFilters); 
 
     });
-  
-    function applyLocalChartFilter() {
-  const origSet = localChartFilters.Originality;
-  const raritySet = localChartFilters.Rarity;
 
-  d3.selectAll(".nodes rect").each(function(d) {
-    const isOrig = d.x0 === 0;
-    const category = isOrig ? "Originality" : "Rarity";
-    const filterSet = isOrig ? origSet : raritySet;
-    const match = filterSet.size === 0 || filterSet.has(d.name);
-
-    d3.select(this)
-      .classed("alluvial-hidden", !match)
-      .classed("alluvial-visible", match);
-  });
-
-  d3.selectAll(".links path").each(function(d) {
-    const origMatch = origSet.size === 0 || origSet.has(d.source.name);
-    const rarityMatch = raritySet.size === 0 || raritySet.has(d.target.name);
-    const match = origMatch && rarityMatch;
-
-    d3.select(this)
-      .classed("alluvial-hidden", !match)
-      .classed("alluvial-visible", match);
-  });
-}
-
-  
-    node.append("text")
-  .attr("x", d => {
+        g.append("text")
+          .attr("x", d => {
       const centerX = (d.x0 + d.x1) / 2;
       const isLeftSide = centerX < width / 2;
       return isLeftSide ? d.x0 : d.x1;
   })
-  .attr("y", d => d.y0 - 5)
-  .attr("dy", "0em")
-  .attr("text-anchor", d => {
+          .attr("y", d => d.y0 - 5)
+          .attr("text-anchor", d => {
       const centerX = (d.x0 + d.x1) / 2;
       const isLeftSide = centerX < width / 2;
       return isLeftSide ? "start" : "end";
   })
-  .text(d => d.name)
-  .attr("font-size", "12px")
-  .attr("fill", "#000")
-  .style("cursor", "help")
-  .style("pointer-events", "auto") 
-  .on("mouseover", function(event, d) {
+          .text(d => d.name)
+          .attr("font-size", "12px")
+          .style("shape-rendering", "crispEdges")
+          .attr("fill", "#000")
+          .style("pointer-events", "auto")
+          .on("mouseover", function(event, d) {
     const explanations = {
       "original": `<strong>Original Card</strong><br>This is the first-ever printing of a card, typically from its debut set.`,
       "reprint": `<strong>Reprint</strong><br>A card that has been printed again in a later set without functional changes.`,
@@ -551,8 +448,7 @@ sankeyGenerator.update(sankeyData);
         .html(explanations[key]);
     }
   })
-  
-  .on("mousemove", function(event) {
+          .on("mousemove", function(event) {
   const tooltipWidth = tooltip.node().offsetWidth;
   const tooltipHeight = tooltip.node().offsetHeight;
 
@@ -570,27 +466,59 @@ sankeyGenerator.update(sankeyData);
     .style("left", `${x}px`)
     .style("top", `${y}px`);
 })
-
-  .on("mouseout", function() {
+          .on("mouseout", function() {
     tooltip.style("display", "none");
   });
+        return g;
+      },
+      update => update.select("rect")
+        .attr("x", d => d.x0)
+        .attr("y", d => d.y0)
+        .attr("width", d => d.x1 - d.x0)
+        .attr("height", d => d.y1 - d.y0)
+        .call(sel => applyColorScale(sel, "fill", priceRange)),
+      exit => exit.remove()
+    );
+  
+function applyLocalChartFilter() {
+  const origSet = localChartFilters.Originality;
+  const raritySet = localChartFilters.Rarity;
 
+  d3.selectAll("g.node rect").each(function(d) {
+    const isOrig = d.x0 === 0;
+    const category = isOrig ? "Originality" : "Rarity";
+    const filterSet = isOrig ? origSet : raritySet;
+    const match = filterSet.size === 0 || filterSet.has(d.name);
 
+    d3.select(this)
+      .classed("alluvial-hidden", !match)
+      .classed("alluvial-visible", match);
+  });
 
+  d3.selectAll("path.link").each(function(d) {
+    const origMatch = origSet.size === 0 || origSet.has(d.source.name);
+    const rarityMatch = raritySet.size === 0 || raritySet.has(d.target.name);
+    const match = origMatch && rarityMatch;
 
+    d3.select(this)
+      .classed("alluvial-hidden", !match)
+      .classed("alluvial-visible", match);
+  });
+}
 
+  
 
   
   const numBins = 5; 
 
   
-  const priceStep = (sharedPriceRange.max - sharedPriceRange.min) / numBins;
+  const priceStep = (priceRange.max - priceRange.min) / numBins;
 
   
   const symbol = formatPriceSymbol(priceAttr);
 
   const dynamicLegendData = Array.from({ length: numBins }, (_, i) => ({
-    label: `${symbol ? symbol + " " : ""}${(sharedPriceRange.min + (i + 1) * priceStep).toFixed(2)}`,
+    label: `${symbol ? symbol + " " : ""}${(priceRange.min + (i + 1) * priceStep).toFixed(2)}`,
     color: getDiscreteColor(i * (100 / numBins))
   })).reverse();
   
@@ -599,8 +527,8 @@ sankeyGenerator.update(sankeyData);
 
     
   
-const legendX = margin.left + chartWidth;  
-const legendY = margin.top - 20  
+const legendX = svgWidth - 87 ;   
+const legendY = 43
 const rectHeight = 20;
 const extraSpacing = 0;
 
@@ -614,6 +542,7 @@ const legend = svg.append("g")
     .text("Avg Price")
     .attr("fill", "#000")
     .style("font-size", "12px")
+    .style("shape-rendering", "crispEdges")
     .style("font-weight", "bold");
 
 legend.append("text")
@@ -622,6 +551,7 @@ legend.append("text")
     .text("(" + formatPriceLabel(priceAttr)+ ")")
     .attr("fill", "#000")
     .style("font-size", "12px")
+    .style("shape-rendering", "crispEdges")
     .style("font-weight", "bold");
 
 
@@ -632,6 +562,7 @@ dynamicLegendData.forEach((interval, i) => {
     legendEntry.append("rect")
         .attr("width", 20)
         .attr("height", rectHeight)
+        .style("shape-rendering", "crispEdges")
         .attr("fill", interval.color)
         .attr("stroke", "#000");
 
@@ -640,7 +571,8 @@ dynamicLegendData.forEach((interval, i) => {
         .attr("y",rectHeight-16)
         .text(interval.label) 
         .attr("fill", "#000")
-        .style("font-size", "12px");
+        .style("font-size", "12px")
+        .style("shape-rendering", "crispEdges");
 });
 
 
@@ -652,35 +584,33 @@ zeroEntry.append("text")
     .attr("y", rectHeight - 16)
     .text(`${symbol} 0.00`)
     .attr("fill", "#000")
-    .style("font-size", "12px");
+    .style("font-size", "12px")
+    .style("shape-rendering", "crispEdges");
 
 }
-export function highlightAlluvialAllElements(hovered) {
-  d3.selectAll(".nodes rect, .links path").classed("highlighted", function(d) {
-    if (!hovered) return false;
 
-    if (this.tagName === "rect") {
-      return d.name === hovered.originality?.toLowerCase() || d.name === hovered.rarity?.toLowerCase();
-    }
 
-    if (this.tagName === "path") {
-      return d.source?.name === hovered.originality?.toLowerCase() &&
-             d.target?.name === hovered.rarity?.toLowerCase();
-    }
+export function highlightAlluvialElements(hoveredCards) {
+  if (!hoveredCards || hoveredCards.length === 0) {
+    // Remove all highlights if no hovered cards
+    d3.selectAll("g.node rect").classed("highlighted", false);
+    return;
+  }
 
-    return false;
+  // Build a set of hovered rarity categories
+  const hoveredRarities = new Set(
+    hoveredCards.map(card => card.rarity?.toLowerCase()).filter(Boolean)
+  );
+
+
+  // Highlight only the rarity nodes (x0 !== 0)
+  d3.selectAll("g.node rect").classed("highlighted", d => {
+    const isRarityNode = d.x0 !== 0;
+    return isRarityNode && hoveredRarities.has(d.name);
   });
 }
 
-export function highlightAlluvialElements(hoveredCards) {
-  const hoveredRarities = new Set(
-    (hoveredCards || []).map(card => card.rarity?.toLowerCase()).filter(Boolean)
-  );
 
-  d3.selectAll(".nodes rect").classed("highlighted", d =>
-    hoveredRarities.has(d.name)
-  );
-}
 
 
 

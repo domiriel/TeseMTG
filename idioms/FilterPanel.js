@@ -72,7 +72,7 @@ export function createFilterPanel(data, containerId, selectedFiltersFromState, i
     for (const key in filters) {
         filters[key] = Array.from(filters[key].entries()).sort((a, b) => a[0].localeCompare(b[0]));
     }
-console.log("A")
+
 const { default: filteredCards } = getFilteredData(data, selectedFilters);
 const uniqueCardNames = Array.from(new Set(filteredCards.map(card => card.name))).sort();
 
@@ -304,7 +304,7 @@ let newHoveredCards = isAlreadySelected
                     updateFilterStyles();
                     clearTimeout(window._filterPanelTimeout);
                     window._filterPanelTimeout = setTimeout(() => {
-                        console.log("[pills] Selected filters now:", [...selectedSet]);
+
                         updateFilterPanel(data);
                     }, 50);
                 });
@@ -483,7 +483,7 @@ wrapper.append("input")
 export function updateFilterPanel(originalData, selectedFilters, containerId = ".FilterPanel") {
     
     selectedFilters = selectedFilters || {};
-console.log("B")
+
 const { default: filteredCards } = getFilteredData(originalData, selectedFilters);
 
     const uniqueCardNames = Array.from(new Set(filteredCards.map(card => card.name))).sort();

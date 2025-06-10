@@ -136,7 +136,7 @@ body {
 
 
 
-  .nodes rect.highlighted {
+  .node rect.highlighted {
     stroke: orange;
     stroke-width: 3px;
   }
