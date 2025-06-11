@@ -16,7 +16,7 @@ function loadCardData() {
       return d3.json(googleDriveURL);
     });
 }
-
+let isUpdatingFilteredData = false;
 function init() {
   showLoader();
   if (!d3.select("#tooltip").node()) {
@@ -35,7 +35,8 @@ function init() {
     d3.json("./data/dataset_card_details.json").then(function (data) {
       const originalData = JSON.parse(JSON.stringify(data));  
       const groupedData = buildGroupedData(originalData);
-      updateState({ originalData });
+      console.log("Grouped data built:", groupedData);
+      updateState({ originalData, groupedData });
     let hoverTimeout = null;
       getState().onChange("hoveredCards", (hoveredCards) => {
       if (hoverTimeout) clearTimeout(hoverTimeout);
@@ -64,8 +65,8 @@ function init() {
       });
  
       const { selectedFilters, selectedPriceAttribute, freeTextSearch } = getState();
-const { default: filtered, icicle: IcicleFiltered, timeline: TimelineFiltered } = 
-  getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
+      const { default: filtered, icicle: IcicleFiltered, timeline: TimelineFiltered } = 
+      getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
 
 
   
@@ -89,6 +90,7 @@ const { default: filtered, icicle: IcicleFiltered, timeline: TimelineFiltered } 
         hideLoader();
       subscribe((state) => {
         showLoader();
+        if (isUpdatingFilteredData) return;
         const context = state.updateContext || "default";
         const { selectedFilters, selectedPriceAttribute, freeTextSearch } = state;
 
@@ -168,72 +170,82 @@ export function filterData(
   freeTextSearch = "",
   groupedData = null
 ) {
-  // Pre-filter by free text search first (on entire dataset or after group filtering)
-  let filteredSet = new Set(data);
-
-  if (groupedData) {
-    for (const [category, values] of Object.entries(selectedFilters)) {
-      if (!values || values.size === 0) continue;
-
-      const categoryGroup = groupedData[category];
-      if (!categoryGroup) continue;
-
-      let matched = new Set();
-      values.forEach(value => {
-        const normalizedValue = value.toLowerCase();
-        const group = categoryGroup.get(normalizedValue);
-        if (group) {
-          group.forEach(card => matched.add(card));
-        }
-      });
-
-      filteredSet = intersectSets(filteredSet, matched);
-    }
-  } else {
-    // Fallback to the slow version if groupedData is not provided
-    filteredSet = new Set(
-      data.filter(card => shouldIncludeCard(card, selectedFilters, []))
-    );
-  }
-
-  // Apply free text search
-  if (freeTextSearch) {
-    const searchLower = freeTextSearch.toLowerCase();
-    filteredSet = new Set([...filteredSet].filter(card => {
-      return (
-        card.name?.toLowerCase().includes(searchLower) ||
-        (card.keywords && card.keywords.some(k => k.toLowerCase().includes(searchLower))) ||
-        (card.subtype && card.subtype.toLowerCase().includes(searchLower))
-      );
-    }));
-  }
-
-  // Define contexts with their ignoreFilters
-  const contexts = {
-    default: [],
-    icicle: ["IcicleColorGroups", "IcicleColorIdentity"],
-    timeline: ["Set Types", "Set Names", "Year"],
+  // Prepare context-specific filter sets
+  const contextFilters = {
+    default: selectedFilters,
+    icicle: omitFilters(selectedFilters, ["IcicleColorGroups", "IcicleColorIdentity"]),
+    timeline: omitFilters(selectedFilters, ["Set Types", "Set Names", "Year"]),
   };
 
-  // Prepare filtered results for each context
   const results = {
     default: [],
     icicle: [],
     timeline: [],
   };
 
-  for (const card of filteredSet) {
-    results.default.push(card);
-    if (shouldIncludeCard(card, selectedFilters, contexts.icicle)) {
-      results.icicle.push(card);
-    }
-    if (shouldIncludeCard(card, selectedFilters, contexts.timeline)) {
-      results.timeline.push(card);
-    }
-  }
+  // For each context, apply filtering separately
+  Object.entries(contextFilters).forEach(([context, filters]) => {
+    let filteredSet = new Set(data);
 
+    if (groupedData) {
+      console.log(selectedFilters["IcicleColorGroups"], selectedFilters["IcicleColorIdentity"]);
+      for (const [category, values] of Object.entries(filters)) {
+        if (!values || values.size === 0) continue;
+        const categoryGroup = groupedData[category];
+        if (!categoryGroup) continue;
+
+        let matched = new Set();
+        values.forEach(value => {
+          const normalizedValue = value.toLowerCase();
+          const group = categoryGroup.get(normalizedValue);
+          if (group) {
+            group.forEach(card => matched.add(card));
+          }
+        });
+
+        filteredSet = intersectSets(filteredSet, matched);
+      }
+    } else {
+      filteredSet = new Set(
+        data.filter(card => shouldIncludeCard(card, filters))
+      );
+    }
+
+    // Apply free text search
+    if (freeTextSearch) {
+      const searchLower = freeTextSearch.toLowerCase();
+      filteredSet = new Set([...filteredSet].filter(card => {
+        return (
+          card.name?.toLowerCase().includes(searchLower) ||
+          (card.keywords && card.keywords.some(k => k.toLowerCase().includes(searchLower))) ||
+          (card.subtype && card.subtype.toLowerCase().includes(searchLower))
+        );
+      }));
+    }
+
+    // Save results
+    results[context] = Array.from(filteredSet);
+  });
+
+  console.log("Filtered results:", {
+    default: results.default.length,
+    icicle: results.icicle.length,
+    timeline: results.timeline.length
+  });
 
   return results;
+}
+
+
+// Helper to create a copy of selectedFilters omitting some categories
+function omitFilters(filters, omitKeys) {
+  const result = {};
+  for (const [key, value] of Object.entries(filters)) {
+    if (!omitKeys.includes(key)) {
+      result[key] = value;
+    }
+  }
+  return result;
 }
 
 // Helper for intersecting two sets
@@ -243,19 +255,21 @@ function intersectSets(setA, setB) {
 
 
 // Helper: test if a single card passes the filters (except those ignored)
-function shouldIncludeCard(card, selectedFilters, ignoreFilters) {
+function shouldIncludeCard(card, selectedFilters) {
   // IcicleColorGroups
-  if (selectedFilters["IcicleColorGroups"]?.size > 0 && !ignoreFilters.includes("IcicleColorGroups")) {
-    const groupLabel = card.number_of_colours >= 4
+  if (selectedFilters["IcicleColorGroups"]?.size > 0) {
+    const groupLabel =( card.number_of_colours >= 4
       ? "+4 Colors"
+      : card.number_of_colours == 1 ? "1 Color"
       : card.number_of_colours === 0
         ? "Colorless"
-        : `${card.number_of_colours} Colors`;
-    if (!selectedFilters["IcicleColorGroups"].has(groupLabel)) return false;
+        : `${card.number_of_colours} Colors`).toLowerCase();
+    console.log("FilterSelected:", selectedFilters["IcicleColorGroups"], "Group label:", groupLabel);
+    if (!selectedFilters["IcicleColorGroups"].has(groupLabel.toLowerCase())) return false;
   }
 
   // IcicleColorIdentity
-  if (selectedFilters["IcicleColorIdentity"]?.size > 0 && !ignoreFilters.includes("IcicleColorIdentity")) {
+  if (selectedFilters["IcicleColorIdentity"]?.size > 0) {
     const identity = Array.isArray(card.color_identity)
       ? card.color_identity.sort().join("-") || "Colorless"
       : "Colorless";
@@ -263,7 +277,7 @@ function shouldIncludeCard(card, selectedFilters, ignoreFilters) {
   }
 
   // Year
-  if (selectedFilters["Year"]?.size > 0 && !ignoreFilters.includes("Year")) {
+  if (selectedFilters["Year"]?.size > 0) {
     const releaseYear = new Date(card.release_date).getFullYear().toString();
     if (!selectedFilters["Year"].has(releaseYear)) return false;
   }
@@ -271,7 +285,6 @@ function shouldIncludeCard(card, selectedFilters, ignoreFilters) {
   // Other categories
   for (const [category, values] of Object.entries(selectedFilters)) {
     if (!values || values.size === 0) continue;
-    if (ignoreFilters.includes(category)) continue;
 
     const cardValue = extractCardValue(card, category);
     if (!cardValue) return false;
@@ -289,6 +302,7 @@ function shouldIncludeCard(card, selectedFilters, ignoreFilters) {
 
   return true;
 }
+
 
   
   
@@ -363,11 +377,12 @@ function extractCardValues(card, category) {
       return [new Date(card.release_date).getFullYear().toString()];
     case "IcicleColorGroups":
       if (card.number_of_colours >= 4) return ["+4 colors"];
+      if (card.number_of_colours === 1) return ["1 color"];
       if (card.number_of_colours === 0) return ["colorless"];
       return [`${card.number_of_colours} colors`];
     case "IcicleColorIdentity":
       if (!Array.isArray(card.color_identity) || card.color_identity.length === 0) return ["colorless"];
-      return [card.color_identity.sort().join("-")];
+      return [card.color_identity.sort().join("-").toLowerCase()];
     case "Foil Status":
       return card.foil_status ? [card.foil_status.toLowerCase()] : [];
     default:
@@ -407,7 +422,7 @@ function extractCardValues(card, category) {
   export function getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch = "") {
   const state = getState();
   const lastInputs = state.lastFilterInputs || {};
-
+  const groupedData = state.groupedData || buildGroupedData(originalData);
   const inputsMatch = 
     shallowCompareFilters(selectedFilters, lastInputs.selectedFilters) &&
     selectedPriceAttribute === lastInputs.selectedPriceAttribute &&
@@ -418,7 +433,9 @@ function extractCardValues(card, category) {
     return state.lastFilteredData;
   }
 
-  const filteredResults = filterData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
+  isUpdatingFilteredData = true;
+
+  const filteredResults = filterData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch, groupedData);
 
   updateState({
     lastFilterInputs: { 
@@ -428,7 +445,7 @@ function extractCardValues(card, category) {
     },
     lastFilteredData: filteredResults
   });
-
+isUpdatingFilteredData = false;
   return filteredResults;
 }
 

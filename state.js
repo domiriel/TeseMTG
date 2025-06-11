@@ -17,7 +17,11 @@ const state = {
     hoveredCards: [],
     updateContext: null,
     originalData: null,
+    groupedData: null,
     freeTextSearch: "",
+
+    lastFilterInputs: null,
+  lastFilteredData: null
   };
   
   const globalListeners = new Set();      // .subscribe()
@@ -125,5 +129,7 @@ export function resetState() {
     selectedPriceAttribute: "price_eur",
     hoveredCards: [],
     updateContext: null,
+    lastFilterInputs: null,
+    lastFilteredData: null
   });
 }

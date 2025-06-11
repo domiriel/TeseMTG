@@ -1,7 +1,7 @@
 
 import { updateState, getState } from "../state.js";
 let globalRects = null;  
-let clickTimeout = null;
+let clickTimer = null;
 
 const colorScale = [
     { range: [0, 20], color: "#efe6dc" },
@@ -240,17 +240,22 @@ const levelHeight = chartHeight / depth;
         .attr("fill", d => d.data.color)
         .style("cursor", "pointer")
         .on("click", function(event, d) {
-
-    clearTimeout(clickTimeout);
-    clickTimeout = setTimeout(() => {
-        clicked(event, d, false);  
-    }, 150); 
-})
-.on("dblclick", function(event, d) {
-
-    clearTimeout(clickTimeout);
-    clickedFilter(event, d);  
-})
+    if (clickTimer) {
+      clearTimeout(clickTimer);
+      clickTimer = null;
+    }
+    clickTimer = setTimeout(() => {
+      clicked(event, d, false); // single-click
+      clickTimer = null;
+    }, 250);
+  })
+  .on("dblclick", function(event, d) {
+    if (clickTimer) {
+      clearTimeout(clickTimer);
+      clickTimer = null;
+    }
+    clickedFilter(event, d); // double-click
+  })
 
 
         
@@ -416,7 +421,7 @@ const levelHeight = chartHeight / depth;
     const newFilters = structuredClone(currentFilters);
 
     const isAlreadySelected =
-    (d.depth === 1 && currentFilters.IcicleColorGroups?.has(d.data.name)) ||
+    (d.depth === 1 && currentFilters.IcicleColorGroups?.has(d.data.name.toLowerCase())) ||
     (d.depth === 2 && currentFilters.IcicleColorIdentity?.has(d.data.name));
 
 if (isAlreadySelected) {
@@ -424,9 +429,10 @@ if (isAlreadySelected) {
     newFilters.IcicleColorIdentity = new Set();
 } else {
     if (d.depth === 1) {
-        newFilters.IcicleColorGroups = new Set([d.data.name]);
+        newFilters.IcicleColorGroups = new Set([d.data.name.toLowerCase()]);
         newFilters.IcicleColorIdentity = new Set(); 
     } else if (d.depth === 2) {
+        console.log("Clicked on color identity:", d.data.name);
         newFilters.IcicleColorIdentity = new Set([d.data.name]);
         newFilters.IcicleColorGroups = new Set(); 
     }
