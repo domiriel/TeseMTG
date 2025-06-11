@@ -18,6 +18,7 @@
     <script type="module" src="./idioms/LineChart.js"></script>
     <script type="module" src="./idioms/FilterPanel.js"></script>
     <script type="module" src="./idioms/HiddenDrawer.js"></script>
+    <script type="module" src ="idioms/LoadingAnimation.js"></script>
   </head>
   <body>
     <div class="container">
@@ -25,7 +26,10 @@
       <div class="TimelineView"></div>
       <div class="Title">
         <span class="dashboard-title">MTG-Vis</span>
-        <div id="inlineLoader" class="spinner" style="display: none;"></div>
+        <div id="inlineLoader"  style="display: none;">
+          <div class="spinner"></div>
+          <span class="loader-text">Loading...</span>
+        </div>
       </div>
       <div class="ISTLogo"></div>
       <div class="IcicleChart"></div>  <!-- Previously div5 -->

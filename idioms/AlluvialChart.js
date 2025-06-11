@@ -40,16 +40,14 @@ function formatPriceLabel(priceAttr) {
   
 
 
+const infoTooltipText = `
+<strong>Chart Interactions:</strong><br>
+• <strong>Click</strong> on a node or link: temporarily filter the chart.<br>
+• <strong>Double-click</strong> on a node or link: apply a global filter to the dataset.<br>
+• <strong>Hover</strong> on nodes or links: see details and highlights.<br>
+`;
 
 
-
-function getPriceRange(data) {
-  const prices = data.map(d => d.avgPrice).filter(price => !isNaN(price));
-  return {
-      min: d3.min(prices),
-      max: d3.max(prices)
-  };
-}
 
 
 function getMarginLeftOffset(screenWidth) {
@@ -167,6 +165,51 @@ rarityCategories.forEach(r => (rarityPriceSums[r] = rarityPriceCounts[r] = 0));
   }
   svg.selectAll("g").remove();
   const sankeyGroup = svg.append("g").attr("transform", `translate(${chartXOffset}, ${chartYOffset})`);
+
+const infoGroup = svg.append("g")
+  .attr("class", "info-icon")
+  .attr("transform", `translate(20, 30)`);
+
+infoGroup.append("circle")
+  .attr("r", 10)
+  .attr("fill", "#ccc")
+  .attr("stroke", "#000");
+
+infoGroup.append("text")
+  .attr("text-anchor", "middle")
+  .attr("dy", "0.35em")
+  .attr("font-size", "12px")
+  .attr("font-weight", "bold")
+  .text("i")
+  .attr("pointer-events", "none");
+
+
+  infoGroup
+  .on("mouseover", function(event) {
+    tooltip.style("display", "block")
+           .html(infoTooltipText);
+  })
+  .on("mousemove", function(event) {
+    const tooltipWidth = tooltip.node().offsetWidth;
+    const tooltipHeight = tooltip.node().offsetHeight;
+
+    let x = event.pageX + 10;
+    let y = event.pageY + 10;
+
+    if (x + tooltipWidth > window.innerWidth) {
+      x = window.innerWidth - tooltipWidth - 10;
+    }
+    if (y + tooltipHeight > window.innerHeight) {
+      y = window.innerHeight - tooltipHeight - 10;
+    }
+
+    tooltip
+      .style("left", `${x}px`)
+      .style("top", `${y}px`);
+  })
+  .on("mouseout", function() {
+    tooltip.style("display", "none");
+  });
 
   const sankey = d3.sankey().nodeWidth(20).nodePadding(20).extent([[0, 0], [chartWidth, chartHeight]]);
   const sankeyData = sankey({

@@ -201,8 +201,14 @@ body {
   font-weight: bold;
   padding: 10px;
 }
+#inlineLoader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
 .spinner {
+  vertical-align: middle;
   width: 18px;
   height: 18px;
   border: 3px solid #ccc;
@@ -224,6 +230,13 @@ body {
   right: 0px; /* when drawer is hidden, show at edge */
 }
 
+#inlineLoader .loader-text {
+  margin: 0;
+  padding: 0;
+  line-height: 1;
+  font-size: 16px;
+  color: #333;
+}
 
 #cardImages {
   display: flex;

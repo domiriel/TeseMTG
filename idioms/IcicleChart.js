@@ -3,6 +3,14 @@ import { updateState, getState } from "../state.js";
 let globalRects = null;  
 let clickTimer = null;
 
+const infoTooltipText = `
+<strong>Icicle Chart Interactions:</strong><br>
+• <strong>Click</strong> on a rectangle: zoom into that section.<br>
+• <strong>Double-click</strong> on a rectangle: apply a global filter to the dataset.<br>
+• <strong>Hover</strong> on a rectangle: see details and highlights.<br>
+`;
+const mtgColorOrder = { W: 0, U: 1, R: 2, B: 3, G: 4 };
+
 const colorScale = [
     { range: [0, 20], color: "#efe6dc" },
     { range: [21, 40], color: "#dac9b9" },
@@ -11,13 +19,6 @@ const colorScale = [
     { range: [81, 100], color: "#594a3a" }
 ];
 
-const colorScaleBlue = [
-    { range: [0, 20], color: "#e0e3ff" },
-    { range: [21, 40], color: "#bbc3f9" },
-    { range: [41, 60], color: "#93a5f3" },
-    { range: [61, 80], color: "#6587ec" },
-    { range: [81, 100], color: "#0C6AE4"}
-];
 
 
 function getColorFromPercentage(percentage) {
@@ -43,11 +44,14 @@ function hexToRgb(hex) {
 function rgbToHex(r, g, b) {
     return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase()}`;
 }
+
+
 export function createIcicleChart(data, containerId, isUpdate = false) {
-    const mtgColorOrder = { W: 0, U: 1, R: 2, B: 3, G: 4 };
+    
     d3.select(containerId).selectAll("*").remove();
 
     let groupedData = [];
+    const groupMap = new Map();
   
     data.forEach(card => {
         const colors = Array.isArray(card.color_identity) ? card.color_identity : [];
@@ -60,28 +64,27 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
         let colorKey = colors
         .slice()
         .sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b])
-        .join("-") || "Colorless";
+        .join("") || "Colorless";
 
         let colorGroupName = 
-    numColors === 0 ? "Colorless" :
-    numColors === 1 ? "1 Color" :
-    numColors === 4 ? "+4 Colors" :
-    `${numColors} Colors`;
+        numColors === 0 ? "Colorless" :
+        numColors === 1 ? "1 Color" :
+        numColors === 4 ? "+4 Colors" :
+        `${numColors} Colors`;
 
 
-        let colorGroup = groupedData.find(c => c.name === colorGroupName);
-        if (!colorGroup) {
-            groupedData.push({
-                name: colorGroupName,
+        let targetGroup = groupMap.get(colorGroupName);
+        if (!targetGroup) {
+            targetGroup = {name: colorGroupName,
                 numColors,
                 originalCount: 0,
                 reprintCount: 0,
                 functionalReprintCount: 0,
-                children: []
-            });
+                children: []}
+            groupMap.set(colorGroupName, targetGroup);
+            groupedData.push(targetGroup);
         }
-    
-        let targetGroup = groupedData.find(c => c.name === colorGroupName);
+
         let colorEntry = targetGroup.children.find(c => c.name === colorKey);
     
         if (colorEntry) {
@@ -158,11 +161,11 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
 
     const container = d3.select(containerId);
     
-    const containerBounds = container.node().getBoundingClientRect();
- 
 
-    const containerWidth = container.node().getBoundingClientRect().width;
-    const containerHeight = container.node().getBoundingClientRect().height;
+    const containerRect = container.node().getBoundingClientRect();
+    const containerWidth = containerRect.width;
+    const containerHeight = containerRect.height;
+
     
 
     const chartWidth = containerWidth * 0.85;
@@ -187,8 +190,53 @@ const svg = container.append("svg")
     .attr("height", containerHeight)
     .attr("preserveAspectRatio", "xMidYMid meet");
 
+const infoGroup = svg.append("g")
+  .attr("class", "info-icon")
+  .attr("transform", `translate(20, 20)`);
+
+infoGroup.append("circle")
+  .attr("r", 10)
+  .attr("fill", "#ccc")
+  .attr("stroke", "#000");
+
+infoGroup.append("text")
+  .attr("text-anchor", "middle")
+  .attr("dy", "0.35em")
+  .attr("font-size", "12px")
+  .attr("font-weight", "bold")
+  .text("i")
+  .attr("pointer-events", "none");
 
 
+infoGroup
+  .on("mouseover", function(event) {
+    d3.select("#tooltip")
+      .style("display", "block")
+      .html(infoTooltipText);
+  })
+  .on("mousemove", function(event) {
+    const tooltip = d3.select("#tooltip");
+    const tooltipNode = tooltip.node();
+    const tooltipWidth = tooltipNode.offsetWidth;
+    const tooltipHeight = tooltipNode.offsetHeight;
+
+    let x = event.pageX + 10;
+    let y = event.pageY + 10;
+
+    if (x + tooltipWidth > window.innerWidth) {
+      x = window.innerWidth - tooltipWidth - 10;
+    }
+    if (y + tooltipHeight > window.innerHeight) {
+      y = window.innerHeight - tooltipHeight - 10;
+    }
+
+    tooltip
+      .style("left", `${x}px`)
+      .style("top", `${y}px`);
+  })
+  .on("mouseout", function() {
+    d3.select("#tooltip").style("display", "none");
+  });
 const chartGroup = svg.append("g")
     .attr("class", "chart-group")
     .attr("transform", `translate(${xOffset}, ${yOffset})`);
@@ -228,73 +276,79 @@ const levelHeight = chartHeight / depth;
 
     
     const rects = zoomGroup.selectAll("rect")
-        .data(root.descendants().slice(1)) 
-        .enter()
-        .append("rect")
-        .attr("x", d => xScale(d.x0))
-        .attr("y", d => yScale(d.depth) - levelHeight / 2) 
+    .data(root.descendants().slice(1), d => d.data.name) // use name as key
+    .join(
+        enter => enter.append("rect")
+            .attr("x", d => xScale(d.x0))
+            .attr("y", d => yScale(d.depth) - levelHeight / 2)
+            .attr("width", d => xScale(d.x1) - xScale(d.x0))
+            .attr("height", levelHeight - 2)
+            .attr("fill", d => d.data.color)
+            .style("cursor", "pointer")
+            .on("click", function(event, d) {
+                if (clickTimer) {
+                    clearTimeout(clickTimer);
+                    clickTimer = null;
+                }
+                clickTimer = setTimeout(() => {
+                    clicked(event, d, false); // single-click
+                    clickTimer = null;
+                }, 250);
+            })
+            .on("dblclick", function(event, d) {
+                if (clickTimer) {
+                    clearTimeout(clickTimer);
+                    clickTimer = null;
+                }
+                clickedFilter(event, d); // double-click
+            })
+            .on("mouseover", function(event, d) {
+                const tooltip = d3.select("#tooltip");
+                tooltip
+                    .style("display", "block")
+                    .html(`
+                        <strong>${d.data.name.replaceAll("-", "")}</strong><br>
+                        Total: ${d.value} cards<br>
+                        Original: ${d.data.originalCount || 0} (${((d.data.originalCount / d.value) * 100).toFixed(2)}%)<br>
+                        Reprint: ${d.data.reprintCount || 0} cards<br>
+                        Functional Reprint: ${d.data.functionalReprintCount || 0} cards
+                    `);
+            })
+            .on("mousemove", function(event) {
+                const tooltip = d3.select("#tooltip");
+                const tooltipNode = tooltip.node();
 
+                const tooltipWidth = tooltipNode.offsetWidth;
+                const tooltipHeight = tooltipNode.offsetHeight;
 
-        .attr("width", d => xScale(d.x1) - xScale(d.x0))
-        .attr("height", levelHeight-2)
-        .attr("fill", d => d.data.color)
-        .style("cursor", "pointer")
-        .on("click", function(event, d) {
-    if (clickTimer) {
-      clearTimeout(clickTimer);
-      clickTimer = null;
-    }
-    clickTimer = setTimeout(() => {
-      clicked(event, d, false); // single-click
-      clickTimer = null;
-    }, 250);
-  })
-  .on("dblclick", function(event, d) {
-    if (clickTimer) {
-      clearTimeout(clickTimer);
-      clickTimer = null;
-    }
-    clickedFilter(event, d); // double-click
-  })
+                let x = event.pageX + 10;
+                let y = event.pageY + 10;
 
+                if (x + tooltipWidth > window.innerWidth) {
+                    x = window.innerWidth - tooltipWidth - 10;
+                }
+                if (y + tooltipHeight > window.innerHeight) {
+                    y = window.innerHeight - tooltipHeight - 10;
+                }
 
-        
-        .on("mouseover", function(event, d) {
-    const tooltip = d3.select("#tooltip");
-    tooltip
-        .style("display", "block")
-        .html(`
-            <strong>${d.data.name.replaceAll("-", "")}</strong><br>
-            Total: ${d.value} cards<br>
-            Original: ${d.data.originalCount || 0} (${((d.data.originalCount / d.value) * 100).toFixed(2)}%)<br>
-            Reprint: ${d.data.reprintCount || 0} cards<br>
-            Functional Reprint: ${d.data.functionalReprintCount || 0} cards
-        `);
-})
-.on("mousemove", function(event) {
-    const tooltip = d3.select("#tooltip");
-    const tooltipNode = tooltip.node();
+                tooltip
+                    .style("left", `${x}px`)
+                    .style("top", `${Math.max(y, 0)}px`);
+            })
+            .on("mouseout", function() {
+                d3.select("#tooltip").style("display", "none");
+            }),
 
-    const tooltipWidth = tooltipNode.offsetWidth;
-    const tooltipHeight = tooltipNode.offsetHeight;
+        update => update
+            .attr("x", d => xScale(d.x0))
+            .attr("y", d => yScale(d.depth) - levelHeight / 2)
+            .attr("width", d => xScale(d.x1) - xScale(d.x0))
+            .attr("height", levelHeight - 2)
+            .attr("fill", d => d.data.color),
 
-    let x = event.pageX + 10;
-    let y = event.pageY + 10;
+        exit => exit.remove()
+    );
 
-    if (x + tooltipWidth > window.innerWidth) {
-        x = window.innerWidth - tooltipWidth - 10;
-    }
-    if (y + tooltipHeight > window.innerHeight) {
-        y = window.innerHeight - tooltipHeight - 10;
-    }
-
-    tooltip
-        .style("left", `${x}px`)
-        .style("top", `${Math.max(y, 0)}px`);
-})
-.on("mouseout", function() {
-    d3.select("#tooltip").style("display", "none");
-});
 
 
 
@@ -306,45 +360,50 @@ const levelHeight = chartHeight / depth;
 
           
     
-        const labels = zoomGroup.selectAll("text")
-    .data(root.descendants().slice(1))
-    .enter()
-    .append("text")
-    .attr("x", d => (xScale(d.x0) + xScale(d.x1)) / 2)
-    .attr("y", d => yScale(d.depth))
-    .attr("dy", "0.35em")
-    .attr("text-anchor", "middle")
-    .attr("fill", "#000")
-    .attr("pointer-events", "none")
-    .attr("transform", d => {
-        if (d.depth === 2) {
-            const x = (xScale(d.x0) + xScale(d.x1)) / 2;
-            const y = yScale(d.depth);
-            return `rotate(-90, ${x}, ${y})`; 
-        }
-        return null;
-    })
-    .style("font-size", d => {
-        const rectWidth = xScale(d.x1) - xScale(d.x0);
-        const baseSize = 15;
-        if (rectWidth < 40) return `${14}px`;
-        return `${baseSize}px`;
-    })
-    .style("opacity", d => {
-    const rectWidth = xScale(d.x1) - xScale(d.x0);
-    const rectHeight = levelHeight - 2;
-    const textLength = d.data.name.replaceAll("-", "").length * 6;
+ const labels = zoomGroup.selectAll("text")
+    .data(root.descendants().slice(1), d => d.data.name)
+    .join(
+        enter => enter.append("text")
+            .attr("x", d => (xScale(d.x0) + xScale(d.x1)) / 2)
+            .attr("y", d => yScale(d.depth))
+            .attr("dy", "0.35em")
+            .attr("text-anchor", "middle")
+            .attr("fill", "#000")
+            .attr("pointer-events", "none")
+            .attr("transform", d => {
+                if (d.depth === 2) {
+                    const x = (xScale(d.x0) + xScale(d.x1)) / 2;
+                    const y = yScale(d.depth);
+                    return `rotate(-90, ${x}, ${y})`;
+                }
+                return null;
+            })
+            .style("font-size", d => {
+                const rectWidth = xScale(d.x1) - xScale(d.x0);
+                const baseSize = 15;
+                if (rectWidth < 40) return `${14}px`;
+                return `${baseSize}px`;
+            })
+            .style("opacity", d => {
+                const rectWidth = xScale(d.x1) - xScale(d.x0);
+                const rectHeight = levelHeight - 2;
+                const textLength = d.data.name.replaceAll("-", "").length * 6;
+                if (d.depth === 2) {
+                    return (rectHeight > textLength && rectWidth > 9) ? 1 : 0;
+                } else {
+                    return (rectWidth > textLength && rectHeight > 12) ? 1 : 0;
+                }
+            })
+            .text(d => d.data.name.replaceAll("-", "")),
 
-    if (d.depth === 2) {
+        update => update
+            .attr("x", d => (xScale(d.x0) + xScale(d.x1)) / 2)
+            .attr("y", d => yScale(d.depth))
+            .text(d => d.data.name.replaceAll("-", "")),
 
-        return (rectHeight > textLength && rectWidth > 9) ? 1 : 0;
-    } else {
+        exit => exit.remove()
+    );
 
-        return (rectWidth > textLength && rectHeight > 12) ? 1 : 0;
-    }
-})
-
-    .text(d => d.data.name.replaceAll("-", ""));
 
       
     

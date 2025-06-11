@@ -1,7 +1,7 @@
 
 import { updateState, getState, saveFilterSettings, loadFilterSettings, generateFilterShareURL, resetState} from "../state.js";
-import { filterData, getFilteredData } from "../script.js"; 
-
+import { filterData, getFilteredData, } from "../script.js"; 
+import { showLoader, hideLoader } from "./LoadingAnimation.js";
 const optionMap = new Map();  
 const pillMap = new Map();
 
@@ -169,6 +169,7 @@ let newHoveredCards = isAlreadySelected
         .style("border-radius", "4px")
         .style("cursor", "pointer")
         .on("click", () => {
+            showLoader();
             const clearedFilters = {};
             for (const key in selectedFilters) clearedFilters[key] = new Set();
             d3.selectAll(".set-square").attr("fill", "#bcab9a").style("opacity", 1);
@@ -177,6 +178,7 @@ let newHoveredCards = isAlreadySelected
             .style("font-weight", "normal");
             updateState({ selectedFilters: clearedFilters });
             createFilterPanel(data, containerId, clearedFilters, true);
+            hideLoader();
         });
 
 
@@ -191,8 +193,10 @@ let newHoveredCards = isAlreadySelected
     .style("cursor", "pointer")
     .style("margin-top", "8px")
     .on("click", () => {
+        showLoader();
         resetState();  // calls the new reset function in state.js
         createFilterPanel(data, containerId, getState().selectedFilters, true);
+        hideLoader();
     });
 
     Object.entries(filters).forEach(([category, values]) => {
@@ -284,14 +288,15 @@ let newHoveredCards = isAlreadySelected
                 .style("cursor", "pointer")
                 .text("\u2715")
                 .on("click", function (event, value) {
+                    showLoader();
                     selectedSet.delete(value);
                     const updatedFilters = {};
                     for (const key in selectedFilters) {
                         updatedFilters[key] = new Set(selectedFilters[key]);
                     }
                     updateState({ 
-    selectedFilters: updatedFilters,
-    updateContext: d.category === "Set Names" ? "TimelineFilter" : undefined
+                    selectedFilters: updatedFilters,
+                    updateContext: d.category === "Set Names" ? "TimelineFilter" : undefined
                     });
                     if (d.category === "Set Names") {
                     d3.selectAll(".set-rect")
@@ -307,9 +312,11 @@ let newHoveredCards = isAlreadySelected
 
                         updateFilterPanel(data);
                     }, 50);
+                    hideLoader();
                 });
 
             pills.exit().remove();
+
         }
 
         const option = content.selectAll("div")
@@ -327,6 +334,7 @@ let newHoveredCards = isAlreadySelected
             .attr("data-category", category)
             .attr("data-value", d => d.value)
             .on("click", function (event, d) {
+                showLoader();
                 const isSelected = selectedSet.has(d.value);
                 isSelected ? selectedSet.delete(d.value) : selectedSet.add(d.value);
                 const updatedFilters = structuredClone(selectedFilters);
@@ -339,6 +347,7 @@ let newHoveredCards = isAlreadySelected
 
                     updateFilterPanel(data, updatedFilters);
                 }, 50);
+                hideLoader();
             });
 
         option.append("span")
