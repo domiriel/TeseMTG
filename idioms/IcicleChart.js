@@ -1,5 +1,7 @@
 
 import { updateState, getState } from "../state.js";
+// @ts-ignore
+import { showLoader, hideLoader, showPopup } from "./LoadingAnimation.js";
 let globalRects = null;  
 let clickTimer = null;
 
@@ -44,6 +46,40 @@ function hexToRgb(hex) {
 function rgbToHex(r, g, b) {
     return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase()}`;
 }
+
+function validateFilterCombination(filters) {
+    const groups = filters.IcicleColorGroups || new Set();
+    const identities = filters.IcicleColorIdentity || new Set();
+
+    if (groups.size === 0 || identities.size === 0) return true;
+
+    const groupToSizes = {
+        "colorless": [0],
+        "1 color": [1],
+        "2 colors": [2],
+        "3 colors": [3],
+        "+4 colors": [4, 5]
+    };
+
+    const allowedSizes = new Set();
+    for (const group of groups) {
+        const sizes = groupToSizes[group];
+        if (sizes) sizes.forEach(s => allowedSizes.add(s));
+    }
+
+    for (const identity of identities) {
+        const normIdentity = identity.toUpperCase();
+        const numColors = normIdentity === "COLORLESS" ? 0 : normIdentity.length;
+        if (allowedSizes.has(numColors)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
+
 
 
 export function createIcicleChart(data, containerId, isUpdate = false) {
@@ -448,60 +484,39 @@ const levelHeight = chartHeight / depth;
                 return (rectWidth > textLength && rectHeight > 12) ? 1 : 0;
             });
     
-        if (doubleClickFlag) {
-            const currentFilters = getState().selectedFilters;
-            const newFilters = structuredClone(currentFilters);
         
-            if (wasFocused) {
-                newFilters.IcicleColorGroups = new Set();
-                newFilters.IcicleColorIdentity = new Set();
-            } else if (p.depth === 1) {
-                newFilters.IcicleColorGroups = new Set([p.data.name]);
-                newFilters.IcicleColorIdentity = new Set(); 
-            } else if (p.depth === 2) {
-                newFilters.IcicleColorIdentity = new Set([p.data.name]);
-                newFilters.IcicleColorGroups = new Set(); 
-            }
-        
-            setTimeout(() => {
-                updateState({ selectedFilters: newFilters, updateContext: "IcicleFilter" });
-                
-            }, 70);  
-        }
     }
 
-    function clickedFilter(event, d) {
-
-    d3.select(event.currentTarget).classed("selected", !d3.select(event.currentTarget).classed("selected"));
-
-    const wasFocused = false; 
+function clickedFilter(event, d) {
+    const rect = d3.select(event.currentTarget);
+    const wasSelected = rect.classed("selected");
+    rect.classed("selected", !wasSelected);
 
     const currentFilters = getState().selectedFilters;
     const newFilters = structuredClone(currentFilters);
 
-    const isAlreadySelected =
-    (d.depth === 1 && currentFilters.IcicleColorGroups?.has(d.data.name.toLowerCase())) ||
-    (d.depth === 2 && currentFilters.IcicleColorIdentity?.has(d.data.name));
+    const isGroup = d.depth === 1;
+    const isIdentity = d.depth === 2;
+    const val = d.data.name.toLowerCase();
 
-if (isAlreadySelected) {
-    newFilters.IcicleColorGroups = new Set();
-    newFilters.IcicleColorIdentity = new Set();
-} else {
-    if (d.depth === 1) {
-        newFilters.IcicleColorGroups = new Set([d.data.name.toLowerCase()]);
-        newFilters.IcicleColorIdentity = new Set(); 
-    } else if (d.depth === 2) {
-        console.log("Clicked on color identity:", d.data.name);
-        newFilters.IcicleColorIdentity = new Set([d.data.name]);
-        newFilters.IcicleColorGroups = new Set(); 
+    if (isGroup) {
+        if (!newFilters.IcicleColorGroups) newFilters.IcicleColorGroups = new Set();
+        wasSelected ? newFilters.IcicleColorGroups.delete(val) : newFilters.IcicleColorGroups.add(val);
+    } else if (isIdentity) {
+        if (!newFilters.IcicleColorIdentity) newFilters.IcicleColorIdentity = new Set();
+        wasSelected ? newFilters.IcicleColorIdentity.delete(val) : newFilters.IcicleColorIdentity.add(val);
     }
+
+    if (!validateFilterCombination(newFilters)) {
+        rect.classed("selected", wasSelected);  // ❗ Revert visual toggle
+        showPopup("Invalid filter: selected color identity/identities do not match the selected color group(s).");
+        return;
+    }
+
+    updateState({ selectedFilters: newFilters, updateContext: "IcicleFilter" });
 }
 
 
-    setTimeout(() => {
-        updateState({ selectedFilters: newFilters, updateContext: "IcicleFilter" });
-    }, 70);
-}
 
     
     

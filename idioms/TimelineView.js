@@ -1,16 +1,60 @@
 
 import { updateState, getState } from "../state.js";
 import { updateFilterPanel } from "./FilterPanel.js";
+
+
+
+
 function updateYearTickStyles() {
     const yearFilter = getState().selectedFilters["Year"] || new Set();
+
     d3.selectAll(".x-axis .tick text")
-        .style("fill", d => yearFilter.has(d.getFullYear().toString()) ? "#007bff" : "black")
-        .style("font-weight", d => yearFilter.has(d.getFullYear().toString()) ? "bold" : "normal");
+        .style("fill", function(d) {
+            const year = (d instanceof Date) ? d.getFullYear().toString() : d.toString();
+            return yearFilter.has(year) ? "#007bff" : "black";
+        })
+        .style("font-weight", function(d) {
+            const year = (d instanceof Date) ? d.getFullYear().toString() : d.toString();
+            return yearFilter.has(year) ? "bold" : "normal";
+        });
 }
 
+
+
+function updateSetRectOpacity() {
+    const yearFilter = getState().selectedFilters["Year"] || new Set();
+    const setRects = d3.selectAll(".set-rect");
+
+    setRects
+        .interrupt()  // Stop any current transition to prevent stacking
+        .transition()
+        .duration(150)
+        .style("opacity", d => {
+            const year = d.releaseDate.getFullYear().toString();
+            return yearFilter.size === 0 || yearFilter.has(year) ? 1 : 0.2;
+        });
+}
+
+
+function getClonedFilters() {
+    const currentState = getState();
+    const cloned = {};
+    for (const key in currentState.selectedFilters) {
+        cloned[key] = new Set(currentState.selectedFilters[key]);
+    }
+    return cloned;
+}
+
+        
 export function createTimelineView(data, containerId, isUpdate = false) {
+    const tooltip = d3.select("#tooltip");
     d3.select(containerId).selectAll("*").remove();
 
+    data.forEach(card => {
+    if (!card._parsedDate) {
+        card._parsedDate = new Date(card.release_date);
+    }
+});
     let setMap = new Map();
 
     data.forEach(card => {
@@ -18,7 +62,7 @@ export function createTimelineView(data, containerId, isUpdate = false) {
         if (!setMap.has(setName)) {
             setMap.set(setName, {
                 name: setName,
-                releaseDate: new Date(card.release_date),
+                releaseDate: card._parsedDate,
                 setType: card.set_type,
                 cardCount: 0 
             });
@@ -29,19 +73,19 @@ export function createTimelineView(data, containerId, isUpdate = false) {
  
     let uniqueSets = Array.from(setMap.values()).sort((a, b) => a.releaseDate - b.releaseDate);
     const yearTypeCounts = new Map();
-const typeCounts = new Map();
+    const typeCounts = new Map();
 
-uniqueSets.forEach(set => {
-    const year = set.releaseDate.getFullYear().toString();
-    const type = set.setType;
+    uniqueSets.forEach(set => {
+        const year = set.releaseDate.getFullYear().toString();
+        const type = set.setType;
 
-    if (!yearTypeCounts.has(year)) yearTypeCounts.set(year, new Map());
-    if (!yearTypeCounts.get(year).has(type)) yearTypeCounts.get(year).set(type, 0);
-    yearTypeCounts.get(year).set(type, yearTypeCounts.get(year).get(type) + 1);
+        if (!yearTypeCounts.has(year)) yearTypeCounts.set(year, new Map());
+        if (!yearTypeCounts.get(year).has(type)) yearTypeCounts.get(year).set(type, 0);
+        yearTypeCounts.get(year).set(type, yearTypeCounts.get(year).get(type) + 1);
 
-    if (!typeCounts.has(type)) typeCounts.set(type, 0);
-    typeCounts.set(type, typeCounts.get(type) + 1);
-});
+        if (!typeCounts.has(type)) typeCounts.set(type, 0);
+        typeCounts.set(type, typeCounts.get(type) + 1);
+    });
 
 
   
@@ -73,89 +117,94 @@ uniqueSets.forEach(set => {
     if (isUpdate) {
         d3.select(containerId).select(".chart-wrapper").remove();
     }
-container.insert("input", ":first-child")
-    .attr("type", "text")
-    .attr("placeholder", "Search set...")
-    .attr("class", "timeline-search-bar")
-    .style("position", "absolute")
-    .style("top", "0px")
-    .style("left", "-4px")
-    .style("margin", "10px")
-    .style("white-space", "nowrap")
-    .style("z-index", "9999")
-    .style("padding", "5px")
-    .style("overflow", "visible")
-    .style("font-size", "14px")
-    .style("width", searchContainerwidth);
-
-container.insert("div", ":nth-child(2)")
-    .attr("class", "search-dropdown")
-    .style("position", "absolute")
-    .style("top", "54px")
-    .style("left", "10px")
-    .style("width", "200px")
-    .style("max-height", "100px")
-    .style("overflow-y", "auto")
-    .style("background", "white")
-    .style("border", "1px solid #ccc")
-    .style("display", "none")
-    .style("z-index", "9999");
-container.select(".timeline-search-bar").on("input", function () {
-    const query = this.value.toLowerCase().trim();
-    const dropdown = container.select(".search-dropdown");
-
-    if (!query) {
-        dropdown.style("display", "none");
-        return;
-    }
-
-    const matches = uniqueSets.filter(d => d.name.toLowerCase().includes(query));
-
-    dropdown.selectAll("div").remove();
-
-    if (matches.length === 0) {
-        dropdown.style("display", "none");
-        return;
-    }
-
-    dropdown.style("display", "block");
-
-    dropdown.selectAll("div")
-        .data(matches)
-        .enter()
-        .append("div")
-        .text(d => d.name)
+    container.insert("input", ":first-child")
+        .attr("type", "text")
+        .attr("placeholder", "Search set...")
+        .attr("class", "timeline-search-bar")
+        .style("position", "absolute")
+        .style("top", "0px")
+        .style("left", "-4px")
+        .style("margin", "10px")
+        .style("white-space", "nowrap")
+        .style("z-index", "9999")
         .style("padding", "5px")
-        .style("cursor", "pointer")
-        .style("border-bottom", "1px solid #eee")
-        .on("mouseover", function () {
-            d3.select(this).style("background", "#f0f0f0");
-        })
-        .on("mouseout", function () {
-            d3.select(this).style("background", "white");
-        })
-        .on("click", function (event, d) {
-            container.select(".timeline-search-bar").property("value", d.name);
+        .style("overflow", "visible")
+        .style("font-size", "14px")
+        .style("width", searchContainerwidth);
+
+    container.insert("div", ":nth-child(2)")
+        .attr("class", "search-dropdown")
+        .style("position", "absolute")
+        .style("top", "54px")
+        .style("left", "10px")
+        .style("width", "200px")
+        .style("max-height", "100px")
+        .style("overflow-y", "auto")
+        .style("background", "white")
+        .style("border", "1px solid #ccc")
+        .style("display", "none")
+        .style("z-index", "9999");
+    container.select(".timeline-search-bar").on("input", function () {
+        const query = this.value.toLowerCase().trim();
+        const dropdown = container.select(".search-dropdown");
+
+        if (!query) {
             dropdown.style("display", "none");
+            return;
+        }
 
-            d3.selectAll(".set-rect").classed("search-match", false);
+        const matches = uniqueSets.filter(d => d.name.toLowerCase().includes(query));
 
-            d3.selectAll(".set-rect")
-                .filter(s => s.name === d.name)
-                .classed("search-match", true)
-                .transition()
-                .delay(1000)
-                .on("end", function () {
-                    d3.select(this).classed("search-match", false);
-                });
+        dropdown.selectAll("div").remove();
 
-            const y = yScale(d.setType);
-            scrollContainer.node().scrollTo({
-                top: y - 50,
-                behavior: "smooth"
-            });
-        });
-});
+        if (matches.length === 0) {
+            dropdown.style("display", "none");
+            return;
+        }
+
+        dropdown.style("display", "block");
+
+
+
+    
+        dropdown.selectAll("div")
+        .data(matches, d => d.name)
+        .join(
+            enter => enter.append("div")
+                .text(d => d.name)
+                .style("padding", "5px")
+                .style("cursor", "pointer")
+                .style("border-bottom", "1px solid #eee")
+                .on("mouseover", function () {
+                    d3.select(this).style("background", "#f0f0f0");
+                })
+                .on("mouseout", function () {
+                    d3.select(this).style("background", "white");
+                })
+                .on("click", function (event, d) {             container.select(".timeline-search-bar").property("value", d.name);
+                dropdown.style("display", "none");
+
+                d3.selectAll(".set-rect").classed("search-match", false);
+
+                d3.selectAll(".set-rect")
+                    .filter(s => s.name === d.name)
+                    .classed("search-match", true);
+
+                setTimeout(() => {
+                    d3.selectAll(".set-rect")
+                        .filter(s => s.name === d.name)
+                        .classed("search-match", false);
+                }, 1000);
+
+                const y = yScale(d.setType);
+                scrollContainer.node().scrollTo({
+                    top: y - 50,
+                    behavior: "smooth"
+                });}),
+            update => update,
+            exit => exit.remove()
+        );
+    });
 
 
 
@@ -188,7 +237,7 @@ container.select(".timeline-search-bar").on("input", function () {
             .attr("transform", `translate(${margin.left}, ${margin.top - 20})`)
             .call(xAxis);
         
-            const yearFilter = getState().selectedFilters["Year"] || new Set();
+
 
             xAxisGroup.selectAll(".tick")
             .select("text")
@@ -197,12 +246,8 @@ container.select(".timeline-search-bar").on("input", function () {
             .style("cursor", "pointer")
             .on("click", function (event, d) {
                 const year = d.getFullYear().toString();
-                const currentState = getState();
-                const updatedFilters = {};
+                const updatedFilters = getClonedFilters();
 
-                for (const key in currentState.selectedFilters) {
-                    updatedFilters[key] = new Set(currentState.selectedFilters[key]);
-                }
 
                 if (!updatedFilters["Year"]) {
                     updatedFilters["Year"] = new Set();
@@ -226,7 +271,7 @@ container.select(".timeline-search-bar").on("input", function () {
                 updateSetRectOpacity();  
             })
             .on("mouseover", function (event, d) {
-    const tooltip = d3.select("#tooltip");
+
     const year = d.getFullYear().toString();
     const types = yearTypeCounts.get(year);
     let totalSets = 0;
@@ -239,10 +284,7 @@ container.select(".timeline-search-bar").on("input", function () {
 
     tooltip.style("display", "block").html(tooltipHtml);
 
-
-   const tooltipNode = tooltip.node();
-const tooltipWidth = tooltipNode.offsetWidth;
-const tooltipHeight = tooltipNode.offsetHeight;
+const { width: tooltipWidth, height: tooltipHeight } = tooltip.node().getBoundingClientRect();
 const viewportWidth = window.innerWidth;
 const viewportHeight = window.innerHeight;
 const padding = 10;
@@ -268,41 +310,7 @@ tooltip.style("left", `${left}px`)
 });
 
 
-function updateYearTickStyles() {
-    const yearFilter = getState().selectedFilters["Year"] || new Set();
 
-    d3.selectAll(".x-axis .tick text")
-        .style("fill", function(d) {
-            const year = (d instanceof Date) ? d.getFullYear().toString() : d.toString();
-            return yearFilter.has(year) ? "#007bff" : "black";
-        })
-        .style("font-weight", function(d) {
-            const year = (d instanceof Date) ? d.getFullYear().toString() : d.toString();
-            return yearFilter.has(year) ? "bold" : "normal";
-        });
-}
-
-function updateSetTypeLabelStyles() {
-    const setTypeFilter = getState().selectedFilters["Set Types"] || new Set();
-
-    d3.selectAll(".set-type-label")
-        .style("fill", d => setTypeFilter.has(d) ? "#007bff" : "black")
-        .style("font-weight", d => setTypeFilter.has(d) ? "bold" : "normal");
-}
-
-
-function updateSetRectOpacity() {
-    const yearFilter = getState().selectedFilters["Year"] || new Set();
-
-    d3.selectAll(".set-rect")
-        .transition()
-        .duration(200)
-        .style("opacity", d => {
-            const year = d.releaseDate.getFullYear().toString();
-            return yearFilter.size === 0 || yearFilter.has(year) ? 1 : 0.2;
-        });
-}
-        
         
 
 
@@ -359,89 +367,85 @@ chartGroup.append("g")
     .attr("class", "brush")
     .call(brush);
 
+
     const squares = chartGroup.selectAll(".set-square")
-        .data(uniqueSets)
-        .enter()
-        .append("rect")
-        .attr("class", "set-square set-rect")
-        .attr("x", d => xScale(d.releaseDate) - 2.5)
-        .attr("y", d => yScale(d.setType) - 5)
-        .attr("width", 8)
-        .attr("height", 8)
-        .attr("fill", "#bcab9a")
-        .attr("stroke", "black")
-        .on("mouseover", function (event, d) {
-    const tooltip = d3.select("#tooltip");
+    .data(uniqueSets, d => d.name)  // key function improves performance
+    .join(
+        enter => enter.append("rect")
+            .attr("class", "set-square set-rect")
+            .attr("width", 8)
+            .attr("height", 8)
+            .attr("stroke", "black")
+            .attr("fill", "#bcab9a")
+            .on("mouseover", function (event, d) {
 
-    // Set content first so dimensions are accurate
-    tooltip
-        .style("display", "block")
-        .html(`
-            <strong>${d.name}</strong><br>
-            ${d.releaseDate.toDateString()}<br>
-            Type: ${d.setType}<br>
-            Cards in Set: ${d.cardCount}
-        `);
+                // Set content first so dimensions are accurate
+                tooltip
+                    .style("display", "block")
+                    .html(`
+                        <strong>${d.name}</strong><br>
+                        ${d.releaseDate.toDateString()}<br>
+                        Type: ${d.setType}<br>
+                        Cards in Set: ${d.cardCount}
+                    `);
 
-    const tooltipNode = tooltip.node();
-    const tooltipWidth = tooltipNode.offsetWidth;
-    const tooltipHeight = tooltipNode.offsetHeight;
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
+                const { width: tooltipWidth, height: tooltipHeight } = tooltip.node().getBoundingClientRect();
+                const viewportWidth = window.innerWidth;
+                const viewportHeight = window.innerHeight;
 
-    const horizontalPadding = 10;
-    const verticalPadding = 10;
+                const horizontalPadding = 10;
+                const verticalPadding = 10;
 
-    let left = event.pageX + horizontalPadding;
-    if (left + tooltipWidth > viewportWidth) {
-        // Flip to left side
-        left = event.pageX - tooltipWidth - horizontalPadding;
-    }
-    if (left < 0) left = horizontalPadding;
+                let left = event.pageX + horizontalPadding;
+                if (left + tooltipWidth > viewportWidth) {
+                    // Flip to left side
+                    left = event.pageX - tooltipWidth - horizontalPadding;
+                }
+                if (left < 0) left = horizontalPadding;
 
-    let top = event.pageY + verticalPadding;
-    if (top + tooltipHeight > viewportHeight) {
-        // Flip above
-        top = event.pageY - tooltipHeight - verticalPadding;
-    }
-    if (top < 0) top = verticalPadding;
+                let top = event.pageY + verticalPadding;
+                if (top + tooltipHeight > viewportHeight) {
+                    // Flip above
+                    top = event.pageY - tooltipHeight - verticalPadding;
+                }
+                if (top < 0) top = verticalPadding;
 
-    tooltip
-        .style("left", `${left}px`)
-        .style("top", `${top}px`);
-})
+                tooltip
+                    .style("left", `${left}px`)
+                    .style("top", `${top}px`);
+            })
+            .on("mouseout", function () {
+                d3.select("#tooltip").style("display", "none");
+            })
+             .on("click", function (event, d) {
+                const updatedFilters = getClonedFilters();
 
+            
+                if (!updatedFilters["Set Names"]) {
+                    updatedFilters["Set Names"] = new Set();
+                }
+            
+                const isSelected = updatedFilters["Set Names"].has(d.name);
+            
+                if (isSelected) {
+                    updatedFilters["Set Names"].delete(d.name);
+                    d3.select(this).attr("fill", "#C3C3C3"); 
+                } else {
+                    updatedFilters["Set Names"].add(d.name);
+                    d3.select(this).attr("fill", "#007bff"); 
+                }
+            
+                updateState({
+                    selectedFilters: updatedFilters,
+                    updateContext: "TimelineFilter"
+                });
+            }),
+        update => update, // leave unchanged
+        exit => exit.remove()
+    )
+    .attr("x", d => xScale(d.releaseDate) - 2.5)
+    .attr("y", d => yScale(d.setType) - 5);
 
-        .on("mouseout", function () {
-                    d3.select("#tooltip").style("display", "none");
-                })
-        .on("click", function (event, d) {
-            const currentState = getState();
-            const updatedFilters = {};
-        
-            for (const key in currentState.selectedFilters) {
-                updatedFilters[key] = new Set(currentState.selectedFilters[key]);
-            }
-        
-            if (!updatedFilters["Set Names"]) {
-                updatedFilters["Set Names"] = new Set();
-            }
-        
-            const isSelected = updatedFilters["Set Names"].has(d.name);
-        
-            if (isSelected) {
-                updatedFilters["Set Names"].delete(d.name);
-                d3.select(this).attr("fill", "#C3C3C3"); 
-            } else {
-                updatedFilters["Set Names"].add(d.name);
-                d3.select(this).attr("fill", "#007bff"); 
-            }
-        
-            updateState({
-                selectedFilters: updatedFilters,
-                updateContext: "TimelineFilter"
-            });
-        });
                 
         
         const selectedSetNames = getState().selectedFilters["Set Names"] || new Set();
@@ -453,98 +457,70 @@ chartGroup.append("g")
     
  
     chartGroup.selectAll(".set-type-label")
-        .data(selectedSetTypes)
-        .enter()
-        .append("text")
-        .attr("class", "set-type-label")
-        .attr("x", -10)
-        .attr("y", d => yScale(d) + 5)
-        .attr("text-anchor", "end")
-        .attr("font-size", "12px")
-        .attr("fill", "black")
-        .text(d => d)
-        .on("click", function (event, type) {
-    const currentState = getState();
-    const updatedFilters = {};
-
-    for (const key in currentState.selectedFilters) {
-        updatedFilters[key] = new Set(currentState.selectedFilters[key]);
-    }
-
-    if (!updatedFilters["Set Types"]) {
-        updatedFilters["Set Types"] = new Set();
-    }
-
-    if (updatedFilters["Set Types"].has(type)) {
-        updatedFilters["Set Types"].delete(type);
-    } else {
-        updatedFilters["Set Types"].add(type);
-    }
-
-    updateState({
-        selectedFilters: updatedFilters,
-        updateContext: "TimelineFilter"
-    });
-})
-        .on("mouseover", function (event, type) {
-    const count = typeCounts.get(type) || 0;
-    const tooltip = d3.select("#tooltip")
-    .style("display", "block")
-    .html(`<strong>${type}</strong><br>${count} sets`);
-
-    const tooltipNode = tooltip.node();
-    const tooltipWidth = tooltipNode.offsetWidth;
-    const tooltipHeight = tooltipNode.offsetHeight;
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    const padding = 10;
-
-    let left = event.pageX + padding;
-    if (left + tooltipWidth > viewportWidth) {
-        left = event.pageX - tooltipWidth - padding;
-    }
-    if (left < 0) left = padding;
-
-    let top = event.pageY + padding;
-    if (top + tooltipHeight > viewportHeight) {
-        top = event.pageY - tooltipHeight - padding;
-    }
-    if (top < 0) top = padding;
-
-    tooltip.style("left", `${left}px`)
-        .style("top", `${top}px`);
+    .data(selectedSetTypes, d => d)  // key by type string
+    .join(
+        enter => enter.append("text")
+            .attr("class", "set-type-label")
+            .attr("x", -10)
+            .attr("text-anchor", "end")
+            .attr("font-size", "12px")
+            .attr("fill", "black")
+            .text(d => d)
+            .on("click", function (event, type) {
+                const updatedFilters = getClonedFilters();
 
 
-    })
-    .on("mouseout", () => {
-        d3.select("#tooltip").style("display", "none");
-    });
-    //updateSetTypeLabelStyles();
+                if (!updatedFilters["Set Types"]) {
+                    updatedFilters["Set Types"] = new Set();
+                }
 
-    ;
+                if (updatedFilters["Set Types"].has(type)) {
+                    updatedFilters["Set Types"].delete(type);
+                } else {
+                    updatedFilters["Set Types"].add(type);
+                }
+
+                updateState({
+                    selectedFilters: updatedFilters,
+                    updateContext: "TimelineFilter"
+                });
+            })
+            .on("mouseover", function (event, type) {
+                const count = typeCounts.get(type) || 0;
+                tooltip
+                .style("display", "block")
+                .html(`<strong>${type}</strong><br>${count} sets`);
+
+                const { width: tooltipWidth, height: tooltipHeight } = tooltip.node().getBoundingClientRect();
+                const viewportWidth = window.innerWidth;
+                const viewportHeight = window.innerHeight;
+                const padding = 10;
+
+                let left = event.pageX + padding;
+                if (left + tooltipWidth > viewportWidth) {
+                    left = event.pageX - tooltipWidth - padding;
+                }
+                if (left < 0) left = padding;
+
+                let top = event.pageY + padding;
+                if (top + tooltipHeight > viewportHeight) {
+                    top = event.pageY - tooltipHeight - padding;
+                }
+                if (top < 0) top = padding;
+
+                tooltip.style("left", `${left}px`)
+                    .style("top", `${top}px`);
 
 
-function clicked(selectedSet) {
-    const selectedYear = selectedSet.releaseDate.getFullYear();
-    const zoomStart = new Date(selectedYear, 0, 1);
-    const zoomEnd = new Date(selectedYear + 1, 11, 31);
+            })
+            .on("mouseout", () => { d3.select("#tooltip").style("display", "none"); }),
+        update => update,
+        exit => exit.remove()
+    )
+    .attr("y", d => yScale(d) + 5);
 
 
-    xScale.domain([zoomStart, zoomEnd]);
 
-    const t = d3.transition().duration(750);
-
-
-    fixedXAxis.transition(t).select(".x-axis")
-        .call(xAxis.scale(xScale));
-
-    
-    squares.transition(t)
-        .style("opacity", d => (d.releaseDate >= zoomStart && d.releaseDate <= zoomEnd) ? 1 : 0)
-        .attr("x", d => xScale(d.releaseDate) - 2.5);
-
-   
-}
 
     
     
@@ -564,6 +540,7 @@ function zoomed(event) {
 
     
     squares.transition().duration(100)
+
     .attr("x", d => newXScale(d.releaseDate) - 2.5)
     .style("opacity", d => {
         const date = d.releaseDate;
@@ -596,12 +573,8 @@ function brushed(event) {
     });
 
 
-    const currentState = getState();
-    const updatedFilters = {};
+    const updatedFilters = getClonedFilters();
 
-    for (const key in currentState.selectedFilters) {
-        updatedFilters[key] = new Set(currentState.selectedFilters[key]);
-    }
 
     if (!updatedFilters["Set Names"]) {
         updatedFilters["Set Names"] = new Set();

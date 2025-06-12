@@ -18,6 +18,7 @@ function loadCardData() {
     });
 }
 let isUpdatingFilteredData = false;
+const mtgColorOrder = { W: 0, U: 1, R: 2, B: 3, G: 4 };
 function init() {
   showLoader();
   if (!d3.select("#tooltip").node()) {
@@ -222,7 +223,6 @@ if (
     let filteredSet = new Set(data);
 
     if (groupedData) {
-      console.log(selectedFilters["IcicleColorGroups"], selectedFilters["IcicleColorIdentity"]);
       for (const [category, values] of Object.entries(filters)) {
         if (!values || values.size === 0) continue;
         const categoryGroup = groupedData[category];
@@ -298,7 +298,6 @@ function shouldIncludeCard(card, selectedFilters) {
       : card.number_of_colours === 0
         ? "Colorless"
         : `${card.number_of_colours} Colors`).toLowerCase();
-    console.log("FilterSelected:", selectedFilters["IcicleColorGroups"], "Group label:", groupLabel);
     if (!selectedFilters["IcicleColorGroups"].has(groupLabel.toLowerCase())) return false;
   }
 
@@ -402,7 +401,10 @@ function extractCardValues(card, category) {
       if (card.number_of_colours === 1) return ["1 color"];
       if (card.number_of_colours === 0) return ["colorless"];
       return [`${card.number_of_colours} colors`];
-    case "IcicleColorIdentity":
+case "IcicleColorIdentity":
+  if (!Array.isArray(card.color_identity) || card.color_identity.length === 0) return ["colorless"];
+  const sortedColors = card.color_identity.slice().sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b]);
+  return [sortedColors.join("").toLowerCase()];
       if (!Array.isArray(card.color_identity) || card.color_identity.length === 0) return ["colorless"];
       return [card.color_identity.sort().join("").toLowerCase()];
     case "Foil Status":

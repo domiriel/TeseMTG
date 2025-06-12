@@ -1,5 +1,15 @@
 
 import { updateState, getState } from "../state.js";
+
+
+function getClonedFilters() {
+    const currentState = getState();
+    const cloned = {};
+    for (const key in currentState.selectedFilters) {
+        cloned[key] = new Set(currentState.selectedFilters[key]);
+    }
+    return cloned;
+}
 export function createStackedLineChart(data, containerId, isUpdate = false) {
     d3.select(containerId).selectAll("*").remove();
 
@@ -44,10 +54,6 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
         };
     })
     .sort((a, b) => a.year - b.year);
-    
-    
-
-
 
     const metrics = [
         { key: "reprints", label: "Func. Reprints", color: "#bcab9a" },
@@ -71,7 +77,7 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
     if (isUpdate) {
         container.select(".stacked-line-wrapper").remove();
     }
-const tooltip = d3.select("#tooltip");
+    const tooltip = d3.select("#tooltip");
 
     const wrapper = container.append("div")
         .attr("class", "stacked-line-wrapper")
@@ -92,16 +98,16 @@ const tooltip = d3.select("#tooltip");
     const chartGroup = svg.append("g")
         .attr("transform", `translate(${margin.left}, ${margin.top})`);
 
-        const xExtent = d3.extent(groupedData, d => d.year);
+    const xExtent = d3.extent(groupedData, d => d.year);
 
-        
-        const xPadding = (xExtent[1] - xExtent[0]) / 50;
-        
-        const xScale = d3.scaleTime()
-            .domain([new Date(xExtent[0].getTime()), new Date(xExtent[1].getTime())])
-            .range([10, width]);
-        
-        window._lineChartXScale = xScale;
+    
+    const xPadding = (xExtent[1] - xExtent[0]) / 50;
+    
+    const xScale = d3.scaleTime()
+        .domain([new Date(xExtent[0].getTime()), new Date(xExtent[1].getTime())])
+        .range([10, width]);
+    
+    window._lineChartXScale = xScale;
 
 
 
@@ -114,209 +120,197 @@ const tooltip = d3.select("#tooltip");
 
     
 
-const yScales = [];
-const linePaths = [];
-const circleGroups = [];
-const xAxisGroups = [];
+    const yScales = [];
+    const linePaths = [];
+    const circleGroups = [];
+    const xAxisGroups = [];
 
 
-svg.append("defs").append("clipPath")
-    .attr("id", "clip-left-margin")
-    .append("rect")
-    .attr("x", 0)
-    .attr("y", 0)
-    .attr("width", width + 20)  
-    .attr("height", containerHeight);  
+    svg.append("defs").append("clipPath")
+        .attr("id", "clip-left-margin")
+        .append("rect")
+        .attr("x", 0)
+        .attr("y", 0)
+        .attr("width", width + 20)  
+        .attr("height", containerHeight);  
 
 
 
-const sharedHoverLine = svg.append("line")
-    .attr("class", "hover-line")
-    .attr("y1", margin.top)
-    .attr("y2", margin.top + height)  
-    .attr("stroke", "#000")
-    .attr("stroke-width", 1)
-    .attr("pointer-events", "none")
-    .style("display", "none");
-metrics.forEach((metric, i) => {
-    const y = d3.scaleLinear()
-    .domain([
-        0,
-        d3.max(groupedData, d => d[metric.key])
-    ])
-    .nice()
-    .range([chartHeight, 4]);
+    const sharedHoverLine = svg.append("line")
+        .attr("class", "hover-line")
+        .attr("y1", margin.top)
+        .attr("y2", margin.top + height)  
+        .attr("stroke", "#000")
+        .attr("stroke-width", 1)
+        .attr("pointer-events", "none")
+        .style("display", "none");
+    metrics.forEach((metric, i) => {
+        const y = d3.scaleLinear()
+        .domain([
+            0,
+            d3.max(groupedData, d => d[metric.key])
+        ])
+        .nice()
+        .range([chartHeight, 4]);
 
-    yScales.push(y);
+        yScales.push(y);
 
-    const line = d3.line()
-        .x(d => xScale(d.year))
-        .y(d => y(d[metric.key]));
+        const line = d3.line()
+            .x(d => xScale(d.year))
+            .y(d => y(d[metric.key]));
 
-    const g = chartGroup.append("g")
-        .attr("transform", `translate(0, ${i * (chartHeight + chartSpacing)})`);
+        const g = chartGroup.append("g")
+            .attr("transform", `translate(0, ${i * (chartHeight + chartSpacing)})`);
 
-    const clippedGroup = g.append("g")
-    .attr("clip-path", "url(#clip-left-margin)");
-
-
-       const linePath = clippedGroup.append("path")
-
-    .datum(groupedData)
-    .attr("fill", "none")
-    .attr("stroke", metric.color)
-    .attr("stroke-width", 2)
-    .attr("d", line);
-
-linePaths.push({ line, path: linePath });
+        const clippedGroup = g.append("g")
+        .attr("clip-path", "url(#clip-left-margin)");
 
 
-clippedGroup.selectAll("circle")
+        const linePath = clippedGroup.append("path")
 
-    .data(groupedData)
-    .enter()
-    .append("circle")
-    .attr("cx", d => xScale(d.year))
-    .attr("cy", d => y(d[metric.key]))
-    .attr("r", 4)
-    .attr("fill", metric.color)
-    .attr("data-year", d => d.year.getFullYear()) 
-    .style("cursor", "pointer")
-    .attr("class", "data-point") 
-    .on("mouseover", (event, d) => {
-        const year = d.year.getFullYear();
+        .datum(groupedData)
+        .attr("fill", "none")
+        .attr("stroke", metric.color)
+        .attr("stroke-width", 2)
+        .attr("d", line);
 
-        const allMetrics = metrics.map(m => {
-            const value = d[m.key];
-            const formatted = m.key === "reprints"
-                ? Math.round(value)             
-                : (value?.toFixed(2) ?? "N/A");
-            return `<strong>${m.label}:</strong> ${formatted}`;
-        }).join("<br/>");
-        
+        linePaths.push({ line, path: linePath });
 
-    tooltip
-        .style("display", "block")
-        .style("font-size", "16px")
-        .html(`
-            <strong>Year:</strong> ${year}<br/>
-            ${allMetrics}
-        `);
 
-        
-        d3.selectAll(`circle.data-point[data-year='${d.year.getFullYear()}']`)
-            
-            .attr("stroke", "#000")
-            .attr("stroke-width", 1.5);
-    })
-    .on("mousemove", (event) => {
-        const tooltipNode = tooltip.node();
-        const tooltipWidth = tooltipNode.offsetWidth;
-        const pageX = event.pageX;
-        const pageY = event.pageY;
-        const padding = 10;
-    
-        let left = pageX + padding;
-    
-        if (left + tooltipWidth > window.innerWidth) {
-            left = pageX - tooltipWidth - padding;
-        }
-    
-        tooltip
-            .style("left", left + "px")
-            .style("top", (pageY - 20) + "px");
-    }) 
-    .on("mouseout", () => {
-        tooltip.style("display", "none");
-        tooltip.style("font-size", "12px");
-
-       
-        d3.selectAll("circle.data-point")
+        clippedGroup.selectAll("circle")
+            .data(groupedData)
+            .enter()
+            .append("circle")
+            .attr("cx", d => xScale(d.year))
+            .attr("cy", d => y(d[metric.key]))
             .attr("r", 4)
-            .attr("stroke", "none");
-    })
-   .on("click", function(event, d) {
-    const selectedYear = d.year.getFullYear().toString();
+            .attr("fill", metric.color)
+            .attr("data-year", d => d.year.getFullYear()) 
+            .style("cursor", "pointer")
+            .attr("class", "data-point") 
+            .on("mouseover", (event, d) => {
+                const year = d.year.getFullYear();
 
-    const currentState = getState();
-    const updatedFilters = {};
+                const allMetrics = metrics.map(m => {
+                    const value = d[m.key];
+                    const formatted = m.key === "reprints"
+                        ? Math.round(value)             
+                        : (value?.toFixed(2) ?? "N/A");
+                    return `<strong>${m.label}:</strong> ${formatted}`;
+                }).join("<br/>");
+            
 
-    for (const key in currentState.selectedFilters) {
-        updatedFilters[key] = new Set(currentState.selectedFilters[key]);
-    }
+                tooltip
+                    .style("display", "block")
+                    .style("font-size", "16px")
+                    .html(`
+                        <strong>Year:</strong> ${year}<br/>
+                        ${allMetrics}
+                    `);
 
-    if (updatedFilters["Year"].has(selectedYear)) {
-        updatedFilters["Year"].delete(selectedYear);
-    } else {
-        updatedFilters["Year"].add(selectedYear);
-    }
+            
+                d3.selectAll(`circle.data-point[data-year='${d.year.getFullYear()}']`)
+                    
+                    .attr("stroke", "#000")
+                    .attr("stroke-width", 1.5);
+            })
+            .on("mousemove", (event) => {
+                const tooltipNode = tooltip.node();
+                const tooltipWidth = tooltipNode.offsetWidth;
+                const pageX = event.pageX;
+                const pageY = event.pageY;
+                const padding = 10;
+            
+                let left = pageX + padding;
+            
+                if (left + tooltipWidth > window.innerWidth) {
+                    left = pageX - tooltipWidth - padding;
+                }
+            
+                tooltip
+                    .style("left", left + "px")
+                    .style("top", (pageY - 20) + "px");
+            }) 
+            .on("mouseout", () => {
+                tooltip.style("display", "none");
+                tooltip.style("font-size", "12px");
 
-    const selectedYears = updatedFilters["Year"];
-    d3.selectAll("circle.data-point")
-        .attr("opacity", function() {
-            const year = this.getAttribute("data-year");
-            return selectedYears.size === 0 || selectedYears.has(year) ? 1 : 0.5;
+            
+                d3.selectAll("circle.data-point")
+                    .attr("r", 4)
+                    .attr("stroke", "none");
+            })
+            .on("click", function(event, d) {
+                const selectedYear = d.year.getFullYear().toString();
+                const updatedFilters = getClonedFilters();
+
+                if (updatedFilters["Year"].has(selectedYear)) {
+                    updatedFilters["Year"].delete(selectedYear);
+                } else {
+                    updatedFilters["Year"].add(selectedYear);
+                }
+
+                const selectedYears = updatedFilters["Year"];
+                d3.selectAll("circle.data-point")
+                    .attr("opacity", function() {
+                        const year = this.getAttribute("data-year");
+                        return selectedYears.size === 0 || selectedYears.has(year) ? 1 : 0.5;
+                    });
+
+                updateState({
+                    selectedFilters: updatedFilters,
+                    updateContext: "TimelineFilter"
+                });
+            });
+
+        const brush = d3.brushX()
+            .extent([[0, 0], [width, height]])
+            .on("end", brushed);
+
+        svg.append("g")
+            .attr("class", "brush")
+            .attr("transform", `translate(${margin.left}, ${margin.top})`)
+            .call(brush).lower();
+        
+    function brushed(event) {
+        if (!event.selection) return;
+
+        const [x0, x1] = event.selection;
+        const startDate = xScale.invert(x0);
+        const endDate = xScale.invert(x1);
+
+        const selectedYears = new Set(
+            groupedData
+                .filter(d => d.year >= startDate && d.year <= endDate)
+                .map(d => d.year.getFullYear().toString())
+        );
+
+
+        const updatedFilters = getClonedFilters();
+
+        selectedYears.forEach(year => {
+            if (updatedFilters["Year"].has(year)) {
+                updatedFilters["Year"].delete(year);
+            } else {
+                updatedFilters["Year"].add(year);
+            }
         });
 
-    updateState({
-        selectedFilters: updatedFilters,
-        updateContext: "TimelineFilter"
-    });
-});
+        d3.selectAll("circle.data-point")
+            .attr("opacity", function() {
+                const year = this.getAttribute("data-year");
+                return updatedFilters["Year"].size === 0 || updatedFilters["Year"].has(year) ? 1 : 0.5;
+            });
 
-const brush = d3.brushX()
-    .extent([[0, 0], [width, height]])
-    .on("end", brushed);
+        updateState({
+            selectedFilters: updatedFilters,
+            updateContext: "TimelineFilter"
+        });
+        d3.select(this).call(brush.move, null);
 
-svg.append("g")
-    .attr("class", "brush")
-    .attr("transform", `translate(${margin.left}, ${margin.top})`)
-    .call(brush).lower();
-    
-function brushed(event) {
-    if (!event.selection) return;
-
-    const [x0, x1] = event.selection;
-    const startDate = xScale.invert(x0);
-    const endDate = xScale.invert(x1);
-
-    const selectedYears = new Set(
-        groupedData
-            .filter(d => d.year >= startDate && d.year <= endDate)
-            .map(d => d.year.getFullYear().toString())
-    );
-
-    // Clone current state
-    const currentState = getState();
-    const updatedFilters = {};
-
-    for (const key in currentState.selectedFilters) {
-        updatedFilters[key] = new Set(currentState.selectedFilters[key]);
-    }
-
-    selectedYears.forEach(year => {
-        if (updatedFilters["Year"].has(year)) {
-            updatedFilters["Year"].delete(year);
-        } else {
-            updatedFilters["Year"].add(year);
         }
-    });
+        circleGroups.push({ group: g, yScale: y, metric });  
 
-    d3.selectAll("circle.data-point")
-        .attr("opacity", function() {
-            const year = this.getAttribute("data-year");
-            return updatedFilters["Year"].size === 0 || updatedFilters["Year"].has(year) ? 1 : 0.5;
-        });
-
-    updateState({
-        selectedFilters: updatedFilters,
-        updateContext: "TimelineFilter"
-    });
-    d3.select(this).call(brush.move, null);
-
-}
-  circleGroups.push({ group: g, yScale: y, metric });  
-    ;
 
 
 
@@ -325,37 +319,37 @@ function brushed(event) {
 
        
         g.append("text")
-    .attr("x", 5)
-    .attr("y",8)
-    .attr("text-anchor", "left")
-    .text(metric.label)
-    .attr("fill", "#000")
-    .attr("font-size", "11px")
-    .style("font-weight", "bold");
+            .attr("x", 5)
+            .attr("y",8)
+            .attr("text-anchor", "left")
+            .text(metric.label)
+            .attr("fill", "#000")
+            .attr("font-size", "11px")
+            .style("font-weight", "bold");
 
        
         
     
-            const xAxisG = clippedGroup.append("g")
-    .attr("transform", `translate(0, ${chartHeight})`)
-    .call(xAxis);
+        const xAxisG = clippedGroup.append("g")
+            .attr("transform", `translate(0, ${chartHeight})`)
+            .call(xAxis);
 
-    xAxisGroups.push({ g: xAxisG, isBottom: i === metrics.length - 1 });
-
-
-xAxisG.selectAll("text")
-.text(function(d) {
-    return d.getFullYear() % 2 === 1 ? d3.timeFormat("%Y")(d) : "";  
-})
-    .attr("transform", "rotate(-45)")
-    .style("text-anchor", "end")
-    .attr("font-size", "10px");
+        xAxisGroups.push({ g: xAxisG, isBottom: i === metrics.length - 1 });
 
 
-if (i !== metrics.length - 1) {
-    xAxisG.selectAll("text").remove();
-    xAxisG.selectAll("line").attr("stroke-opacity", 0.3); 
-}
+        xAxisG.selectAll("text")
+        .text(function(d) {
+            return d.getFullYear() % 2 === 1 ? d3.timeFormat("%Y")(d) : "";  
+        })
+            .attr("transform", "rotate(-45)")
+            .style("text-anchor", "end")
+            .attr("font-size", "10px");
+
+
+        if (i !== metrics.length - 1) {
+            xAxisG.selectAll("text").remove();
+            xAxisG.selectAll("line").attr("stroke-opacity", 0.3); 
+        }
 
         
     });
@@ -363,70 +357,70 @@ if (i !== metrics.length - 1) {
 
 
 
-svg.append("rect")
-    .attr("class", "hover-overlay")
-    .attr("x", margin.left)
-    .attr("y", margin.top)
-    .attr("width", width)
-    .attr("height", height)
-    .style("fill", "none")
-    .style("pointer-events", "all")
-    .on("mousemove", (event) => {
-        const [mouseX] = d3.pointer(event);
-        const date = xScale.invert(mouseX - margin.left);
+    svg.append("rect")
+        .attr("class", "hover-overlay")
+        .attr("x", margin.left)
+        .attr("y", margin.top)
+        .attr("width", width)
+        .attr("height", height)
+        .style("fill", "none")
+        .style("pointer-events", "all")
+        .on("mousemove", (event) => {
+            const [mouseX] = d3.pointer(event);
+            const date = xScale.invert(mouseX - margin.left);
 
-        sharedHoverLine
-    .attr("x1", mouseX)
-    .attr("x2", mouseX)
-    .style("display", "block");
+            sharedHoverLine
+        .attr("x1", mouseX)
+        .attr("x2", mouseX)
+        .style("display", "block");
 
-    })
-    .on("mouseout", () => {
-        sharedHoverLine.style("display", "none");
-    })
-    .lower();
-
-
+        })
+        .on("mouseout", () => {
+            sharedHoverLine.style("display", "none");
+        })
+        .lower();
 
 
 
 
-function zoomed(event) {
-    const transform = event.transform;
-    const newXScale = transform.rescaleX(xScale);
 
 
-    linePaths.forEach(({ line, path }) => {
-        path.attr("d", line.x(d => newXScale(d.year)));
-    });
+    function zoomed(event) {
+        const transform = event.transform;
+        const newXScale = transform.rescaleX(xScale);
 
 
-    circleGroups.forEach(({ group, yScale, metric }) => {
-        group.selectAll("circle")
-            .attr("cx", d => newXScale(d.year))
-            .attr("cy", d => yScale(d[metric.key]));
-    });
+        linePaths.forEach(({ line, path }) => {
+            path.attr("d", line.x(d => newXScale(d.year)));
+        });
 
 
-    xAxisGroups.forEach(({ g, isBottom }) => {
-        g.call(d3.axisBottom(newXScale)
-            .tickValues(allYears)
-            .tickFormat(d3.timeFormat("%Y"))
-        );
+        circleGroups.forEach(({ group, yScale, metric }) => {
+            group.selectAll("circle")
+                .attr("cx", d => newXScale(d.year))
+                .attr("cy", d => yScale(d[metric.key]));
+        });
 
-        g.selectAll("text")
-            .text(function(d) {
-                return isBottom && d.getFullYear() % 2 === 1 ? d3.timeFormat("%Y")(d) : "";
-            })
-            .attr("transform", "rotate(-45)")
-            .style("text-anchor", "end")
-            .attr("font-size", "10px");
 
-        if (!isBottom) {
-            g.selectAll("text").remove();
-        }
-    });
-}
+        xAxisGroups.forEach(({ g, isBottom }) => {
+            g.call(d3.axisBottom(newXScale)
+                .tickValues(allYears)
+                .tickFormat(d3.timeFormat("%Y"))
+            );
+
+            g.selectAll("text")
+                .text(function(d) {
+                    return isBottom && d.getFullYear() % 2 === 1 ? d3.timeFormat("%Y")(d) : "";
+                })
+                .attr("transform", "rotate(-45)")
+                .style("text-anchor", "end")
+                .attr("font-size", "10px");
+
+            if (!isBottom) {
+                g.selectAll("text").remove();
+            }
+        });
+    }
 
 
 }
