@@ -145,10 +145,18 @@ let newHoveredCards = isAlreadySelected
     updateState({ hoveredCards: newHoveredCards });
 
     // Immediately reflect in scatterplot
-    const scatterSvg = d3.select(".Scatterplot svg");
-    scatterSvg.selectAll(".dots circle")
-        .attr("stroke", d => newHoveredCards.some(c => c.name === d.name) ? "#000" : "none")
-        .attr("stroke-width", d => newHoveredCards.some(c => c.name === d.name) ? 2.5 : null);
+    d3.selectAll(".dots circle")
+  .style("stroke", d => newHoveredCards.some(c => c.name === d.name)
+    ? "orange"
+    : (+d.edhrec_rank > 0 ? "none" : "black"))
+  .style("stroke-width", d => newHoveredCards.some(c => c.name === d.name)
+    ? 2.5
+    : (+d.edhrec_rank > 0 ? 0 : 1.2))
+  .each(function (d) {
+    if (newHoveredCards.some(c => c.name === d.name)) {
+      this.parentNode.appendChild(this); // bring to front
+    }
+  });
 });
 
     const priceFields = new Set();

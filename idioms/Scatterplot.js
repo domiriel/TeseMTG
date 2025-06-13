@@ -13,6 +13,53 @@ function getSymbolFromAttribute(attr) {
     return "";
 }
 
+const ZOOM_THRESHOLD = 6;
+let currentZoomLevel = 1;
+let wasZoomedOut = true;  
+let isShowingFullData = false;
+let initialDownsampledData = null;
+let lastZoomedOut = currentZoomLevel < ZOOM_THRESHOLD;
+
+function styleAndBindDots(selection) {
+  return selection
+    .attr("r", 2.5)
+    .style("cursor", "pointer")
+    .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
+    .style("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
+    .style("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
+    .attr("opacity", 0.8)
+    .on("mouseover", mouseoverFn)
+    .on("mousemove", mousemoveFn)
+    .on("mouseout", mouseoutFn)
+    .on("click", clickFn);
+}
+
+
+
+function downsamplePoints(data, xScale, yScale, cellSize = 6) {
+  const grid = new Map();
+
+  for (const d of data) {
+    const cx = Math.floor(xScale(d.avg_price) / cellSize);
+    const cy = Math.floor(yScale(d.complexity) / cellSize);
+    const key = `${cx},${cy}`;
+    if (!grid.has(key)) {
+      grid.set(key, d);  // Only one card per grid cell
+    }
+  }
+
+  return Array.from(grid.values());
+}
+function tagZoomKeyPoints(data, xScale, yScale, cellSize = 6) {
+  const zoomKeys = downsamplePoints(data, xScale, yScale, cellSize);
+  const keepSet = new Set(zoomKeys.map(d => d.name)); // or d.id if more unique
+  data.forEach(d => {
+    d.isZoomKey = keepSet.has(d.name);
+  });
+  return data;
+}
+
+
 let globalDots = null;
 
 function mouseoverFn(event, d) {
@@ -89,9 +136,14 @@ function updatePointPositions(xScale, yScale) {
     .style("display", d => {
       const cx = xScale(d.avg_price);
       const cy = yScale(d.complexity);
-      return (cx < 0 || cx > chartWidth || cy < 0 || cy > chartHeight) ? "none" : null;
+      const inBounds = cx >= 0 && cx <= chartWidth && cy >= 0 && cy <= chartHeight;
+      const hoveredCards = getState().hoveredCards || [];
+      const hoveredSet = new Set(hoveredCards.map(c => c.name));
+      const showDot = currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey || hoveredSet.has(d.name);
+      return (inBounds && showDot) ? null : "none";
     });
 }
+
 
 
 
@@ -167,6 +219,9 @@ function getGroupColor(rank) {
 
 
 export function createScatterPlot(data, containerId, isUpdate = false, selectedPriceAttribute = "price_usd", savedTransform = null) {
+const hoveredCards = getState().hoveredCards || [];
+const hoveredSet = new Set(hoveredCards.map(c => c.name));
+
 
     
     d3.select(containerId).selectAll("*").remove();
@@ -229,16 +284,17 @@ const filteredData = filteredForPlot
     .map(card => cardMap.get(card.name));
 
 
-    const sampledData = filteredData;
+   
 
-    const minPrice = d3.min(sampledData, d => d.avg_price);
-const maxPrice = d3.max(sampledData, d => d.avg_price);
+
+    const minPrice = d3.min(filteredData, d => d.avg_price);
+const maxPrice = d3.max(filteredData, d => d.avg_price);
 const safeMinPrice = Math.max(0.001, minPrice);
 const pricePadding = (maxPrice - safeMinPrice) * 0.01;
 const paddedMinPrice = 0.0009
 const paddedMaxPrice = maxPrice + pricePadding;
 
-sampledData.forEach(d => {
+filteredData.forEach(d => {
     if (d.avg_price <= 0 || isNaN(d.avg_price)) {
         d.avg_price = safeMinPrice;
     }
@@ -266,10 +322,10 @@ const originalXScale = d3.scaleLog()
     ])
     .range([0, chartWidth]);
 
+    
 
-
-        const minComplexity = d3.min(sampledData, d => d.complexity);
-        const maxComplexity = d3.max(sampledData, d => d.complexity);
+        const minComplexity = d3.min(filteredData, d => d.complexity);
+        const maxComplexity = d3.max(filteredData, d => d.complexity);
         const yPadding = (maxComplexity - minComplexity) * 0.01; 
         
         const originalYScale = d3.scaleLinear()
@@ -277,8 +333,12 @@ const originalXScale = d3.scaleLog()
             .range([chartHeight, 0]);
         
 
+
+
     const xScale = originalXScale.copy();
     const yScale = originalYScale.copy();
+
+    tagZoomKeyPoints(filteredData, xScale, yScale);
 
     const symbol = getSymbolFromAttribute(selectedPriceAttribute); 
 
@@ -420,7 +480,7 @@ const brush = d3.brush()
 
         const [[x0, y0], [x1, y1]] = event.selection;
 
-        const brushedCards = sampledData.filter(d => {
+        const brushedCards = filteredData.filter(d => {
             const cx = xScale(d.avg_price);
             const cy = yScale(d.complexity);
             return cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1;
@@ -459,21 +519,25 @@ const brush = d3.brush()
 
 
     brushOverlay.call(brush).lower();
+    let fullData = filteredData;
 
 
+
+const visibleData = filteredData
     const dots = gClip.selectAll("circle")
-    .data(sampledData, d => d.name)
-    .join("circle")
-    .attr("cx", d => xScale(d.avg_price))
-    .attr("cy", d => yScale(d.complexity))
-    .attr("r", 2.5)
-    .style("cursor", "pointer")
-    .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
-    .style("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
-    .style("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
-    .attr("opacity", 0.8);
+    .data(visibleData, d => d.name)
+  .join("circle")
+  .attr("cx", d => xScale(d.avg_price))
+  .attr("cy", d => yScale(d.complexity))
+  .attr("r", 2.5)
+  .style("cursor", "pointer")
+  .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
+  .style("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
+  .style("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
+  .attr("opacity", 0.8)
+  .style("display", d =>(currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey || hoveredSet.has(d.name)) ? null : "none");
 
-    sampledData.forEach((d, i) => {
+    filteredData.forEach((d, i) => {
         if (isNaN(d.avg_price) || d.avg_price <= 0 || typeof d.avg_price !== 'number') {
         }
     });
@@ -482,8 +546,23 @@ const brush = d3.brush()
 
     updatePointPositions(xScale, yScale);
 
+console.log("🔍 Non-visible cards (display: none):");
 
-    
+const hiddenCards = [];
+
+gClip.selectAll("circle")
+  .filter(function () {
+    return d3.select(this).style("display") === "none";
+  })
+  .each(function (d) {
+    if (hiddenCards.length < 10) {
+      hiddenCards.push(d.name);
+    }
+  });
+
+hiddenCards.forEach((name, i) => {
+  console.log(`${i + 1}. ${name}`);
+});
 
     const tooltip = d3.select("#tooltip");
     let hoverTimeout = null;
@@ -563,36 +642,54 @@ noRankEntry.append("text")
 
 
     let zoomTimeout = null;
-    const ZOOM_DELAY = 60; 
+    const ZOOM_DELAY =0; 
 
 
     const zoom = d3.zoom()
         .scaleExtent([1, 24])
         .on("zoom", event => {
-            if (zoomTimeout) clearTimeout(zoomTimeout);
-            zoomTimeout = setTimeout(() => {
-                const transform = event.transform;
-                const newX = transform.rescaleX(originalXScale);
-                let newY = transform.rescaleY(originalYScale);
-                const [yMin, yMax] = newY.domain();
+  if (zoomTimeout) clearTimeout(zoomTimeout);
+  zoomTimeout = setTimeout(() => {
+    const transform = event.transform;
+    currentZoomLevel = transform.k;
 
-                
-                if (yMin < 0) {
-                    const span = yMax - yMin;
-                    newY = d3.scaleLinear()
-                        .domain([0, Math.max(0.001, span)])
-                        .range([chartHeight, 0]);
-                }
+    const newX = transform.rescaleX(originalXScale);
+    const newY = transform.rescaleY(originalYScale);
 
-                xScale.domain(newX.domain());
-                yScale.domain(newY.domain());
+    xScale.domain(newX.domain());
+    yScale.domain(newY.domain());
 
-                updateAxes(symbol);
-                updatePointPositions(xScale, yScale);
+    updateAxes(symbol);
 
-                
-            }, ZOOM_DELAY);
-        });
+
+console.log(`Zoom level: ${currentZoomLevel} | Showing full data? ${isShowingFullData}`);
+
+    const nowZoomedOut = transform.k < ZOOM_THRESHOLD;
+
+if (nowZoomedOut !== lastZoomedOut) {
+  const newVisible = filteredData
+
+gClip.selectAll("circle")
+  .data(newVisible, d => d.name)
+  .join(
+    enter => styleAndBindDots(enter.append("circle")),
+    update => styleAndBindDots(update),
+    exit => exit.remove()
+  )
+  .attr("cx", d => xScale(d.avg_price))
+  .attr("cy", d => yScale(d.complexity));
+
+  lastZoomedOut = nowZoomedOut;
+}
+
+globalDots = gClip.selectAll("circle");
+
+// Always update positions (even if no redraw)
+updatePointPositions(xScale, yScale);
+
+  }, ZOOM_DELAY);
+});
+
 
 
         svg.call(zoom);
@@ -606,13 +703,6 @@ noRankEntry.append("text")
         
     
 
-    function updatePointStyle(zoomLevel) {
-        dots.attr("r", d => {
-            if (zoomLevel < 2) return 1.5;
-            if (zoomLevel < 6) return 3;
-            return 5;
-        });
-    }
     
 svg.node().__scales__ = {
     xScale,
@@ -640,6 +730,8 @@ svg.node().__scatterMeta__ = {
 export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_eur") {
 
   console.log("Updating scatter plot...");
+  const hoveredCards = getState().hoveredCards || [];
+const hoveredSet = new Set(hoveredCards.map(c => c.name));
 
     const svg = d3.select(".Scatterplot svg");
     if (svg.empty()) return;
@@ -679,26 +771,32 @@ export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_
 
 
     const tooltip = d3.select("#tooltip");
-const dots = gClip.selectAll("circle")
-  .data(filteredData, d => d.name)
-  .join(
-    enter => enter.append("circle")
-      .attr("r", 2.5)
-      .style("cursor", "pointer")
-      .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
-      .style("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
-      .style("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
-      .attr("opacity", 0.8)
-      .on("mouseover", mouseoverFn)
-      .on("mousemove", mousemoveFn)
-      .on("mouseout", mouseoutFn)
-      .on("click", clickFn),
-    update => update
-      .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
-      .style("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
-      .style("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2),
-    exit => exit.remove()
-  );
+
+    tagZoomKeyPoints(filteredData, xScale, yScale);
+
+    const dots = gClip.selectAll("circle")
+    .data(filteredData, d => d.name)
+    .join(
+        enter => enter.append("circle")
+        .attr("r", 2.5)
+        .style("cursor", "pointer")
+        .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
+        .style("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
+        .style("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
+        .attr("opacity", 0.8)
+        .style("display", d => (currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey || hoveredSet.has(d.name)) ? null : "none")
+        .on("mouseover", mouseoverFn)
+        .on("mousemove", mousemoveFn)
+        .on("mouseout", mouseoutFn)
+        .on("click", clickFn),
+        update => update
+        .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
+        .style("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
+        .style("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
+        .style("display", d => (currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey || hoveredSet.has(d.name)) ? null : "none"),
+        exit => exit.remove()
+    );
+
 
 dots
   .attr("cx", d => xScale(d.avg_price))
@@ -710,7 +808,6 @@ dots
     updatePointPositions(xScale, yScale);
 
 
-    const { hoveredCards } = getState();
 d3.selectAll(".dots circle")
   .style("stroke", d => hoveredCards.some(c => c.name === d.name)
     ? "orange"
