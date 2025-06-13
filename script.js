@@ -246,16 +246,23 @@ if (
     }
 
     // Apply free text search
-    if (freeTextSearch) {
-      const searchLower = freeTextSearch.toLowerCase();
-      filteredSet = new Set([...filteredSet].filter(card => {
-        return (
-          card.name?.toLowerCase().includes(searchLower) ||
-          (card.keywords && card.keywords.some(k => k.toLowerCase().includes(searchLower))) ||
-          (card.subtype && card.subtype.toLowerCase().includes(searchLower))
-        );
-      }));
-    }
+    const textTerms = selectedFilters["FreeTextSearch"];
+ console.log("FreeTextSearch terms:", Array.from(textTerms));
+
+if (textTerms && textTerms.size > 0) {
+  const searchTerms = Array.from(textTerms).map(t => t.toLowerCase());
+  filteredSet = new Set([...filteredSet].filter(card => {
+    const cardText = [
+      card.name?.toLowerCase() || "",
+      ...(card.keywords || []).map(k => k.toLowerCase()),
+      card.subtype?.toLowerCase() || ""
+    ];
+    return searchTerms.some(term =>
+      cardText.some(text => text.includes(term))
+    );
+  }));
+}
+
 
     // Save results
     results[context] = Array.from(filteredSet);

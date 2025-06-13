@@ -15,11 +15,84 @@ function getSymbolFromAttribute(attr) {
 
 let globalDots = null;
 
-function updatePointPositions(xScale, yScale) {
-    if (!globalDots) return;
-    globalDots.attr("cx", d => xScale(d.avg_price))
-              .attr("cy", d => yScale(d.complexity));
+function mouseoverFn(event, d) {
+  d3.select("#tooltip").style("display", "block")
+    .html(`
+      <div style="display: flex; gap: 12px; align-items: flex-start;">
+        <img src="${d.image_normal}" alt="${d.name}" width="200" style="border-radius: 4px; box-shadow: 0 0 4px rgba(0,0,0,0.5);" />
+        <div>
+          <strong>${d.name}</strong><br>
+          Complexity: ${d.complexity}<br>
+          EDH Rank: ${d.edhrec_rank || "N/A"}<br>
+          Supertypes: ${d.supertype}<br>
+          Type: ${d.type}<br>
+          Subtype: ${d.subtype}<br>
+          Colors: ${d.color_identity}<br>
+          Avg Price: ${d.was_price_invalid ? "NaN" : "$" + d.avg_price.toFixed(3)}<br>
+          All Sets: ${d.all_sets.map(set => `${set.name} (${set.type})`).join("<br>")}<br>
+        </div>
+      </div>
+    `);
 }
+
+function mousemoveFn(event) {
+  const tooltipNode = d3.select("#tooltip").node();
+  const tooltipWidth = tooltipNode.offsetWidth;
+  const padding = 10;
+  let left = event.pageX + padding;
+  if (left + tooltipWidth > window.innerWidth) {
+    left = event.pageX - tooltipWidth - padding;
+  }
+  d3.select("#tooltip")
+    .style("left", `${left}px`)
+    .style("top", `${event.pageY + padding}px`);
+}
+
+function mouseoutFn() {
+   d3.select("#tooltip").style("display", "none");
+}
+
+
+function clickFn(event, d) {
+  const { hoveredCards } = getState();
+  const isAlreadySelected = hoveredCards.some(c => c.name === d.name);
+  let newHoveredCards;
+
+  if (isAlreadySelected) {
+    newHoveredCards = hoveredCards.filter(c => c.name !== d.name);
+    d3.select(this).attr("stroke", "none").attr("stroke-width", null);
+  } else {
+    newHoveredCards = [...hoveredCards, d];
+    d3.select(this).raise().attr("stroke", "orange").attr("stroke-width", 2.5);
+  }
+
+  updateState({ hoveredCards: newHoveredCards });
+
+  d3.selectAll(".dots circle")
+    .style("stroke", d => newHoveredCards.some(c => c.name === d.name) ? "orange" : (+d.edhrec_rank > 0 ? "none" : "black"))
+    .style("stroke-width", d => newHoveredCards.some(c => c.name === d.name) ? 2.5 : (+d.edhrec_rank > 0 ? 0 : 1.2));
+}
+
+
+function updatePointPositions(xScale, yScale) {
+  if (!globalDots) return;
+
+  const svg = d3.select(".Scatterplot svg");
+  const meta = svg.node().__scatterMeta__;
+  if (!meta) return;
+
+  const { chartWidth, chartHeight } = meta;
+
+  globalDots
+    .attr("cx", d => xScale(d.avg_price))
+    .attr("cy", d => yScale(d.complexity))
+    .style("display", d => {
+      const cx = xScale(d.avg_price);
+      const cy = yScale(d.complexity);
+      return (cx < 0 || cx > chartWidth || cy < 0 || cy > chartHeight) ? "none" : null;
+    });
+}
+
 
 
 export function prepareScatterData(data, selectedPriceAttribute) {
@@ -385,24 +458,25 @@ const brush = d3.brush()
 
 
 
-brushOverlay.call(brush).lower();
+    brushOverlay.call(brush).lower();
 
 
     const dots = gClip.selectAll("circle")
     .data(sampledData, d => d.name)
     .join("circle")
+    .attr("cx", d => xScale(d.avg_price))
+    .attr("cy", d => yScale(d.complexity))
     .attr("r", 2.5)
     .style("cursor", "pointer")
     .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
-.style("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
-.style("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
-
+    .style("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
+    .style("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
     .attr("opacity", 0.8);
 
-sampledData.forEach((d, i) => {
-    if (isNaN(d.avg_price) || d.avg_price <= 0 || typeof d.avg_price !== 'number') {
-    }
-});
+    sampledData.forEach((d, i) => {
+        if (isNaN(d.avg_price) || d.avg_price <= 0 || typeof d.avg_price !== 'number') {
+        }
+    });
 
     globalDots = dots;
 
@@ -415,69 +489,10 @@ sampledData.forEach((d, i) => {
     let hoverTimeout = null;
 
 
-    dots.on("mouseover", function (event, d) {
-        tooltip.style("display", "block")
-    .html(`
-        <div style="display: flex; gap: 12px; align-items: flex-start;">
-            <img src="${d.image_normal}" alt="${d.name}" width="200" style="border-radius: 4px; box-shadow: 0 0 4px rgba(0,0,0,0.5);" />
-            <div>
-                <strong>${d.name}</strong><br>
-                Complexity: ${d.complexity}<br>
-                EDH Rank: ${d.edhrec_rank || "N/A"}<br>
-                Supertypes: ${d.supertype}<br>
-                Type: ${d.type}<br>
-                Subtype: ${d.subtype}<br>
-                Colors: ${d.color_identity}<br>
-                Avg Price: ${d.was_price_invalid ? "NaN" : symbol + d.avg_price.toFixed(3)}<br>
-                All Sets: ${d.all_sets.map(set => `${set.name} (${set.type})`).join("<br>")}<br>
-            </div>
-        </div>
-    `);
- })
-        .on("mousemove", function (event) {
-            const tooltipNode = tooltip.node();
-            const tooltipWidth = tooltipNode.offsetWidth;
-            const pageX = event.pageX;
-            const pageY = event.pageY;
-            const padding = 10;
-
-            let left = pageX + padding;
-            if (left + tooltipWidth > window.innerWidth) {
-                left = pageX - tooltipWidth - padding;
-            }
-
-            tooltip.style("left", left + "px")
-                .style("top", (pageY + padding) + "px");
-        })
-        .on("mouseout", function () {
-            tooltip.style("display", "none");
-        })
-        .on("click", function (event, d) {
-    const { hoveredCards } = getState();
-    const isAlreadySelected = hoveredCards.some(c => c.name === d.name);
-
-    let newHoveredCards;
-    if (isAlreadySelected) {
-        newHoveredCards = hoveredCards.filter(c => c.name !== d.name);
-        d3.select(this).attr("stroke", "none").attr("stroke-width", null);
-    } else {
-        newHoveredCards = [...hoveredCards, d];
-        d3.select(this)
-            .raise()
-            .attr("stroke", "orange")
-            .attr("stroke-width", 2.5);
-    }
-
-    updateState({ hoveredCards: newHoveredCards });
-
-     d3.selectAll(".dots circle")
-  .style("stroke", d => newHoveredCards.some(c => c.name === d.name)
-    ? "orange"
-    : (+d.edhrec_rank > 0 ? "none" : "black"))
-  .style("stroke-width", d => newHoveredCards.some(c => c.name === d.name)
-    ? 2.5
-    : (+d.edhrec_rank > 0 ? 0 : 1.2));
-});
+    dots.on("mouseover", mouseoverFn)
+        .on("mousemove", mousemoveFn)
+        .on("mouseout", mouseoutFn)
+        .on("click", clickFn);
 
         
         
@@ -550,6 +565,7 @@ noRankEntry.append("text")
     let zoomTimeout = null;
     const ZOOM_DELAY = 60; 
 
+
     const zoom = d3.zoom()
         .scaleExtent([1, 24])
         .on("zoom", event => {
@@ -608,6 +624,11 @@ svg.node().__scales__ = {
     originalYScale
 };
 
+svg.node().__scatterMeta__ = {
+  chartWidth,
+  chartHeight
+};
+
 
     function resetZoom() {
         svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity);
@@ -618,7 +639,7 @@ svg.node().__scales__ = {
 
 export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_eur") {
 
-
+  console.log("Updating scatter plot...");
 
     const svg = d3.select(".Scatterplot svg");
     if (svg.empty()) return;
@@ -656,86 +677,33 @@ export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_
             return "Price ($)";
         });
 
-    gClip.selectAll("circle").remove();
 
     const tooltip = d3.select("#tooltip");
+const dots = gClip.selectAll("circle")
+  .data(filteredData, d => d.name)
+  .join(
+    enter => enter.append("circle")
+      .attr("r", 2.5)
+      .style("cursor", "pointer")
+      .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
+      .style("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
+      .style("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
+      .attr("opacity", 0.8)
+      .on("mouseover", mouseoverFn)
+      .on("mousemove", mousemoveFn)
+      .on("mouseout", mouseoutFn)
+      .on("click", clickFn),
+    update => update
+      .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
+      .style("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
+      .style("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2),
+    exit => exit.remove()
+  );
 
-    gClip.selectAll("circle")
-        .data(filteredData, d => d.name)
-        .enter()
-        .append("circle")
-        .attr("r", 2.5)
-        .style("cursor", "pointer")
-       .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
-    .style("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
-.style("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
+dots
+  .attr("cx", d => xScale(d.avg_price))
+  .attr("cy", d => yScale(d.complexity));
 
-        .attr("opacity", 0.8)
-        .attr("cx", d => xScale(d.avg_price))
-        .attr("cy", d => yScale(d.complexity))
-        .on("mouseover", function (event, d) {
-            tooltip.style("display", "block")
-            .html(`
-                <div style="display: flex; gap: 12px; align-items: flex-start;">
-                    <img src="${d.image_normal}" alt="${d.name}" width="200" style="border-radius: 4px; box-shadow: 0 0 4px rgba(0,0,0,0.5);" />
-                    <div>
-                        <strong>${d.name}</strong><br>
-                        Complexity: ${d.complexity}<br>
-                        EDH Rank: ${d.edhrec_rank || "N/A"}<br>
-                        Supertypes: ${d.supertype}<br>
-                        Type: ${d.type}<br>
-                        Subtype: ${d.subtype}<br>
-                        Colors: ${d.color_identity}<br>
-                        Avg Price: ${d.was_price_invalid ? "NaN" : symbol + d.avg_price.toFixed(3)}<br>
-                        All Sets: ${d.all_sets.map(set => `${set.name} (${set.type})`).join("<br>")}<br>
-                    </div>
-                </div>
-            `);
-        })
-        .on("mousemove", function (event) {
-            const tooltipNode = tooltip.node();
-            const tooltipWidth = tooltipNode.offsetWidth;
-            const pageX = event.pageX;
-            const pageY = event.pageY;
-            const padding = 10;
-
-            let left = pageX + padding;
-            if (left + tooltipWidth > window.innerWidth) {
-                left = pageX - tooltipWidth - padding;
-            }
-
-            tooltip.style("left", `${left}px`)
-                   .style("top", `${pageY + padding}px`);
-        })
-        .on("mouseout", function () {
-            tooltip.style("display", "none");
-        })
-        .on("click", function (event, d) {
-            const { hoveredCards } = getState();
-            const isAlreadySelected = hoveredCards.some(c => c.name === d.name);
-
-            let newHoveredCards;
-            if (isAlreadySelected) {
-                newHoveredCards = hoveredCards.filter(c => c.name !== d.name);
-                d3.select(this).attr("stroke", "none").attr("stroke-width", null);
-            } else {
-                newHoveredCards = [...hoveredCards, d];
-                d3.select(this)
-                    .raise()
-                    .attr("stroke", "orange")
-                    .attr("stroke-width", 2.5);
-            }
-
-            updateState({ hoveredCards: newHoveredCards });
-
-            d3.selectAll(".dots circle")
-  .style("stroke", d => newHoveredCards.some(c => c.name === d.name)
-    ? "orange"
-    : (+d.edhrec_rank > 0 ? "none" : "black"))
-  .style("stroke-width", d => newHoveredCards.some(c => c.name === d.name)
-    ? 2.5
-    : (+d.edhrec_rank > 0 ? 0 : 1.2));
-        });
 
 
     globalDots = gClip.selectAll("circle");

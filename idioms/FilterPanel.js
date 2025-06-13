@@ -5,12 +5,30 @@ import { showLoader, hideLoader } from "./LoadingAnimation.js";
 const optionMap = new Map();  
 const pillMap = new Map();
 
+const VISIBLE_FILTER_CATEGORIES = [
+  "Keywords",
+  "Supertypes",
+  "Types",
+  "Subtypes",
+  "Set Types",
+  "Set Names",
+  "Originality",
+  "Rarity",
+  "Foil Status"
+];
+
 
 function addToMap(map, key) {
     if (!key) return;
     const trimmed = key.trim();
     if (!trimmed) return;
     map.set(trimmed, (map.get(trimmed) || 0) + 1);
+}
+
+function cloneFilters(filters) {
+    return Object.fromEntries(
+        Object.entries(filters).map(([k, v]) => [k, new Set(v)])
+    );
 }
 
 export function createFilterPanel(data, containerId, selectedFiltersFromState, isUpdate = false) {
@@ -33,48 +51,19 @@ export function createFilterPanel(data, containerId, selectedFiltersFromState, i
         .style("padding", "10px")
         .style("box-sizing", "border-box");
 
-    const filters = {
-        "Keywords": new Map(),
-        "Supertypes": new Map(),
-        "Types": new Map(),
-        "Subtypes": new Map(),
-        "Set Types": new Map(),
-        "Set Names": new Map(),
-        "Originality": new Map(),
-        "Rarity": new Map(),
-        "Foil Status": new Map(),
-    };
-
     const selectedFilters = selectedFiltersFromState;
-    const cardNameSet = new Set();
+    const allFilters = computeFilterCounts(data, selectedFilters);
 
-    data.forEach(card => {
-        if (card.name) cardNameSet.add(card.name);
-        if (Array.isArray(card.keywords)) card.keywords.forEach(k => addToMap(filters["Keywords"], k));
-        if (card.supertype) {
-            if (card.supertype.toLowerCase() === "no supertype") {
-                addToMap(filters["Supertypes"], "No supertype");
-            } else {
-                card.supertype.split(/[\s/]+/).forEach(su => addToMap(filters["Supertypes"], su));
-            }
-        }
-        if (card.type) card.type.split(/[\s/]+/).forEach(t => addToMap(filters["Types"], t));
-        if (card.subtype) card.subtype.split(/[\s/]+/).forEach(s => addToMap(filters["Subtypes"], s));
-        if (card.set_type) addToMap(filters["Set Types"], card.set_type);
-        if (card.set_name) addToMap(filters["Set Names"], card.set_name);
+    const filters = Object.fromEntries(Object.entries(allFilters).filter(([category]) =>
+            VISIBLE_FILTER_CATEGORIES.includes(category)
+        )
+);
 
-        if (card.originality) addToMap(filters["Originality"], card.originality);
-        if (card.rarity) addToMap(filters["Rarity"], card.rarity);
-        if (card.foil_status) addToMap(filters["Foil Status"], card.foil_status);
 
-    });
 
-    for (const key in filters) {
-        filters[key] = Array.from(filters[key].entries()).sort((a, b) => a[0].localeCompare(b[0]));
-    }
+    const { default: filteredCards } = getState().lastFilteredData || getFilteredData(data, selectedFilters);
 
-const { default: filteredCards } = getFilteredData(data, selectedFilters);
-const uniqueCardNames = Array.from(new Set(filteredCards.map(card => card.name))).sort();
+    const uniqueCardNames = Array.from(new Set(filteredCards.map(card => card.name))).sort();
 
 
 
@@ -103,12 +92,32 @@ wrapper.append("input")
   .style("margin-bottom", "12px")
   .style("padding", "6px")
   .style("font-size", "16px")
-  .on("keydown", function (event) {
-    if (event.key === "Enter") {
-      const searchText = this.value.trim();
-      updateState({ freeTextSearch: searchText });
-    }
-  });
+.on("keydown", function (event) {
+  if (event.key === "Enter") {
+    const searchText = this.value.trim().toLowerCase();
+    if (!searchText) return;
+    
+    const terms = searchText.split(/\s+/); // Split by whitespace
+    const currentFilters = cloneFilters(getState().selectedFilters);
+    if (!currentFilters["FreeTextSearch"]) currentFilters["FreeTextSearch"] = new Set();
+    
+    terms.forEach(term => currentFilters["FreeTextSearch"].add(term));
+
+    updateState({ selectedFilters: currentFilters, updateContext: "TextSearch" });
+        console.log("Updated selectedFilters:", getState().selectedFilters);
+    this.value = ""; // Clear input after
+  }
+});
+
+const freeTextPillContainer = wrapper.append("div")
+  .attr("class", "pill-container free-text-pills")
+  .style("display", "flex")
+  .style("flex-wrap", "wrap")
+  .style("gap", "4px")
+  .style("margin-bottom", "12px");
+
+pillMap.set("FreeTextSearch", freeTextPillContainer);
+
 
 
 
@@ -250,13 +259,12 @@ let newHoveredCards = isAlreadySelected
                 const isVisible = content.style("display") === "block";
                 content.style("display", isVisible ? "none" : "block");
                 searchBox.style("display", isVisible ? "none" : "block");
-                pillContainer.style("display", isVisible ? "none" : "flex");
             });
 
         const pillContainer = section.append("div")
             .attr("class", "pill-container")
             .style("margin-top", "6px")
-            .style("display", "none")
+            .style("display", "flex")
             .style("flex-wrap", "wrap")
             .style("gap", "4px");
         pillMap.set(category, pillContainer);
@@ -290,10 +298,7 @@ let newHoveredCards = isAlreadySelected
                 .on("click", function (event, value) {
                     showLoader();
                     selectedSet.delete(value);
-                    const updatedFilters = {};
-                    for (const key in selectedFilters) {
-                        updatedFilters[key] = new Set(selectedFilters[key]);
-                    }
+                    const updatedFilters = cloneFilters(selectedFilters);
                     updateState({ 
                     selectedFilters: updatedFilters,
                     updateContext: d.category === "Set Names" ? "TimelineFilter" : undefined
@@ -493,7 +498,7 @@ export function updateFilterPanel(originalData, selectedFilters, containerId = "
     
     selectedFilters = selectedFilters || {};
 
-const { default: filteredCards } = getFilteredData(originalData, selectedFilters);
+const { default: filteredCards } = getState().lastFilteredData || getFilteredData(data, selectedFilters);
 
     const uniqueCardNames = Array.from(new Set(filteredCards.map(card => card.name))).sort();
 
@@ -507,70 +512,46 @@ const { default: filteredCards } = getFilteredData(originalData, selectedFilters
         update => update.attr("value", d => d),
         exit => exit.remove()
       );
-    const filters = {
-        "Keywords": new Map(),
-        "Supertypes": new Map(),
-        "Types": new Map(),
-        "Subtypes": new Map(),
-        "Set Types": new Map(),
-        "Set Names": new Map(),
-        "Originality": new Map(),
-        "Rarity": new Map(),
-        "IcicleColorGroups": new Map(),
-        "IcicleColorIdentity": new Map(),
-        "Foil Status": new Map(),
-    };
+    const filters = new Map();
 
-    Object.keys(filters).forEach(category => {
-        // Partial filter: ignore the current category
-        const partialFilters = {};
-        for (const key in selectedFilters) {
-            partialFilters[key] = new Set(selectedFilters[key]);
+VISIBLE_FILTER_CATEGORIES.forEach(category => {
+    const partialFilters = Object.fromEntries(
+        Object.entries(selectedFilters).map(([k, v]) => [k, new Set(v)])
+    );
+    partialFilters[category] = new Set();
+
+    const partiallyFilteredData = originalData.filter(card => {
+        for (const [cat, values] of Object.entries(partialFilters)) {
+            if (!values || values.size === 0) continue;
+            const cardValue = extractCardValue(card, cat);
+            if (!cardValue) return false;
+
+            const isSplittable = ["Supertypes", "Types", "Subtypes"].includes(cat);
+            const cardValues = Array.isArray(cardValue)
+                ? cardValue.map(v => v.trim().toLowerCase())
+                : (isSplittable
+                    ? cardValue.split(/[\s/]+/).map(v => v.trim().toLowerCase())
+                    : [cardValue.trim().toLowerCase()]);
+
+            const filterValues = new Set([...values].map(v => v.trim().toLowerCase()));
+            if (!cardValues.some(v => filterValues.has(v))) return false;
         }
-        partialFilters[category] = new Set(); // empty for this category
-
-        const partiallyFilteredData = originalData.filter(card => {
-            for (const [cat, values] of Object.entries(partialFilters)) {
-                if (!values || values.size === 0) continue;
-                const cardValue = extractCardValue(card, cat);
-                if (!cardValue) return false;
-
-                const isSplittable = ["Supertypes", "Types", "Subtypes"].includes(cat);
-                const cardValues = Array.isArray(cardValue)
-                    ? cardValue.map(v => v.trim().toLowerCase())
-                    : (isSplittable
-                        ? cardValue.split(/[\s/]+/).map(v => v.trim().toLowerCase())
-                        : [cardValue.trim().toLowerCase()]);
-
-                const filterValues = new Set([...values].map(v => v.trim().toLowerCase()));
-                if (!cardValues.some(v => filterValues.has(v))) return false;
-            }
-            return true;
-        });
-
-        // Count the values for this category using the partially filtered data
-        partiallyFilteredData.forEach(card => {
-            const cardValue = extractCardValue(card, category);
-            if (!cardValue) return;
-
-            const isSplittable = ["Supertypes", "Types", "Subtypes"].includes(category);
-            const values = Array.isArray(cardValue)
-                ? cardValue.map(v => v.trim())
-                : (isSplittable ? cardValue.split(/[\s/]+/).map(v => v.trim()) : [cardValue.trim()]);
-
-            values.forEach(v => addToMap(filters[category], v));
-        });
-
-        
-
+        return true;
     });
+
+    const filterCounts = computeFilterCounts(partiallyFilteredData, partialFilters, []);
+
+    filters.set(category, new Map(filterCounts[category]));
+});
+
+
 
     window.requestAnimationFrame(() => {
         optionMap.forEach((el, key) => {
             const [category, value] = key.split("|");
-            if (!filters[category]) return;
+            if (!filters.has(category)) return;
 
-            const count = filters[category]?.get(value) || 0;
+            const count = filters.get(category)?.get(value) || 0;
             const span = el.select("span");
             span.text(`${value} (${count})`).attr("data-count", count);
 
@@ -584,6 +565,8 @@ const { default: filteredCards } = getFilteredData(originalData, selectedFilters
     });
 
     Object.entries(selectedFilters).forEach(([category, selectedSet]) => {
+        if (!VISIBLE_FILTER_CATEGORIES.includes(category) && category !== "FreeTextSearch") return;
+
         const pillContainer = pillMap.get(category);
         if (!pillContainer) return;
       
@@ -605,10 +588,7 @@ const { default: filteredCards } = getFilteredData(originalData, selectedFilters
           .text("\u2715")
           .on("click", function (event, value) {
               selectedSet.delete(value);
-              const updatedFilters = {};
-              for (const key in selectedFilters) {
-                  updatedFilters[key] = new Set(selectedFilters[key]);
-              }
+              const updatedFilters = cloneFilters(selectedFilters);
               updateState({ selectedFilters: updatedFilters });
           });
       
@@ -641,6 +621,38 @@ function extractCardValue(card, category) {
         default: return null;
     }
 } 
+
+function computeFilterCounts(data, selectedFilters, categoriesToIgnore = []) {
+    const filterMaps = Object.fromEntries(
+        Object.keys(selectedFilters).map(cat => [cat, new Map()])
+    );
+
+    data.forEach(card => {
+        for (const category in selectedFilters) {
+            if (categoriesToIgnore.includes(category)) continue;
+
+            const rawValue = extractCardValue(card, category);
+            if (!rawValue) continue;
+
+            const isSplittable = ["Supertypes", "Types", "Subtypes"].includes(category);
+            const values = Array.isArray(rawValue)
+                ? rawValue.map(v => v.trim())
+                : (isSplittable
+                    ? rawValue.split(/[\s/]+/).map(v => v.trim())
+                    : [rawValue.trim()]);
+
+            values.forEach(v => addToMap(filterMaps[category], v));
+        }
+    });
+
+    return Object.fromEntries(
+        Object.entries(filterMaps).map(([cat, map]) => [
+            cat,
+            Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+        ])
+    );
+}
+
 
 
 

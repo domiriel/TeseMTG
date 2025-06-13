@@ -11,7 +11,8 @@ const state = {
       "IcicleColorIdentity": new Set(),
       "Set Names": new Set(),
       "Year": new Set(),
-      "Foil Status": new Set()
+      "Foil Status": new Set(),
+      "FreeTextSearch": new Set()
     },
     selectedPriceAttribute: "price_eur",
     hoveredCards: [],
