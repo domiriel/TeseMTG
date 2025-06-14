@@ -3,6 +3,16 @@ import { updateState, getState } from "../state.js";
 import { updateFilterPanel } from "./FilterPanel.js";
 
 
+const timelineTooltipText = `
+<strong>Timeline Interactions:</strong><br>
+• <strong>Click</strong> a year: toggle filter by year.<br>
+• <strong>Hover</strong> a year: see number of sets and types.<br>
+• <strong>Click</strong> a set square: filter by set.<br>
+• <strong>Click</strong> a set type label: filter by type.<br>
+• <strong>Search</strong> for a set name using the bar above.<br>
+• <strong>Brush</strong> to select multiple sets.<br>
+• <strong>Zoom</strong> to focus a time range.
+`;
 
 
 function updateYearTickStyles() {
@@ -131,6 +141,51 @@ export function createTimelineView(data, containerId, isUpdate = false) {
         .style("overflow", "visible")
         .style("font-size", "14px")
         .style("width", searchContainerwidth);
+
+    const infoGroup = container.append("div")
+  .attr("class", "timeline-info-icon")
+  .style("position", "absolute")
+  .style("top", "16px")
+  .style("left", `${searchContainerwidth + 60}px`) // next to the search bar
+  .style("width", "20px")
+  .style("height", "20px")
+  .style("background", "#ccc")
+  .style("border", "1px solid #000")
+  .style("border-radius", "50%")
+  .style("text-align", "center")
+  .style("line-height", "20px")
+  .style("cursor", "help")
+  .style("z-index", "10000")
+  .text("i")
+  .on("mouseover", function (event) {
+    d3.select("#tooltip")
+      .style("display", "block")
+      .html(timelineTooltipText);
+  })
+  .on("mousemove", function (event) {
+    const tooltip = d3.select("#tooltip");
+    const tooltipWidth = tooltip.node().offsetWidth;
+    const tooltipHeight = tooltip.node().offsetHeight;
+    const padding = 10;
+
+    let x = event.pageX + padding;
+    let y = event.pageY + padding;
+
+    if (x + tooltipWidth > window.innerWidth) {
+      x = window.innerWidth - tooltipWidth - 10;
+    }
+    if (y + tooltipHeight > window.innerHeight) {
+      y = window.innerHeight - tooltipHeight - 10;
+    }
+
+    tooltip
+      .style("left", `${x}px`)
+      .style("top", `${y}px`);
+  })
+  .on("mouseout", function () {
+    d3.select("#tooltip").style("display", "none");
+  });
+
 
     container.insert("div", ":nth-child(2)")
         .attr("class", "search-dropdown")

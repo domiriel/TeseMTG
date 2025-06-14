@@ -12,6 +12,15 @@ function getSymbolFromAttribute(attr) {
     if (attr.includes("usd")) return "$";
     return "";
 }
+const scatterTooltipText = `
+<strong>Scatterplot Interactions:</strong><br>
+• <strong>Hover</strong> on a dot: view card details.<br>
+• <strong>Click</strong> a dot: toggle highlight.<br>
+• <strong>Shift + Brush</strong>: multi-select cards.<br>
+• <strong>Double-click Price/Complexity labels</strong>: view tooltip explanation.<br>
+• <strong>Zoom</strong>: to reveal more cards.<br>
+`;
+
 
 const ZOOM_THRESHOLD = 6;
 let currentZoomLevel = 1;
@@ -19,6 +28,12 @@ let wasZoomedOut = true;
 let isShowingFullData = false;
 let initialDownsampledData = null;
 let lastZoomedOut = currentZoomLevel < ZOOM_THRESHOLD;
+let actualFIlteredData = null; // Store the actual filtered data for updates
+    let isBrushing = false;
+let brushOverlay = null;
+let brush = null;
+let shiftPressed = false;
+
 
 function styleAndBindDots(selection) {
   return selection
@@ -313,6 +328,56 @@ filteredData.forEach(d => {
         .attr("width", width)
         .attr("height", height);
 
+
+    const infoGroup = svg.append("g")
+  .attr("class", "info-icon")
+  .attr("transform", `translate(${width - 35}, 30)`);
+
+infoGroup.append("circle")
+  .attr("r", 10)
+  .attr("fill", "#ccc")
+  .attr("stroke", "#000");
+
+infoGroup.append("text")
+  .attr("text-anchor", "middle")
+  .attr("dy", "0.35em")
+  .attr("font-size", "12px")
+  .attr("font-weight", "bold")
+  .text("i")
+  .attr("pointer-events", "none");
+    
+
+
+
+  infoGroup
+  .on("mouseover", function(event) {
+    d3.select("#tooltip")
+      .style("display", "block")
+      .html(scatterTooltipText);
+  })
+  .on("mousemove", function(event) {
+    const tooltip = d3.select("#tooltip");
+    const tooltipWidth = tooltip.node().offsetWidth;
+    const tooltipHeight = tooltip.node().offsetHeight;
+
+    let x = event.pageX + 10;
+    let y = event.pageY + 10;
+
+    if (x + tooltipWidth > window.innerWidth) {
+      x = window.innerWidth - tooltipWidth - 10;
+    }
+    if (y + tooltipHeight > window.innerHeight) {
+      y = window.innerHeight - tooltipHeight - 10;
+    }
+
+    tooltip
+      .style("left", `${x}px`)
+      .style("top", `${y}px`);
+  })
+  .on("mouseout", function() {
+    d3.select("#tooltip").style("display", "none");
+  });
+
     const g = svg.append("g").attr("transform", `translate(${margin.left - 8.5}, ${margin.top})`);
 
 const originalXScale = d3.scaleLog()
@@ -339,7 +404,7 @@ const originalXScale = d3.scaleLog()
     const yScale = originalYScale.copy();
 
     tagZoomKeyPoints(filteredData, xScale, yScale);
-
+    actualFIlteredData = filteredData; // Store the actual filtered data for updates
     const symbol = getSymbolFromAttribute(selectedPriceAttribute); 
 
 
@@ -518,7 +583,7 @@ const brush = d3.brush()
 
 
 
-    brushOverlay.call(brush).lower();
+    //brushOverlay.call(brush).lower();
     let fullData = filteredData;
 
 
@@ -546,23 +611,6 @@ const visibleData = filteredData
 
     updatePointPositions(xScale, yScale);
 
-console.log("🔍 Non-visible cards (display: none):");
-
-const hiddenCards = [];
-
-gClip.selectAll("circle")
-  .filter(function () {
-    return d3.select(this).style("display") === "none";
-  })
-  .each(function (d) {
-    if (hiddenCards.length < 10) {
-      hiddenCards.push(d.name);
-    }
-  });
-
-hiddenCards.forEach((name, i) => {
-  console.log(`${i + 1}. ${name}`);
-});
 
     const tooltip = d3.select("#tooltip");
     let hoverTimeout = null;
@@ -648,8 +696,8 @@ noRankEntry.append("text")
     const zoom = d3.zoom()
         .scaleExtent([1, 24])
         .on("zoom", event => {
-  if (zoomTimeout) clearTimeout(zoomTimeout);
-  zoomTimeout = setTimeout(() => {
+
+
     const transform = event.transform;
     currentZoomLevel = transform.k;
 
@@ -662,13 +710,13 @@ noRankEntry.append("text")
     updateAxes(symbol);
 
 
-console.log(`Zoom level: ${currentZoomLevel} | Showing full data? ${isShowingFullData}`);
 
     const nowZoomedOut = transform.k < ZOOM_THRESHOLD;
 
 if (nowZoomedOut !== lastZoomedOut) {
-  const newVisible = filteredData
+  const newVisible = actualFIlteredData
 
+  console.log(newVisible.length, "newVisible length");
 gClip.selectAll("circle")
   .data(newVisible, d => d.name)
   .join(
@@ -687,7 +735,7 @@ globalDots = gClip.selectAll("circle");
 // Always update positions (even if no redraw)
 updatePointPositions(xScale, yScale);
 
-  }, ZOOM_DELAY);
+
 });
 
 
@@ -769,11 +817,12 @@ const hoveredSet = new Set(hoveredCards.map(c => c.name));
             return "Price ($)";
         });
 
+    
+    filteredData.forEach(d => delete d.isZoomKey);
 
-    const tooltip = d3.select("#tooltip");
-
+    console.log(filteredData.length, "filteredData length");
     tagZoomKeyPoints(filteredData, xScale, yScale);
-
+actualFIlteredData = filteredData; // Update the actual filtered data
     const dots = gClip.selectAll("circle")
     .data(filteredData, d => d.name)
     .join(

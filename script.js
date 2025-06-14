@@ -7,6 +7,22 @@ import { createStackedLineChart, highlightLineChart } from "./idioms/LineChart.j
 import { createFilterPanel, updateFilterPanel } from "./idioms/FilterPanel.js";
 import { createHiddenDrawer, updateDrawer } from "./idioms/HiddenDrawer.js";
 import { showLoader, hideLoader } from "./idioms/LoadingAnimation.js";
+
+const filterApplicationOrder = [
+  "FreeTextSearch",      
+  "Set Names",
+  "Set Types",
+  "Year",
+  "Originality",
+  "Rarity",
+  "Foil Status",
+  "IcicleColorGroups",
+  "IcicleColorIdentity",
+  "Supertypes",
+  "Types",
+  "Subtypes"
+];
+
 function loadCardData() {
   const localPath = "./data/card_details.json";
   const googleDriveURL = "https://drive.google.com/uc?export=download&id=1q3PD40N8nLbpMBknczyxJhDqFahQr2d3";
@@ -183,28 +199,7 @@ export function filterData(
 
   const state = getState();
   const originalSelectedFilters = state.originalSelectedFilters;
-if (
-    shallowCompareFilters(selectedFilters, originalSelectedFilters) &&
-    !freeTextSearch
-  ) {
-    console.log("Using cached original filtered data");
-    // If current filters match the original filters, return the stored result
-    return state.originalFilteredData || {
-      default: [...data],
-      icicle: [...data],
-      timeline: [...data]
-    };
-  }
 
-
-  if (isFilterEmpty(selectedFilters) && !freeTextSearch) {
-    console.log("No filters applied, returning original data");
-    return {
-      default: [...state.originalData],
-      icicle: [...state.originalData],
-      timeline: [...state.originalData]
-    };
-  }
   // Prepare context-specific filter sets
   const contextFilters = {
     default: selectedFilters,
@@ -223,7 +218,8 @@ if (
     let filteredSet = new Set(data);
 
     if (groupedData) {
-      for (const [category, values] of Object.entries(filters)) {
+     for (const category of filterApplicationOrder) {
+        const values = filters[category];
         if (!values || values.size === 0) continue;
         const categoryGroup = groupedData[category];
         if (!categoryGroup) continue;
@@ -452,8 +448,33 @@ case "IcicleColorIdentity":
   }
   export function getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch = "") {
   const state = getState();
-  const lastInputs = state.lastFilterInputs || {};
+  
   const groupedData = state.groupedData || buildGroupedData(originalData);
+  
+
+  if (isFilterEmpty(selectedFilters) && !freeTextSearch) {
+    console.log("No filters applied, returning original data");
+    return {
+      default: [...state.originalData],
+      icicle: [...state.originalData],
+      timeline: [...state.originalData]
+    };
+  }
+
+
+  if (
+    shallowCompareFilters(selectedFilters, state.originalSelectedFilters) &&
+    !freeTextSearch
+  ) {
+    console.log("Using cached original filtered data");
+    return state.originalFilteredData || {
+      default: [...originalData],
+      icicle: [...originalData],
+      timeline: [...originalData]
+    };
+  }
+
+  const lastInputs = state.lastFilterInputs || {};
   const inputsMatch = 
     shallowCompareFilters(selectedFilters, lastInputs.selectedFilters) &&
     selectedPriceAttribute === lastInputs.selectedPriceAttribute &&

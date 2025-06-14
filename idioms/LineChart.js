@@ -1,6 +1,13 @@
 
 import { updateState, getState } from "../state.js";
-
+const lineChartTooltipText = `
+<strong>Timeline Interactions:</strong><br>
+• <strong>Hover</strong> a circle: view year and metrics.<br>
+• <strong>Click</strong> a circle: toggle year filter.<br>
+• <strong>Brush</strong> across timeline: multi-select years.<br>
+• <strong>Hover</strong> a line: inspect metric value at that year.<br>
+• <strong>Zoom</strong>: scroll or drag to focus a time range.<br>
+`;
 
 function getClonedFilters() {
     const currentState = getState();
@@ -95,6 +102,54 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
         .attr("height", containerHeight)
         .call(zoom);
 
+
+    const infoGroup = svg.append("g")
+  .attr("class", "info-icon")
+  .attr("transform", `translate(${containerWidth - 35}, 25)`); // Top-right position
+
+infoGroup.append("circle")
+  .attr("r", 10)
+  .attr("fill", "#ccc")
+  .attr("stroke", "#000");
+
+infoGroup.append("text")
+  .attr("text-anchor", "middle")
+  .attr("dy", "0.35em")
+  .attr("font-size", "12px")
+  .attr("font-weight", "bold")
+  .text("i")
+  .attr("pointer-events", "none");
+
+
+  infoGroup
+  .on("mouseover", function(event) {
+    d3.select("#tooltip")
+      .style("display", "block")
+      .html(lineChartTooltipText);
+  })
+  .on("mousemove", function(event) {
+    const tooltip = d3.select("#tooltip");
+    const tooltipWidth = tooltip.node().offsetWidth;
+    const tooltipHeight = tooltip.node().offsetHeight;
+    const padding = 10;
+
+    let x = event.pageX + padding;
+    let y = event.pageY + padding;
+
+    if (x + tooltipWidth > window.innerWidth) {
+      x = window.innerWidth - tooltipWidth - 10;
+    }
+    if (y + tooltipHeight > window.innerHeight) {
+      y = window.innerHeight - tooltipHeight - 10;
+    }
+
+    tooltip
+      .style("left", `${x}px`)
+      .style("top", `${y}px`);
+  })
+  .on("mouseout", function() {
+    d3.select("#tooltip").style("display", "none");
+  });
     const chartGroup = svg.append("g")
         .attr("transform", `translate(${margin.left}, ${margin.top})`);
 

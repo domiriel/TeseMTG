@@ -309,9 +309,9 @@ let newHoveredCards = isAlreadySelected
                     const updatedFilters = cloneFilters(selectedFilters);
                     updateState({ 
                     selectedFilters: updatedFilters,
-                    updateContext: d.category === "Set Names" ? "TimelineFilter" : undefined
+                    updateContext: category === "Set Names" ? "TimelineFilter" : undefined
                     });
-                    if (d.category === "Set Names") {
+                    if (category === "Set Names") {
                     d3.selectAll(".set-rect")
                         .attr("fill", rectData =>
                         selectedFilters["Set Names"].has(rectData.name) ? "#007bff" : "#bcab9a"
