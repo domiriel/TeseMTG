@@ -189,9 +189,9 @@ searchInput.on("change", function () {
             showLoader();
             const clearedFilters = {};
             for (const key in selectedFilters) clearedFilters[key] = new Set();
-            d3.selectAll(".set-square").attr("fill", "#bcab9a").style("opacity", 1);
+            d3.selectAll(".set-square").attr("fill", "#998066").style("opacity", 1);
             d3.selectAll(".year-tick-timeline").style("fill", "black").style("font-weight", "normal");
-            d3.selectAll(".data-point").attr("fill", "#bcab9a").style("opacity", 1)
+            d3.selectAll(".data-point").attr("fill", "#998066").style("opacity", 1)
             .style("font-weight", "normal");
             d3.selectAll(".chart-group rect").classed("selected", false);
             updateState({ selectedFilters: clearedFilters });
@@ -226,7 +226,7 @@ searchInput.on("change", function () {
         section.append("div")
             .attr("class", "dropdown-header")
             .text(category)
-            .style("background", "#bcab9a")
+            .style("background", "#998066")
             .style("padding", "6px 10px")
             .style("border", "1px solid #ccc")
             .style("border-radius", "6px")
@@ -294,7 +294,7 @@ searchInput.on("change", function () {
             pills.enter()
                 .append("div")
                 .attr("class", "pill")
-                .style("background", "#007bff")
+                .style("background", "#8A9CE4")
                 .style("color", "white")
                 .style("padding", "2px 8px")
                 .style("border-radius", "12px")
@@ -315,7 +315,7 @@ searchInput.on("change", function () {
                     if (category === "Set Names") {
                     d3.selectAll(".set-rect")
                         .attr("fill", rectData =>
-                        selectedFilters["Set Names"].has(rectData.name) ? "#007bff" : "#bcab9a"
+                        selectedFilters["Set Names"].has(rectData.name) ? "#007bff" : "#998066"
                         );
                     }
 

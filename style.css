@@ -1,7 +1,10 @@
 body {
   font-family: sans-serif;
-  /*background-color: #faedc8;*/
+  background-color: hsl(44, 65%, 97%);
+  scrollbar-color: hsl(44, 65%, 97%) auto;
 }
+
+
 .container {
   display: grid;
   grid-template-columns: 0.35fr repeat(2, 0.70fr) repeat(2, .75fr);

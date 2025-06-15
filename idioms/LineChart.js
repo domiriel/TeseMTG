@@ -9,6 +9,8 @@ const lineChartTooltipText = `
 • <strong>Zoom</strong>: scroll or drag to focus a time range.<br>
 `;
 
+let brushing = false;
+
 function getClonedFilters() {
     const currentState = getState();
     const cloned = {};
@@ -63,9 +65,9 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
     .sort((a, b) => a.year - b.year);
 
     const metrics = [
-        { key: "reprints", label: "Func. Reprints", color: "#bcab9a" },
-        { key: "avgComplexity", label: "Avg. Complexity", color: "#bcab9a" },
-        { key: "avgCMC", label: "Avg. MV", color: "#bcab9a" }
+        { key: "reprints", label: "Func. Reprints", color: "#998066" },
+        { key: "avgComplexity", label: "Avg. Complexity", color: "#998066" },
+        { key: "avgCMC", label: "Avg. MV", color: "#998066" }
     ];
     
     const container = d3.select(containerId);
@@ -320,13 +322,63 @@ infoGroup.append("text")
 
         const brush = d3.brushX()
             .extent([[0, 0], [width, height]])
-            .on("end", brushed);
+            .on("start", () => brushing = true)
+            .on("end", (event) => {
+        brushing = false;
+        brushed(event);
+    });
 
         svg.append("g")
             .attr("class", "brush")
             .attr("transform", `translate(${margin.left}, ${margin.top})`)
             .call(brush).lower();
         
+
+         svg.append("rect")
+        .attr("class", "hover-overlay")
+        .attr("x", margin.left)
+        .attr("y", margin.top)
+        .attr("width", width)
+        .attr("height", height)
+        .style("fill", "none")
+        .style("pointer-events", "none")
+        
+
+
+   svg
+  .on("mousemove", (event) => {
+    if (brushing) return;
+
+    const [mouseX, mouseY] = d3.pointer(event, svg.node());
+
+    const chartLeft = margin.left;
+    const chartRight = margin.left + width;
+    const chartTop = margin.top;
+    const chartBottom = margin.top + height;
+
+    const isOutside =
+      mouseX < chartLeft ||
+      mouseX > chartRight ||
+      mouseY < chartTop ||
+      mouseY > chartBottom;
+
+    if (isOutside) {
+      sharedHoverLine.style("display", "none");
+      return;
+    }
+
+    const date = xScale.invert(mouseX - margin.left);
+
+    sharedHoverLine
+      .attr("x1", mouseX)
+      .attr("x2", mouseX)
+      .style("display", "block");
+  })
+  .on("mouseout", () => {
+    sharedHoverLine.style("display", "none");
+  });
+
+
     function brushed(event) {
         if (!event.selection) return;
 
@@ -412,28 +464,8 @@ infoGroup.append("text")
 
 
 
-    svg.append("rect")
-        .attr("class", "hover-overlay")
-        .attr("x", margin.left)
-        .attr("y", margin.top)
-        .attr("width", width)
-        .attr("height", height)
-        .style("fill", "none")
-        .style("pointer-events", "all")
-        .on("mousemove", (event) => {
-            const [mouseX] = d3.pointer(event);
-            const date = xScale.invert(mouseX - margin.left);
-
-            sharedHoverLine
-        .attr("x1", mouseX)
-        .attr("x2", mouseX)
-        .style("display", "block");
-
-        })
-        .on("mouseout", () => {
-            sharedHoverLine.style("display", "none");
-        })
-        .lower();
+   
+        
 
 
 

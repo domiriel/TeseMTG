@@ -7,10 +7,10 @@ import { updateFilterPanel } from "./FilterPanel.js";
     "common", "uncommon", "rare", "mythic", "special", "bonus"];
 
 function getDiscreteColor(percentage) {
-  if (percentage < 20) return "#efe6dc";
-  if (percentage < 40) return "#dac9b9";
-  if (percentage < 60) return "#bcab9a";
-  if (percentage < 80) return "#8a7a6a";
+  if (percentage < 20) return "#ceb397";
+  if (percentage < 40) return "#b8997a";
+  if (percentage < 60) return "#998066";
+  if (percentage < 80) return "#736659";
   return "#594a3a"; 
 }
   

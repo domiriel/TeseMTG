@@ -274,7 +274,7 @@ export function createTimelineView(data, containerId, isUpdate = false) {
         .attr("height", margin.top - 10)
         .style("position", "sticky")
         .style("top", "0px")
-        .style("background", "white")
+        .style("background", "hsl(44, 65%, 97%)")
         .style("z-index", "10");
 
     const xScale = d3.scaleTime()
@@ -431,7 +431,7 @@ chartGroup.append("g")
             .attr("width", 8)
             .attr("height", 8)
             .attr("stroke", "black")
-            .attr("fill", "#bcab9a")
+            .attr("fill", "#998066")
             .on("mouseover", function (event, d) {
 
                 // Set content first so dimensions are accurate
@@ -484,7 +484,7 @@ chartGroup.append("g")
             
                 if (isSelected) {
                     updatedFilters["Set Names"].delete(d.name);
-                    d3.select(this).attr("fill", "#C3C3C3"); 
+                    d3.select(this).attr("fill", "#998066"); 
                 } else {
                     updatedFilters["Set Names"].add(d.name);
                     d3.select(this).attr("fill", "#007bff"); 
@@ -506,7 +506,7 @@ chartGroup.append("g")
         const selectedSetNames = getState().selectedFilters["Set Names"] || new Set();
 
         squares.attr("fill", d =>
-            selectedSetNames.has(d.name) ? "#007bff" : "#bcab9a"
+            selectedSetNames.has(d.name) ? "#007bff" : "#998066"
         );
         
     
@@ -585,24 +585,42 @@ chartGroup.append("g")
 function zoomed(event) {
     const transform = event.transform;
 
-    
-    const newXScale = transform.rescaleX(xScale);
+    let newXScale;
+    if (transform.k === 1) {
+        // Fully zoomed out — restore original domain
+        newXScale = d3.scaleTime()
+            .domain(xScale.domain())  // original domain
+            .range(xScale.range());
+    } else {
+        // Apply zoom transform and clamp domain
+        const rescaled = transform.rescaleX(xScale);
+        const [minDate, maxDate] = xScale.domain();
+        const [newStart, newEnd] = rescaled.domain();
 
-    
+        const clampedStart = d3.max([newStart, minDate]);
+        const clampedEnd = d3.min([newEnd, maxDate]);
+
+        if (clampedEnd < clampedStart) return;
+
+        newXScale = d3.scaleTime()
+            .domain([clampedStart, clampedEnd])
+            .range(xScale.range());
+    }
+
     fixedXAxis.select(".x-axis")
         .transition().duration(100)
         .call(xAxis.scale(newXScale));
 
-    
     squares.transition().duration(100)
-
-    .attr("x", d => newXScale(d.releaseDate) - 2.5)
-    .style("opacity", d => {
-        const date = d.releaseDate;
-        return (date >= newXScale.domain()[0] && date <= newXScale.domain()[1]) ? 1 : 0;
-    });
-
+        .attr("x", d => newXScale(d.releaseDate) - 2.5)
+        .style("opacity", d => {
+            const date = d.releaseDate;
+            const [start, end] = newXScale.domain();
+            return (date >= start && date <= end) ? 1 : 0;
+        });
 }
+
+
 
 function brushed(event) {
     if (!event.selection) return;
@@ -654,7 +672,7 @@ function brushed(event) {
 
         d3.selectAll(".set-rect")
             .attr("fill", d =>
-                updatedFilters["Set Names"].has(d.name) ? "#007bff" : "#bcab9a"
+                updatedFilters["Set Names"].has(d.name) ? "#007bff" : "#998066"
             );
     }
 

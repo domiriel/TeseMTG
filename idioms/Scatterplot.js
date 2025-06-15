@@ -2,10 +2,10 @@
 import { updateState, getState } from "../state.js";
 const colorGroups = [
     { range: [1, 5691], color: "#594A3A" },  
-    { range: [5692, 11382], color:  "#8a7a6a" },
-    { range: [11383, 17074], color: "#bcab9a" },
-    { range: [17075, 22765], color: "#dac9b9"},
-    { range: [22766, 28456], color: "#efe6dc" }  
+    { range: [5692, 11382], color:  "#736659" },
+    { range: [11383, 17074], color: "#998066" },
+    { range: [17075, 22765], color: "#b8997a"},
+    { range: [22766, 28456], color: "#ceb397" }  
 ];
 function getSymbolFromAttribute(attr) {
     if (attr.includes("eur")) return "€";
@@ -33,6 +33,7 @@ let actualFIlteredData = null; // Store the actual filtered data for updates
 let brushOverlay = null;
 let brush = null;
 let shiftPressed = false;
+let lastPriceAttribute = null;
 
 
 function styleAndBindDots(selection) {
@@ -269,7 +270,7 @@ export function createScatterPlot(data, containerId, isUpdate = false, selectedP
 const hoveredCards = getState().hoveredCards || [];
 const hoveredSet = new Set(hoveredCards.map(c => c.name));
 
-
+lastPriceAttribute = selectedPriceAttribute; // Store the last used price attribute
     
     d3.select(containerId).selectAll("*").remove();
 
@@ -621,6 +622,7 @@ legend.append("text")
   .attr("x", 0)
   .attr("y", 150)
   .text("EDHREC Rank")
+  .style("shape-rendering", "crispEdges")
   .attr("fill", "#000")
   .style("font-size", "12px")
   .style("font-weight", "bold");
@@ -634,6 +636,7 @@ colorGroups.forEach((group, i) => {
   entry.append("rect")
     .attr("width", 18)
     .attr("height", legendItemHeight)
+    .style("shape-rendering", "crispEdges")
     .attr("fill", group.color)
     .attr("stroke", "#000");
 
@@ -641,6 +644,7 @@ colorGroups.forEach((group, i) => {
     .attr("x", 26)
     .attr("y", legendItemHeight / 2)
     .attr("dy", "0.35em")
+    .style("shape-rendering", "crispEdges")
     .text(`${group.range[0]}–${group.range[1]}`)
     .style("font-size", "12px")
     .attr("fill", "#000");
@@ -661,6 +665,7 @@ noRankEntry.append("text")
   .attr("x", 26)
   .attr("y", legendItemHeight / 2)
   .attr("dy", "0.35em")
+  .style("shape-rendering", "crispEdges")
   .text("No Rank")
   .style("font-size", "12px")
   .attr("fill", "#000");
@@ -778,9 +783,19 @@ const hoveredSet = new Set(hoveredCards.map(c => c.name));
 
 
 
-    const newMinPrice = Math.max(0.001, d3.min(filteredData, d => d.avg_price));
     const newMaxPrice = d3.max(filteredData, d => d.avg_price);
-    originalXScale.domain([newMinPrice, newMaxPrice]);
+
+if (selectedPriceAttribute !== lastPriceAttribute) {
+  // Recalculate full domain (min + max) if price attribute changed
+  const newMinPrice = Math.max(0.001, d3.min(filteredData, d => d.avg_price));
+  originalXScale.domain([newMinPrice, newMaxPrice]);
+  lastPriceAttribute = selectedPriceAttribute;
+} else {
+  // Otherwise, keep old min and only update max
+  const currentMin = originalXScale.domain()[0];
+  originalXScale.domain([currentMin, newMaxPrice]);
+}
+
 
 
     const transform = d3.zoomTransform(svg.node());

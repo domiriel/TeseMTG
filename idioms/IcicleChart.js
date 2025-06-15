@@ -14,10 +14,10 @@ const infoTooltipText = `
 const mtgColorOrder = { W: 0, U: 1, R: 2, B: 3, G: 4 };
 
 const colorScale = [
-    { range: [0, 20], color: "#efe6dc" },
-    { range: [21, 40], color: "#dac9b9" },
-    { range: [41, 60], color: "#bcab9a" },
-    { range: [61, 80], color: "#8a7a6a" },
+    { range: [0, 20], color: "#ceb397" },
+    { range: [21, 40], color: "#b8997a" },
+    { range: [41, 60], color: "#998066" },
+    { range: [61, 80], color: "#736659" },
     { range: [81, 100], color: "#594a3a" }
 ];
 
