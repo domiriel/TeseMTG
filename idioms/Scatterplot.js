@@ -81,7 +81,7 @@ function mouseoverFn(event, d) {
   d3.select("#tooltip").style("display", "block")
     .html(`
       <div style="display: flex; gap: 12px; align-items: flex-start;">
-        <img src="${d.image_normal}" alt="${d.name}" width="200" style="border-radius: 4px; box-shadow: 0 0 4px rgba(0,0,0,0.5);" />
+        <img src="${d.tooltip_image}" alt="${d.name}" width="200" style="border-radius: 4px; box-shadow: 0 0 4px rgba(0,0,0,0.5);" />
         <div>
           <strong>${d.name}</strong><br>
           Complexity: ${d.complexity}<br>
@@ -92,6 +92,7 @@ function mouseoverFn(event, d) {
           Colors: ${d.color_identity}<br>
           Avg Price: ${d.was_price_invalid ? "NaN" : "$" + d.avg_price.toFixed(3)}<br>
           All Sets: ${d.all_sets.map(set => `${set.name} (${set.type})`).join("<br>")}<br>
+          Number of Prints: ${d.all_print_images.length}<br>
         </div>
       </div>
     `);
@@ -124,7 +125,10 @@ function clickFn(event, d) {
     newHoveredCards = hoveredCards.filter(c => c.name !== d.name);
     d3.select(this).attr("stroke", "none").attr("stroke-width", null);
   } else {
-    newHoveredCards = [...hoveredCards, d];
+    const matchingCard = actualFIlteredData.find(c => c.name === d.name);
+if (matchingCard) {
+  newHoveredCards = [...hoveredCards, matchingCard];
+}
     d3.select(this).raise().attr("stroke", "orange").attr("stroke-width", 2.5);
   }
 
@@ -163,60 +167,88 @@ function updatePointPositions(xScale, yScale) {
 
 
 export function prepareScatterData(data, selectedPriceAttribute) {
-    const excludedSetTypes = new Set(["promo", "funny", "memorabilia", "alchemy", "token", "minigame"]);
-    const excludedSetNames = ["Arena", "Alchemy", "Digital"];
-    const excludedTypes = ["Emblem", "Token"];
+  const excludedSetTypes = new Set(["promo", "funny", "memorabilia", "alchemy", "token", "minigame"]);
+  const excludedSetNames = ["Arena", "Alchemy", "Digital"];
+  const excludedTypes = ["Emblem", "Token"];
 
-    const filteredForPlot = data.filter(card =>
-        !excludedSetTypes.has(card.set_type) &&
-        !excludedSetNames.some(keyword => card.set_name?.includes(keyword)) &&
-        !excludedTypes.includes(card.type) &&
-        !card.digital
-    );
+  const cardMap = new Map();
 
-    const cardMap = new Map();
-    data.forEach(card => {
-        if (!cardMap.has(card.name)) {
-            cardMap.set(card.name, {
-                ...card,
-                prices: [],
-                avg_price: 0,
-                all_sets: new Map([[card.set_name, card.set_type]])
-            });
-        } else {
-            cardMap.get(card.name).all_sets.set(card.set_name, card.set_type);
+  for (const card of data) {
+    // Skip if digital or excluded
+    if (
+      card.digital ||
+      excludedSetTypes.has(card.set_type) ||
+      excludedSetNames.some(keyword => card.set_name?.includes(keyword)) ||
+      excludedTypes.includes(card.type)
+    ) continue;
+
+    // Initialize or retrieve card aggregate
+    if (!cardMap.has(card.name)) {
+      cardMap.set(card.name, {
+        ...card,
+        prices: [],
+        setTypes: new Map(),
+        printImages: [],
+        tooltip_image: null,
+        foundOriginal: false,
+      });
+    }
+
+    const entry = cardMap.get(card.name);
+
+    // Track all set types
+    entry.setTypes.set(card.set_name, card.set_type);
+
+    // Track price
+    const price = isNaN(card[selectedPriceAttribute]) || card[selectedPriceAttribute] == null ? 0 : card[selectedPriceAttribute];
+    if (!isNaN(card.complexity)) {
+      entry.prices.push(price);
+    }
+
+
+    if(card.image_normal){
+      entry.printImages.push(card.image_normal);
+      if (!entry.foundOriginal && card.originality === "original") {
+        entry.tooltip_image = card.image_normal;
+        entry.foundOriginal = true;
+      }
+
+    } else if (Array.isArray(card.faces)) {
+        for (const face of card.faces) {
+            if(face.image_normal){
+                entry.printImages.push(face.image_normal);
+                if (!entry.foundOriginal && card.originality === "original") {
+                    entry.tooltip_image = face.image_normal;
+                    entry.foundOriginal = true;
+                }
+            }
         }
+    }
 
-        const price = isNaN(card[selectedPriceAttribute]) || card[selectedPriceAttribute] == null
-            ? 0 : card[selectedPriceAttribute];
-        if (!card.digital && !isNaN(card.complexity)) {
-            cardMap.get(card.name).prices.push(price);
-        }
-    });
+    // Track image links for print
+  }
 
-    cardMap.forEach(card => {
-    card.avg_price = card.prices.length > 0
-        ? card.prices.reduce((sum, p) => sum + p, 0) / card.prices.length
-        : 0;
+  // Finalize values
+  const result = [];
+  for (const card of cardMap.values()) {
+    card.all_sets = Array.from(card.setTypes.entries()).map(([name, type]) => ({ name, type }));
+    card.all_print_images = card.printImages;
+    card.tooltip_image = card.tooltip_image || card.image_normal;
 
+    const sum = card.prices.reduce((a, b) => a + b, 0);
+    card.avg_price = card.prices.length > 0 ? sum / card.prices.length : 0;
 
-    if (card.avg_price <= 0 ) {
-    card.was_price_invalid = true;
-    card.avg_price = 0.001;
-} else {
-    card.was_price_invalid = false;
+    card.was_price_invalid = card.avg_price <= 0;
+    if (card.was_price_invalid) {
+      card.avg_price = 0.001;
+    }
+
+    result.push(card);
+  }
+
+  return result;
 }
 
-
-
-
-    card.all_sets = Array.from(card.all_sets.entries()).map(([name, type]) => ({ name, type }));
-});
-
-    return filteredForPlot
-        .filter(card => cardMap.has(card.name))
-        .map(card => cardMap.get(card.name));
-}
 
 
 
@@ -241,63 +273,8 @@ const hoveredSet = new Set(hoveredCards.map(c => c.name));
     
     d3.select(containerId).selectAll("*").remove();
 
-    const excludedSetTypes = new Set(["promo", "funny", "memorabilia", "alchemy", "token", "minigame"]);
-    const excludedSetNames = ["Arena", "Alchemy", "Digital"];
-    const excludedTypes = ["Emblem", "Token"];
-
-
-    const allData = data; 
-const filteredForPlot = allData.filter(card =>
-    !excludedSetTypes.has(card.set_type) &&
-    !excludedSetNames.some(keyword => card.set_name && card.set_name.includes(keyword)) &&
-    !excludedTypes.includes(card.type) &&
-    
-    !card.digital
-);
-
-const cardMap = new Map();
-
-
-allData.forEach(card => {
-    if (!cardMap.has(card.name)) {
-        cardMap.set(card.name, {
-            ...card,
-            prices: [],
-            avg_price: 0,
-            all_sets: new Map([[card.set_name, card.set_type]])
-        });
-    } else {
-        cardMap.get(card.name).all_sets.set(card.set_name, card.set_type);
-    }
-
-
-    const price = isNaN(card[selectedPriceAttribute]) || card[selectedPriceAttribute] === null ? 0 : card[selectedPriceAttribute];
-    if (!card.digital && !isNaN(card.complexity)) {
-        cardMap.get(card.name).prices.push(price);
-    }
-});
-
-cardMap.forEach(card => {
-    card.avg_price = card.prices.length > 0
-        ? card.prices.reduce((sum, p) => sum + p, 0) / card.prices.length
-        : 0;
-
-
-
-  if (card.avg_price <= 0 ) {
-        card.was_price_invalid = true;
-        card.avg_price = 0.001;
-    } else {
-        card.was_price_invalid = false;
-    }
-    card.all_sets = Array.from(card.all_sets.entries()).map(([name, type]) => ({ name, type }));
-});
-
-
-const filteredData = filteredForPlot
-    .filter(card => cardMap.has(card.name))
-    .map(card => cardMap.get(card.name));
-
+   
+const filteredData = data
 
    
 
@@ -607,8 +584,12 @@ const visibleData = filteredData
         }
     });
 
+
+    console.log(gClip.selectAll("circle").size(), "dots size");
     globalDots = dots;
 
+
+    console.log(globalDots.size(), "globalDots size");
     updatePointPositions(xScale, yScale);
 
 
@@ -793,8 +774,8 @@ const hoveredSet = new Set(hoveredCards.map(c => c.name));
     } = svg.node().__scales__ || {};
     if (!xScale || !yScale || !updateAxes || !originalXScale || !originalYScale) return;
 
-    const g = svg.select("g");
-    const gClip = g.select(".dots .clip-group");
+    const gClip = svg.select(".dots .clip-group");
+
 
 
     const newMinPrice = Math.max(0.001, d3.min(filteredData, d => d.avg_price));
@@ -823,33 +804,28 @@ const hoveredSet = new Set(hoveredCards.map(c => c.name));
     console.log(filteredData.length, "filteredData length");
     tagZoomKeyPoints(filteredData, xScale, yScale);
 actualFIlteredData = filteredData; // Update the actual filtered data
-    const dots = gClip.selectAll("circle")
-    .data(filteredData, d => d.name)
-    .join(
-        enter => enter.append("circle")
-        .attr("r", 2.5)
-        .style("cursor", "pointer")
-        .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
-        .style("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
-        .style("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
-        .attr("opacity", 0.8)
-        .style("display", d => (currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey || hoveredSet.has(d.name)) ? null : "none")
-        .on("mouseover", mouseoverFn)
-        .on("mousemove", mousemoveFn)
-        .on("mouseout", mouseoutFn)
-        .on("click", clickFn),
-        update => update
-        .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
-        .style("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
-        .style("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
-        .style("display", d => (currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey || hoveredSet.has(d.name)) ? null : "none"),
-        exit => exit.remove()
-    );
 
-
-dots
+console.log(gClip.selectAll("circle").size(), "before removing circles");
+  gClip.selectAll("circle").remove();
+console.log(gClip.selectAll("circle").size(), "after removing circles");
+// ✨ Bind new data and create fresh dots
+const dots = gClip.selectAll("circle")
+  .data(filteredData, d => d.name)
+  .enter()
+  .append("circle")
+  .attr("r", 2.5)
+  .style("cursor", "pointer")
+  .attr("opacity", 0.8)
+  .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
+  .style("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
+  .style("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
+  .style("display", d => (currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey || hoveredSet.has(d.name)) ? null : "none")
   .attr("cx", d => xScale(d.avg_price))
-  .attr("cy", d => yScale(d.complexity));
+  .attr("cy", d => yScale(d.complexity))
+  .on("mouseover", mouseoverFn)
+  .on("mousemove", mousemoveFn)
+  .on("mouseout", mouseoutFn)
+  .on("click", clickFn);
 
 
 

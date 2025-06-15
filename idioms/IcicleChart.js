@@ -582,27 +582,29 @@ zeroLabel.append("text")
 
     
 }
-
 export function highlightIcicleRect(hoveredCards) {
     if (!globalRects) return;
 
     const identityMatches = new Set();
-    const mtgColorOrder = { W: 0, U: 1, R: 2, B: 3, G: 4 };
 
     (hoveredCards || []).forEach(card => {
-        if (card.color_identity && card.color_identity.length > 0) {
-            const identity = card.color_identity
+        let identity;
+        if (!card.color_identity || card.color_identity.length === 0) {
+            identity = "Colorless";
+        } else {
+            identity = card.color_identity
                 .slice()
                 .sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b])
                 .join("-");
-            identityMatches.add(identity);
         }
+        identityMatches.add(identity);
     });
 
     globalRects.classed("highlighted", d =>
         d.depth === 2 && identityMatches.has(d.data.name)
     );
 }
+
 
 
 

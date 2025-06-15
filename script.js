@@ -66,14 +66,15 @@ function init() {
         highlightLineChart(hoveredCards);
         updateDrawer(hoveredCards);
 
+        const hoveredSet = new Set(hoveredCards.map(c => c.name));
+        
         d3.selectAll(".dots circle")
-          .attr("stroke", d => hoveredCards.some(c => c.name === d.name) ? "orange" : "none")
-          .attr("stroke-width", d => hoveredCards.some(c => c.name === d.name) ? 2.5 : null)
-          .each(function (d) {
-            if (hoveredCards.some(c => c.name === d.name)) {
-              this.parentNode.appendChild(this); // raise
-            }
-          });
+          .style("stroke", d => hoveredSet.has(d.name)
+        ? "orange"
+        : (+d.edhrec_rank > 0 ? "none" : "black"))
+      .style("stroke-width", d => hoveredSet.has(d.name)
+        ? 2.5
+        : (+d.edhrec_rank > 0 ? 0 : 1.2));
 
         // Delay hiding to allow animation to show without flickering
         setTimeout(hideLoader, 150);
@@ -88,16 +89,19 @@ function init() {
 
   
       createIcicleChart(IcicleFiltered, ".IcicleChart");
-      updateFilterPanel(originalData, selectedFilters);
+      createFilterPanel(originalData,filtered, ".FilterPanel", selectedFilters); 
+      updateFilterPanel(originalData,filtered, selectedFilters);
       createAlluvialChart(filtered, ".AlluvialChart", false, selectedPriceAttribute);
       createHiddenDrawer(".HiddenDrawerArea");
       createTimelineView(filtered, ".TimelineView");
 
 
-      createScatterPlot(filtered, ".Scatterplot", false, selectedPriceAttribute);
+      const processedScatterData = prepareScatterData(filtered, selectedPriceAttribute);
+      createScatterPlot(processedScatterData, ".Scatterplot", false, selectedPriceAttribute);
+
 
       createStackedLineChart(filtered, ".LineChart");
-      createFilterPanel(originalData, ".FilterPanel", selectedFilters); 
+
       
       highlightAlluvialElements([]);
       highlightIcicleRect([]);
@@ -118,41 +122,57 @@ function init() {
         hideLoader();
       subscribe((state) => {
  
-  if (isUpdatingFilteredData) return;
+          if (isUpdatingFilteredData) return;
 
-  const context = state.updateContext || "default";
-  const { selectedFilters, selectedPriceAttribute, freeTextSearch } = state;
+          const context = state.updateContext || "default";
+          const { selectedFilters, selectedPriceAttribute, freeTextSearch } = state;
 
-  const { default: filteredData, icicle: IcicleFiltered, timeline: TimelineFiltered } = 
-    getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
+          const { default: filteredData, icicle: IcicleFiltered, timeline: TimelineFiltered } = 
+            getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
 
-  // Skip repeated state updates here to avoid the infinite loop!
+          // Skip repeated state updates here to avoid the infinite loop!
 
-  if (window._prevFilteredLength === filteredData.length &&
-      window._prevPriceAttribute === selectedPriceAttribute &&
-      context === "default") {
-    return;
-  }
+          if (window._prevFilteredLength === filteredData.length &&
+              window._prevPriceAttribute === selectedPriceAttribute &&
+              context === "default") {
+            return;
+          }
 
-  window._prevFilteredLength = filteredData.length;
-  window._prevPriceAttribute = selectedPriceAttribute;
+          window._prevFilteredLength = filteredData.length;
+          window._prevPriceAttribute = selectedPriceAttribute;
 
-  if (context !== "IcicleFilter") {
-    createIcicleChart(IcicleFiltered, ".IcicleChart", true);
-  }
-  if (context !== "TimelineFilter") {
-    createTimelineView(TimelineFiltered, ".TimelineView", true);
-    createStackedLineChart(TimelineFiltered, ".LineChart", true);
-  }
-  createAlluvialChart(filteredData, ".AlluvialChart", true, selectedPriceAttribute);
+          if (context !== "IcicleFilter") {
+            createIcicleChart(IcicleFiltered, ".IcicleChart", true);
+          }
+          if (context !== "TimelineFilter") {
+            createTimelineView(TimelineFiltered, ".TimelineView", true);
+            createStackedLineChart(TimelineFiltered, ".LineChart", true);
+          }
+          createAlluvialChart(filteredData, ".AlluvialChart", true, selectedPriceAttribute);
 
-  const processedData = prepareScatterData(filteredData, selectedPriceAttribute);
-  updateScatterPlot(processedData, selectedPriceAttribute);
+          const processedData = prepareScatterData(filteredData, selectedPriceAttribute);
+          updateScatterPlot(processedData, selectedPriceAttribute);
 
-  setTimeout(() => {
-    updateFilterPanel(originalData, selectedFilters, ".FilterPanel");
-  }, 10);
+          setTimeout(() => {
+            updateFilterPanel(originalData,filteredData, selectedFilters, ".FilterPanel");
+          }, 10);
 
+          let { hoveredCards } = getState();
+          const filteredNames = new Set(filteredData.map(d => d.name));
+
+          // Filter out any hovered cards that are no longer in the filtered dataset
+          hoveredCards = hoveredCards.filter(card => filteredNames.has(card.name));
+
+          // Optionally: update state to reflect trimmed list (only if it changed)
+          if (hoveredCards.length !== getState().hoveredCards.length) {
+            updateState({ hoveredCards });
+          }
+
+          highlightAlluvialElements(hoveredCards);
+          highlightIcicleRect(hoveredCards);
+          highlightTimelineSets(hoveredCards);
+          highlightLineChart(hoveredCards);
+          updateDrawer(hoveredCards);
 });
 
 
@@ -173,13 +193,13 @@ function init() {
       createStackedLineChart(filteredData, ".LineChart", true);
       createIcicleChart(IcicleFiltered, ".IcicleChart", true);
       updateScatterPlot(prepareScatterData(filteredData, selectedPriceAttribute), selectedPriceAttribute);
-      createFilterPanel(getState().originalData, ".FilterPanel", selectedFilters); 
+      createFilterPanel(getState().originalData,filteredData, ".FilterPanel", selectedFilters); 
 
-highlightAlluvialElements(hoveredCards);
-highlightIcicleRect(hoveredCards);
-highlightTimelineSets(hoveredCards);
-highlightLineChart(hoveredCards);
-updateDrawer(hoveredCards);
+      highlightAlluvialElements(hoveredCards);
+      highlightIcicleRect(hoveredCards);
+      highlightTimelineSets(hoveredCards);
+      highlightLineChart(hoveredCards);
+      updateDrawer(hoveredCards);
 
 
     });

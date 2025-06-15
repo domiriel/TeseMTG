@@ -31,7 +31,7 @@ function cloneFilters(filters) {
     );
 }
 
-export function createFilterPanel(data, containerId, selectedFiltersFromState, isUpdate = false) {
+export function createFilterPanel(data,filteredCards, containerId, selectedFiltersFromState, isUpdate = false) {
     d3.select(containerId).selectAll("*").remove();
 
     const container = d3.select(containerId)
@@ -61,8 +61,7 @@ export function createFilterPanel(data, containerId, selectedFiltersFromState, i
 
 
 
-    const { default: filteredCards } = getState().lastFilteredData || getFilteredData(data, selectedFilters);
-
+    
     const uniqueCardNames = Array.from(new Set(filteredCards.map(card => card.name))).sort();
 
 
@@ -131,14 +130,14 @@ searchInput.on("change", function () {
     .filter(d => d.name === cardName)
     .node();
 
-if (!circle) return;
+    if (!circle) return;
 
-const card = d3.select(circle).datum();
+    const card = d3.select(circle).datum();
 
-const { hoveredCards } = getState();
-const isAlreadySelected = hoveredCards.some(c => c.name === card.name);
+    const { hoveredCards } = getState();
+    const isAlreadySelected = hoveredCards.some(c => c.name === card.name);
 
-let newHoveredCards = isAlreadySelected
+    let newHoveredCards = isAlreadySelected
     ? hoveredCards
     : [...hoveredCards, card];
 
@@ -154,6 +153,7 @@ let newHoveredCards = isAlreadySelected
     : (+d.edhrec_rank > 0 ? 0 : 1.2))
   .each(function (d) {
     if (newHoveredCards.some(c => c.name === d.name)) {
+    
       this.parentNode.appendChild(this); // bring to front
     }
   });
@@ -193,8 +193,9 @@ let newHoveredCards = isAlreadySelected
             d3.selectAll(".year-tick-timeline").style("fill", "black").style("font-weight", "normal");
             d3.selectAll(".data-point").attr("fill", "#bcab9a").style("opacity", 1)
             .style("font-weight", "normal");
+            d3.selectAll(".chart-group rect").classed("selected", false);
             updateState({ selectedFilters: clearedFilters });
-            createFilterPanel(data, containerId, clearedFilters, true);
+            createFilterPanel(data,data, containerId, clearedFilters, true);
             hideLoader();
         });
 
@@ -320,11 +321,6 @@ let newHoveredCards = isAlreadySelected
 
                     updatePills();
                     updateFilterStyles();
-                    clearTimeout(window._filterPanelTimeout);
-                    window._filterPanelTimeout = setTimeout(() => {
-
-                        updateFilterPanel(data);
-                    }, 50);
                     hideLoader();
                 });
 
@@ -355,11 +351,6 @@ let newHoveredCards = isAlreadySelected
                 updatePills();
                 updateFilterStyles();
                 clearTimeout(window._filterPanelTimeout);
-                window._filterPanelTimeout = setTimeout(() => {
-                    
-
-                    updateFilterPanel(data, updatedFilters);
-                }, 50);
                 hideLoader();
             });
 
@@ -502,11 +493,11 @@ wrapper.append("input")
 
 }
 
-export function updateFilterPanel(originalData, selectedFilters, containerId = ".FilterPanel") {
-    
+export function updateFilterPanel(originalData, filteredCards, selectedFilters, containerId = ".FilterPanel") {
     selectedFilters = selectedFilters || {};
 
-const { default: filteredCards } = getState().lastFilteredData || getFilteredData(data, selectedFilters);
+
+    console.log("Filtered cards:", filteredCards.length);
 
     const uniqueCardNames = Array.from(new Set(filteredCards.map(card => card.name))).sort();
 
