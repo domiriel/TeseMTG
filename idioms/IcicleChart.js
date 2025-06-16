@@ -209,7 +209,7 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
     
 
     const xOffset = (containerWidth - chartWidth)/2 - 40; 
-    const yOffset = -(containerHeight - chartHeight)/2; 
+    const yOffset = -(containerHeight - chartHeight)/2 + 5; 
 
 
     const margin = { top: (containerHeight - chartHeight)/2 + 1 , right: 50, bottom: 20, left: (containerWidth - chartWidth)/2 - 40 }; 
@@ -521,7 +521,7 @@ function clickedFilter(event, d) {
     
     
     const legendX = margin.left + chartWidth + 15;
-    const legendY = margin.top; 
+    const legendY = margin.top + 5; 
 
 
     const legend = svg.append("g")

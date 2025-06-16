@@ -140,13 +140,19 @@ export function createTimelineView(data, containerId, isUpdate = false) {
         .style("padding", "5px")
         .style("overflow", "visible")
         .style("font-size", "14px")
-        .style("width", searchContainerwidth);
+        .style("width", "9.5%");
 
+
+    const searchInput = container.select(".timeline-search-bar");
+const searchBounds = searchInput.node().getBoundingClientRect();
+
+const iconLeft = searchBounds.left + searchBounds.width + 8; // 8px spacing
+const relativeLeft = iconLeft - containerBounds.left;
     const infoGroup = container.append("div")
   .attr("class", "timeline-info-icon")
   .style("position", "absolute")
   .style("top", "16px")
-  .style("left", `${searchContainerwidth + 60}px`) // next to the search bar
+  .style("left", `${relativeLeft}px`)
   .style("width", "20px")
   .style("height", "20px")
   .style("background", "#ccc")

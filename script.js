@@ -12,6 +12,7 @@ const filterApplicationOrder = [
   "FreeTextSearch",      
   "Set Names",
   "Set Types",
+  "Keywords",
   "Year",
   "Originality",
   "Rarity",
@@ -42,17 +43,14 @@ function init() {
       .append("div")
       .attr("id", "tooltip")
       .style("position", "absolute")
-      .style("background", "rgba(0, 0, 0, 0.7)")
-      .style("color", "white")
-      .style("padding", "5px")
-      .style("border-radius", "3px")
-      .style("font-size", "12px")
+      
       .style("pointer-events", "none")
       .style("display", "none");
   }
     d3.json("./data/dataset_card_details.json").then(function (data) {
       const originalData = JSON.parse(JSON.stringify(data));  
       const groupedData = buildGroupedData(originalData);
+      console.log(groupedData)
       updateState({ originalData, groupedData });
     let hoverTimeout = null;
       getState().onChange("hoveredCards", (hoveredCards) => {
@@ -345,7 +343,7 @@ function shouldIncludeCard(card, selectedFilters) {
     const cardValue = extractCardValue(card, category);
     if (!cardValue) return false;
 
-    const isSplittable = ["Supertypes", "Types", "Subtypes"].includes(category);
+    const isSplittable = ["Supertypes", "Types", "Subtypes", "Keywords"].includes(category);
     const cardValues = Array.isArray(cardValue)
       ? cardValue.map(v => v.trim().toLowerCase())
       : (isSplittable
@@ -372,6 +370,7 @@ function shouldIncludeCard(card, selectedFilters) {
   function buildGroupedData(data) {
   const grouped = {
     Originality: new Map(),
+    Keywords: new Map(),
     Rarity: new Map(),
     Supertypes: new Map(),
     Types: new Map(),
@@ -404,6 +403,10 @@ function extractCardValues(card, category) {
   switch (category) {
     case "Originality":
       return card.originality ? [card.originality.toLowerCase()] : [];
+    case "Keywords":
+  return Array.isArray(card.keywords)
+    ? card.keywords.map(k => k.toLowerCase())
+    : [];
     case "Rarity":
       return card.rarity ? [card.rarity.toLowerCase()] : [];
     case "Supertypes":
@@ -424,7 +427,7 @@ function extractCardValues(card, category) {
       if (card.number_of_colours === 1) return ["1 color"];
       if (card.number_of_colours === 0) return ["colorless"];
       return [`${card.number_of_colours} colors`];
-case "IcicleColorIdentity":
+    case "IcicleColorIdentity":
   if (!Array.isArray(card.color_identity) || card.color_identity.length === 0) return ["colorless"];
   const sortedColors = card.color_identity.slice().sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b]);
   return [sortedColors.join("").toLowerCase()];
@@ -439,7 +442,9 @@ case "IcicleColorIdentity":
 
   function extractCardValue(card, category) {
     switch (category) {
-      case "Keywords": return card.keywords;
+      case "Keywords":
+  return Array.isArray(card.keywords) ? card.keywords.join(" ") : null;
+
       case "Supertypes": return card.supertype;
       case "Types": return card.type;
       case "Subtypes": return card.subtype;

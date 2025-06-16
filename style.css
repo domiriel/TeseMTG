@@ -5,6 +5,22 @@ body {
 }
 
 
+#tooltip {
+  background :#8A9CE4 ;
+  border: 1px solid #ccc;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 5px;
+  font-size: 13px;
+  pointer-events: none;
+  z-index: 9999;
+  position: absolute;
+  display: none; /* Initially hidden */
+}
+
+
 .container {
   display: grid;
   grid-template-columns: 0.35fr repeat(2, 0.70fr) repeat(2, .75fr);

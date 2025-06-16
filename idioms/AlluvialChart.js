@@ -78,7 +78,7 @@ const chartHeight = svgHeight * 0.75
 const chartXOffset = (svgWidth - chartWidth) / 2 - 40; 
 const chartYOffset = (svgHeight - chartHeight) / 2; 
 
-const margin = { top: 20, right: 60, bottom: 20, left: (svgWidth - chartWidth)/2 - marginLeftOffset }; 
+const margin = { top: 45, right: 18, bottom: 40, left: 10 };
 const originalitySet = new Set();
 const raritySet = new Set();
 data.forEach(card => {
@@ -164,7 +164,7 @@ rarityCategories.forEach(r => (rarityPriceSums[r] = rarityPriceCounts[r] = 0));
     svg = container.append("svg").attr("width", svgWidth).attr("height", svgHeight);
   }
   svg.selectAll("g").remove();
-  const sankeyGroup = svg.append("g").attr("transform", `translate(${chartXOffset}, ${chartYOffset})`);
+  const sankeyGroup = svg.append("g").attr("transform", `translate(${margin.left}, ${margin.top})`);
 
 const infoGroup = svg.append("g")
   .attr("class", "info-icon")
@@ -570,8 +570,8 @@ function applyLocalChartFilter() {
 
     
   
-const legendX = svgWidth - 87 ;   
-const legendY = 43
+const legendX = chartWidth + margin.right;  // slight adjustment inward
+const legendY = margin.top;
 const rectHeight = 20;
 const extraSpacing = 0;
 

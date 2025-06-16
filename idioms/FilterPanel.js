@@ -600,7 +600,8 @@ VISIBLE_FILTER_CATEGORIES.forEach(category => {
 
 function extractCardValue(card, category) {
     switch (category) {
-        case "Keywords": return card.keywords;
+        case "Keywords":
+            return Array.isArray(card.keywords) ? card.keywords.join("/") : null;
         case "Supertypes": return card.supertype;
         case "Types": return card.type;
         case "Subtypes": return card.subtype;

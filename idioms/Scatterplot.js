@@ -22,6 +22,35 @@ const scatterTooltipText = `
 `;
 
 
+function getColorIdentityBackground(colorIdentity) {
+  if (!Array.isArray(colorIdentity) || colorIdentity.length === 0) return "#888";
+
+  const colorMap = {
+    W: "#f6f1d5",
+    U: "#b3d9ff",
+    R: "#f8b3a0",
+    B: "#c8b4c0",
+    G: "#b6d7b3",
+  };
+
+  const mtgColorOrder = { W: 0, U: 1, R: 2, B: 3, G: 4 };
+
+  // Sort identity based on defined order
+  const sorted = [...colorIdentity].sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b]);
+  const colors = sorted.map(c => colorMap[c]).filter(Boolean);
+
+  if (colors.length === 1) {
+    return colors[0];
+  } else {
+    const step = 100 / (colors.length - 1);
+    const stops = colors.map((color, i) => `${color} ${i * step}%`);
+    return `linear-gradient(to right, ${stops.join(", ")})`;
+  }
+}
+
+
+
+
 const ZOOM_THRESHOLD = 6;
 let currentZoomLevel = 1;
 let wasZoomedOut = true;  
@@ -80,6 +109,8 @@ let globalDots = null;
 
 function mouseoverFn(event, d) {
   d3.select("#tooltip").style("display", "block")
+    .style("background", getColorIdentityBackground(d.color_identity))
+    .style("color", "black")
     .html(`
       <div style="display: flex; gap: 12px; align-items: flex-start;">
         <img src="${d.tooltip_image}" alt="${d.name}" width="200" style="border-radius: 4px; box-shadow: 0 0 4px rgba(0,0,0,0.5);" />
@@ -113,7 +144,9 @@ function mousemoveFn(event) {
 }
 
 function mouseoutFn() {
-   d3.select("#tooltip").style("display", "none");
+   d3.select("#tooltip").style("display", "none")
+   .style("background", null)
+   .style("color", null);
 }
 
 
@@ -168,9 +201,9 @@ function updatePointPositions(xScale, yScale) {
 
 
 export function prepareScatterData(data, selectedPriceAttribute) {
-  const excludedSetTypes = new Set(["promo", "funny", "memorabilia", "alchemy", "token", "minigame"]);
+  const excludedSetTypes = new Set([ "memorabilia", "alchemy", "token"]);
   const excludedSetNames = ["Arena", "Alchemy", "Digital"];
-  const excludedTypes = ["Emblem", "Token"];
+  const excludedTypes = [];
 
   const cardMap = new Map();
 
@@ -293,9 +326,17 @@ filteredData.forEach(d => {
     }
 });
 
+
+const sortedPrices = filteredData
+  .map(d => d.avg_price)
+  .filter(p => p > 0.001) // ignore placeholder values
+  .sort((a, b) => a - b);
+
+const secondMinPrice = sortedPrices[1] || paddedMinPrice;
+
     const container = d3.select(containerId).node();
     const { width, height } = container.getBoundingClientRect();
-    const margin = { top: 20, right: 30, bottom: 50, left: 70 };
+    const margin = { top: 35, right: 60, bottom: 35, left: 60 };
     const chartWidth = width - margin.left - margin.right;
     const chartHeight = height - margin.top - margin.bottom;
 
@@ -360,10 +401,10 @@ infoGroup.append("text")
 
 const originalXScale = d3.scaleLog()
     .domain([
-        paddedMinPrice,
+        minPrice,
         paddedMaxPrice
     ])
-    .range([0, chartWidth]);
+    .range([10, chartWidth]);
 
     
 
@@ -423,7 +464,7 @@ function updateAxes(symbol) {
     svg.append("text")
         .attr("class", "x-axis-label")
         .attr("x", margin.left + chartWidth / 2)
-        .attr("y", height - 15)
+        .attr("y", height - 5)
         .attr("text-anchor", "middle")
         .style("font-size", "14px")
         .style("font-weight", "bold")
@@ -681,6 +722,8 @@ noRankEntry.append("text")
 
     const zoom = d3.zoom()
         .scaleExtent([1, 24])
+    .translateExtent([[0, 0], [chartWidth, chartHeight]]) 
+    .extent([[0, 0], [chartWidth, chartHeight]]) 
         .on("zoom", event => {
 
 
