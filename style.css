@@ -119,8 +119,7 @@ body {
   }
 
 
-  .FilterPanel, .TimelineView, .Title, .ISTLogo, 
-  .IcicleChart, .LineChart {
+  .FilterPanel, .TimelineView, .Title, .ISTLogo {
     border: 1px solid black; 
   }
   
