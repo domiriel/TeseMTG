@@ -44,7 +44,7 @@ const infoTooltipText = `
 <strong>Chart Interactions:</strong><br>
 • <strong>Click</strong> on a node or link: temporarily filter the chart.<br>
 • <strong>Double-click</strong> on a node or link: apply a global filter to the dataset.<br>
-• <strong>Hover</strong> on nodes or links: see details and highlights.<br>
+• <strong>Hover</strong> on nodes or links: see details.<br>
 `;
 
 
@@ -653,6 +653,21 @@ export function highlightAlluvialElements(hoveredCards) {
   });
 }
 
+export function highlightAlluvialElementsHoverOnly(card) {
+  if (!card || !card.rarity) return;
+
+  const rarity = card.rarity.toLowerCase();
+  
+
+  
+  d3.selectAll("g.node rect")
+    .filter(d => d.x0 !== 0 && d.name === rarity)
+    .classed("hover-temp", true);
+}
+
+export function clearAlluvialHoverOnly() {
+  d3.selectAll("g.node rect").classed("hover-temp", false);
+}
 
 
 

@@ -9,6 +9,8 @@ MTG_CARD_TYPES = {
     "Plane", "Planeswalker", "Scheme", "Sorcery", "Vanguard", "Battle"
 }
 
+functional_reprint_names = set()
+
 def parse_type_line(type_line):
     # Handle double-faced/split/meld cards — we only parse the front face
     front_type_line = type_line.split("//")[0].strip()
@@ -29,6 +31,18 @@ def parse_type_line(type_line):
         "subtype": subtype
     }
 
+def get_canonical_mechanics_key(card):
+    # Prefer front face if it's a double-faced card
+    front = card.get('card_faces', [{}])[0] if 'card_faces' in card else card
+
+    return (
+        card.get('cmc', 0),
+        front.get('type_line', ''),
+        front.get('oracle_text', ''),
+        front.get('power', ''),
+        front.get('toughness', '')
+    )
+
 # Custom encoder to handle Decimal types
 class DecimalEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -44,8 +58,12 @@ output_file = os.path.join(output_dir, 'card_details.json')
 
 # Function to calculate complexity
 def calculate_complexity(card):
-    oracle_text = card.get('oracle_text', '')
-    return len(oracle_text.split())
+    if 'card_faces' in card:
+        text = ' '.join(face.get('oracle_text', '') for face in card['card_faces'])
+    else:
+        text = card.get('oracle_text', '')
+    return len(text.split())
+
 
 # Precompute dictionaries to speed up originality determination
 originality_lookup = defaultdict(list)
@@ -61,18 +79,39 @@ with open(input_file, 'r', encoding='utf-8') as file:
 
 # Function to determine originality of the card
 def determine_originality(card):
-    key = (card.get('cmc', 0), card.get('type_line', ''), card.get('oracle_text', ''),
-           card.get('power', ''), card.get('toughness', ''))
+    if card.get('set_type') == 'memorabilia':
+        return 'art_series'
 
+    # If name is already known to be a reprint, skip redundant comparison
+    if card['name'] in functional_reprint_names:
+        return 'functional reprint'
+
+    key = get_canonical_mechanics_key(card)
     existing_cards = originality_lookup.get(key, [])
-    
+
     for existing_card in existing_cards:
-        if existing_card.get('name', '') != card.get('name', '') and \
-           existing_card.get('released_at', '') < card.get('released_at', ''):
-            return 'functional reprint'
+        if existing_card.get('name') == card.get('name', ''):
+            continue  # same name, skip
+
+        if existing_card.get('released_at', '') >= card.get('released_at', ''):
+            continue  # not older, skip
+
+        # Fail-safe: skip functional reprint comparison between DFC and non-DFC
+        is_card_dfc = 'card_faces' in card
+        is_existing_dfc = 'card_faces' in existing_card
+        if is_card_dfc != is_existing_dfc:
+            continue  # one is DFC, the other is not → skip
+
+
+        functional_reprint_names.add(card['name'])
+
+        for other in originality_lookup[key]:
+            if other.get('name') == card['name']:
+                functional_reprint_names.add(other['name'])
+
+        return 'functional reprint'
 
     return 'reprint' if card.get('reprint') else 'original'
-
 # Counters for statistics
 color_count = Counter()
 color_identity_count = Counter()
@@ -87,7 +126,11 @@ subtype_count = Counter()
 with open(output_file, 'w') as outfile:
     outfile.write('[\n')  # Start of JSON array
 
-    for index, card in enumerate(all_cards):
+    written_index = 0
+    for card in all_cards:
+        if card.get('set_type') == 'memorabilia':
+            continue  # Skip memorabilia cards entirely
+
         color_identity = card.get('color_identity', [])
         type_line = card.get('type_line', '')
 
@@ -96,7 +139,6 @@ with open(output_file, 'w') as outfile:
         supertype = parsed['supertype'] if parsed['supertype'] else 'Basic'
         type_ = parsed['type']
         subtype = parsed['subtype']
-
 
         # If the card is a Land, override color to be colorless
         if "Land" in type_:
@@ -110,7 +152,6 @@ with open(output_file, 'w') as outfile:
         color_count[len(color_identity)] += 1
         color_identity_count[tuple(sorted(color_identity))] += 1
         rarity_count[card.get('rarity', 'unknown')] += 1
-
 
         # Determine foil_status
         price_usd = float(card.get('prices', {}).get('usd', 0) or 0)
@@ -128,10 +169,9 @@ with open(output_file, 'w') as outfile:
         originality = determine_originality(card)
         originality_count[originality] += 1
 
-        # Extract set name and set type
         image_uris = card.get('image_uris', {})
-
         faces_data = []
+
         if 'card_faces' in card:
             for face in card['card_faces']:
                 faces_data.append({
@@ -139,17 +179,15 @@ with open(output_file, 'w') as outfile:
                     "mana_cost": face.get('mana_cost', ''),
                     "type_line": face.get('type_line', ''),
                     "image_normal": face.get('image_uris', {}).get('normal', ''),
-                  
-
-                    })
+                })
         else:
             faces_data.append({
                 "name": card.get('name'),
                 "mana_cost": card.get('mana_cost', ''),
                 "type_line": card.get('type_line', ''),
                 "image_normal": image_uris.get('normal', ''),
-
             })
+
         card_details = {
             "name": card.get('name'),
             "cmc": float(card.get('cmc', 0)),
@@ -176,15 +214,16 @@ with open(output_file, 'w') as outfile:
             "image_normal": image_uris.get('normal', ''),
             "faces": faces_data,
             "foil_status": foil_status,
-
         }
 
-        if index > 0:
+        if written_index > 0:
             outfile.write(',\n')
 
         json.dump(card_details, outfile, separators=(',', ':'), cls=DecimalEncoder)
+        written_index += 1
 
     outfile.write('\n]')  # End of JSON array
+
 
 total_cards = len(all_cards)
 supertype_total = sum(supertype_count.values())
@@ -192,11 +231,6 @@ type_total = sum(type_count.values())
 subtype_total = sum(subtype_count.values())
 
 
-print("Supertype Count:", dict(supertype_count))
-print("Type Count:", dict(type_count))
-print(f"Total cards processed: {total_cards}")
-print(f"Sum of all supertypes counted: {supertype_total}")
-print(f"Sum of all types counted: {type_total}")
-print(f"Sum of all subtypes counted: {subtype_total}")
-print(f"All card details have been saved to '{output_file}'")
+print("Originality distribution:", dict(originality_count))
+
 

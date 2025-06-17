@@ -6,7 +6,7 @@ const lineChartTooltipText = `
 • <strong>Click</strong> a circle: toggle year filter.<br>
 • <strong>Brush</strong> across timeline: multi-select years.<br>
 • <strong>Hover</strong> a line: inspect metric value at that year.<br>
-• <strong>Zoom</strong>: scroll or drag to focus a time range.<br>
+• <strong>Zoom</strong>: scroll to focus a time range.<br>
 `;
 
 let brushing = false;
@@ -107,7 +107,7 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
 
     const infoGroup = svg.append("g")
   .attr("class", "info-icon")
-  .attr("transform", `translate(${containerWidth - 35}, 25)`); // Top-right position
+  .attr("transform", `translate(${containerWidth - 20}, 25)`); // Top-right position
 
 infoGroup.append("circle")
   .attr("r", 10)
@@ -550,4 +550,16 @@ function getXCoordFromYear(date, svg) {
     if (!window._lineChartXScale) return 0;
     const marginLeft = +svg.select(".stacked-line-wrapper svg g").attr("transform")?.match(/translate\(([\d.]+)/)?.[1] || 0;
     return window._lineChartXScale(date) + marginLeft;
+}
+export function highlightLineChartHoverOnly(card) {
+    if (!card?.release_date) return;
+
+    const year = new Date(card.release_date).getFullYear().toString();
+
+    d3.select(".LineChart").selectAll(`circle.data-point[data-year='${year}']`)
+      .classed("hover-temp", true);
+}
+export function clearLineChartHoverOnly() {
+    d3.select(".LineChart").selectAll("circle.data-point")
+      .classed("hover-temp", false);
 }

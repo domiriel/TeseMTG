@@ -1,4 +1,4 @@
-import { getState, subscribe, updateState } from "./state.js";
+import { getState, subscribe, updateState, loadFiltersFromURL } from "./state.js";
 import { createIcicleChart, highlightIcicleRect } from "./idioms/IcicleChart.js";
 import { createAlluvialChart, highlightAlluvialElements} from "./idioms/AlluvialChart.js";
 import { createTimelineView, highlightTimelineSets } from "./idioms/TimelineView.js";
@@ -79,8 +79,15 @@ function init() {
       }, 60);
 
       });
- 
-      const { selectedFilters, selectedPriceAttribute, freeTextSearch } = getState();
+      
+
+      const stateSnapshot = getState();
+      const sharedFilters = loadFiltersFromURL();
+
+      const selectedPriceAttribute = stateSnapshot.selectedPriceAttribute;
+      const freeTextSearch = stateSnapshot.freeTextSearch;
+      let selectedFilters = sharedFilters || stateSnapshot.selectedFilters;
+
       const filteredResults = getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
       const { default: filtered, icicle: IcicleFiltered, timeline: TimelineFiltered } = filteredResults;
 

@@ -9,7 +9,7 @@ const infoTooltipText = `
 <strong>Icicle Chart Interactions:</strong><br>
 • <strong>Click</strong> on a rectangle: zoom into that section.<br>
 • <strong>Double-click</strong> on a rectangle: apply a global filter to the dataset.<br>
-• <strong>Hover</strong> on a rectangle: see details and highlights.<br>
+• <strong>Hover</strong> on a rectangle: see details.<br>
 `;
 const mtgColorOrder = { W: 0, U: 1, R: 2, B: 3, G: 4 };
 
@@ -315,6 +315,7 @@ const levelHeight = chartHeight / depth;
     .data(root.descendants().slice(1), d => d.data.name) // use name as key
     .join(
         enter => enter.append("rect")
+            .attr("class", "icicle-rect")
             .attr("x", d => xScale(d.x0))
             .attr("y", d => yScale(d.depth) - levelHeight / 2)
             .attr("width", d => xScale(d.x1) - xScale(d.x0))
@@ -595,7 +596,7 @@ export function highlightIcicleRect(hoveredCards) {
             identity = card.color_identity
                 .slice()
                 .sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b])
-                .join("-");
+                .join("");
         }
         identityMatches.add(identity);
     });
@@ -607,5 +608,21 @@ export function highlightIcicleRect(hoveredCards) {
 
 
 
+export function highlightIcicleRectHoverOnly(card) {
+  if (!card || !card.color_identity) return;
+
+  const identityKey = card.color_identity.length
+    ? card.color_identity.slice().sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b]).join("")
+    : "Colorless";
+
+  d3.select(".IcicleChart").selectAll("rect.icicle-rect")
+  .filter(d => d.data?.name === identityKey && d.depth === 2)
+  .classed("hover-temp", true);
+}
+
+export function clearIcicleHoverOnly() {
+  d3.select(".IcicleChart").selectAll("rect.icicle-rect").classed("hover-temp", false);
+
+}
 
 

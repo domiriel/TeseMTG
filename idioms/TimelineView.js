@@ -11,7 +11,7 @@ const timelineTooltipText = `
 • <strong>Click</strong> a set type label: filter by type.<br>
 • <strong>Search</strong> for a set name using the bar above.<br>
 • <strong>Brush</strong> to select multiple sets.<br>
-• <strong>Zoom</strong> to focus a time range.
+• <strong>Scroll</strong> to focus a time range.
 `;
 
 
@@ -701,4 +701,19 @@ export function highlightTimelineSets(hoveredCards) {
     );
 }
 
+export function highlightTimelineSetsHoverOnly(card) {
+    if (!card?.all_sets) return;
+
+    const hoveredSetNames = new Set(
+        card.all_sets.map(set => set.name.toLowerCase())
+    );
+
+    d3.selectAll(".set-rect")
+      .filter(d => hoveredSetNames.has(d.name.toLowerCase()))
+      .classed("hover-temp", true);
+}
+
+export function clearTimelineHoverOnly() {
+    d3.selectAll(".set-rect").classed("hover-temp", false);
+}
 

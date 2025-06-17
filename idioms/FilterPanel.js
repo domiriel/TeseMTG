@@ -102,6 +102,7 @@ wrapper.append("input")
     
     terms.forEach(term => currentFilters["FreeTextSearch"].add(term));
 
+
     updateState({ selectedFilters: currentFilters, updateContext: "TextSearch" });
         console.log("Updated selectedFilters:", getState().selectedFilters);
     this.value = ""; // Clear input after
@@ -226,7 +227,7 @@ searchInput.on("change", function () {
         section.append("div")
             .attr("class", "dropdown-header")
             .text(category)
-            .style("background", "#998066")
+            .style("background", "#B69677")
             .style("padding", "6px 10px")
             .style("border", "1px solid #ccc")
             .style("border-radius", "6px")
@@ -444,10 +445,7 @@ settingsContent.append("button")
     .style("cursor", "pointer")
     .style("margin-right", "8px")
     .on("click", () => {
-        const filters = getState().selectedFilters;
-        const json = JSON.stringify(Object.fromEntries(
-            Object.entries(filters).map(([k, v]) => [k, Array.from(v)])
-        ), null, 2);
+        const json = saveFilterSettings();
         const blob = new Blob([json], { type: "application/json" });
         const link = document.createElement("a");
         link.href = URL.createObjectURL(blob);
@@ -468,28 +466,41 @@ settingsContent.append("button")
     .on("click", () => document.getElementById("loadFilterInput").click());
 
 wrapper.append("input")
-    .attr("type", "file")
-    .attr("id", "loadFilterInput")
-    .style("display", "none")
-    .on("change", function () {
-        const file = this.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = e => {
-            try {
-                const loaded = JSON.parse(e.target.result);
-                const newFilters = {};
-                for (const key in loaded) {
-                    newFilters[key] = new Set(loaded[key]);
-                }
-                updateState({ selectedFilters: newFilters });
-                createFilterPanel(data, containerId, newFilters, true);
-            } catch (err) {
-                alert("Failed to load filters.");
-            }
-        };
-        reader.readAsText(file);
+  .attr("type", "file")
+  .attr("id", "loadFilterInput")
+  .style("display", "none")
+  .on("change", function () {
+    const file = this.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        loadFilterSettings(e.target.result);  // ✅ uses state.js logic
+      } catch (err) {
+        alert("Failed to load filters.");
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  settingsContent.append("button")
+  .text("Share Filters")
+  .style("padding", "6px 12px")
+  .style("font-size", "14px")
+  .style("background-color", "#f0f0f0")
+  .style("color", "#000")
+  .style("border", "none")
+  .style("border-radius", "4px")
+  .style("cursor", "pointer")
+  .style("margin-top", "8px")
+  .on("click", () => {
+    const shareURL = generateFilterShareURL();
+    navigator.clipboard.writeText(shareURL).then(() => {
+      alert("Shareable URL copied to clipboard!");
+    }).catch(() => {
+      alert("Failed to copy URL. Here it is:\n" + shareURL);
     });
+  });
 
 }
 
@@ -601,7 +612,7 @@ VISIBLE_FILTER_CATEGORIES.forEach(category => {
 function extractCardValue(card, category) {
     switch (category) {
         case "Keywords":
-            return Array.isArray(card.keywords) ? card.keywords.join("/") : null;
+            return Array.isArray(card.keywords) ? card.keywords : null;
         case "Supertypes": return card.supertype;
         case "Types": return card.type;
         case "Subtypes": return card.subtype;
@@ -634,7 +645,7 @@ function computeFilterCounts(data, selectedFilters, categoriesToIgnore = []) {
             const rawValue = extractCardValue(card, category);
             if (!rawValue) continue;
 
-            const isSplittable = ["Supertypes", "Types", "Subtypes"].includes(category);
+            const isSplittable = ["Supertypes", "Types", "Subtypes", "Keywords"].includes(category);
             const values = Array.isArray(rawValue)
                 ? rawValue.map(v => v.trim())
                 : (isSplittable

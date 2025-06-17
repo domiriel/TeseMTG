@@ -107,7 +107,29 @@ export function generateFilterShareURL(baseURL = window.location.origin + window
   return `${baseURL}?filters=${encodeURIComponent(params.toString())}`;
 }
 
+export function loadFiltersFromURL() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const encodedFilters = urlParams.get("filters");
 
+  if (!encodedFilters) return null;
+
+  try {
+    const decoded = decodeURIComponent(encodedFilters);
+    const parsedParams = new URLSearchParams(decoded);
+    const newFilters = {};
+
+    for (const [key, value] of parsedParams.entries()) {
+      if (value) {
+        newFilters[key] = new Set(value.split(","));
+      }
+    }
+
+    return newFilters;
+  } catch (e) {
+    console.error("Failed to parse filters from URL:", e);
+    return null;
+  }
+}
 
 export function resetState() {
   

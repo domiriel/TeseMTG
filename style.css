@@ -60,6 +60,11 @@ body {
   transition: stroke 0.3s ease, fill 0.3s ease;
 }
 
+
+.set-rect.hover-temp:not(.highlighted) {
+  stroke: orange;
+  stroke-width: 2px;
+}
   .Title { grid-area: 1 / 2 / 2 / 4; }
   .ISTLogo { grid-area: 1 / 1 / 2 / 2; 
     background-image: url('images/IST logo.jpg');
@@ -115,7 +120,7 @@ body {
 
 
   .FilterPanel, .TimelineView, .Title, .ISTLogo, 
-  .IcicleChart, .LineChart, .AlluvialChart, .Scatterplot {
+  .IcicleChart, .LineChart {
     border: 1px solid black; 
   }
   
@@ -153,13 +158,28 @@ body {
     fill-opacity: 1;
 }
 
+.IcicleChart rect.hover-temp:not(.highlighted) {
+  stroke: orange;
+  stroke-width: 2px;
+}
 
+.LineChart circle.hover-temp:not(.selected) {
+  stroke: orange;
+  stroke-width: 2px;
+}
 
   .node rect.highlighted {
     stroke: orange;
     stroke-width: 3px;
+
+    
   }
   
+  g.node rect.hover-temp:not(.highlighted) {
+  stroke: orange;
+  stroke-width: 2px;
+}
+
   .links path.highlighted {
     stroke: orange !important;
     stroke-opacity: 1 !important;

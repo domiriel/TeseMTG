@@ -1,5 +1,9 @@
 
 import { updateState, getState } from "../state.js";
+import { highlightAlluvialElementsHoverOnly, clearAlluvialHoverOnly } from "./AlluvialChart.js";
+import { highlightIcicleRectHoverOnly, clearIcicleHoverOnly } from "./IcicleChart.js";
+import { highlightLineChartHoverOnly, clearLineChartHoverOnly, highlightLineChart } from "./LineChart.js";
+import { highlightTimelineSetsHoverOnly, clearTimelineHoverOnly } from "./TimelineView.js";
 const colorGroups = [
     { range: [1, 5691], color: "#594A3A" },  
     { range: [5692, 11382], color:  "#736659" },
@@ -14,12 +18,29 @@ function getSymbolFromAttribute(attr) {
 }
 const scatterTooltipText = `
 <strong>Scatterplot Interactions:</strong><br>
-• <strong>Hover</strong> on a dot: view card details.<br>
-• <strong>Click</strong> a dot: toggle highlight.<br>
-• <strong>Shift + Brush</strong>: multi-select cards.<br>
-• <strong>Double-click Price/Complexity labels</strong>: view tooltip explanation.<br>
-• <strong>Zoom</strong>: to reveal more cards.<br>
+• <strong>Hover on dots</strong>: view card details and highlight related data across views.<br>
+• <strong>Click</strong>: toggle persistent highlight.<br>
+• <strong>Shift + Brush</strong>: multi-select/deselect cards.<br>
+• <strong>Hover on labels</strong>: view tooltip explanation.<br>
+• <strong>Scroll</strong>: zoom in/out.<br>
+• <strong>Moving mouse while holding right-click</strong>: Panning<br>
 `;
+
+export function hoverOnlyHighlightCard(card) {
+  highlightAlluvialElementsHoverOnly(card);
+  highlightIcicleRectHoverOnly(card);
+  highlightLineChartHoverOnly(card);
+  highlightTimelineSetsHoverOnly(card);
+  // Add others if needed
+}
+
+export function clearHoverOnlyHighlight() {
+  clearAlluvialHoverOnly();
+  clearIcicleHoverOnly();
+  clearLineChartHoverOnly();
+  clearTimelineHoverOnly();
+  // Add others if needed
+}
 
 
 function getColorIdentityBackground(colorIdentity) {
@@ -60,6 +81,7 @@ let lastZoomedOut = currentZoomLevel < ZOOM_THRESHOLD;
 let actualFIlteredData = null; // Store the actual filtered data for updates
     let isBrushing = false;
 let brushOverlay = null;
+let zoom = null;
 let brush = null;
 let shiftPressed = false;
 let lastPriceAttribute = null;
@@ -128,6 +150,7 @@ function mouseoverFn(event, d) {
         </div>
       </div>
     `);
+  hoverOnlyHighlightCard(d);
 }
 
 function mousemoveFn(event) {
@@ -143,10 +166,11 @@ function mousemoveFn(event) {
     .style("top", `${event.pageY + padding}px`);
 }
 
-function mouseoutFn() {
+function mouseoutFn(event, d) {
    d3.select("#tooltip").style("display", "none")
    .style("background", null)
    .style("color", null);
+  clearHoverOnlyHighlight();
 }
 
 
@@ -346,6 +370,11 @@ const secondMinPrice = sortedPrices[1] || paddedMinPrice;
         .append("svg")
         .attr("width", width)
         .attr("height", height);
+
+
+    d3.select(containerId)
+  .on("contextmenu", event => event.preventDefault());
+
 
 
     const infoGroup = svg.append("g")
@@ -602,7 +631,7 @@ const brush = d3.brush()
 
 
 
-    //brushOverlay.call(brush).lower();
+    brushOverlay.call(brush).lower();
     let fullData = filteredData;
 
 
@@ -627,11 +656,11 @@ const visibleData = filteredData
     });
 
 
-    console.log(gClip.selectAll("circle").size(), "dots size");
+    
     globalDots = dots;
 
 
-    console.log(globalDots.size(), "globalDots size");
+    
     updatePointPositions(xScale, yScale);
 
 
@@ -720,54 +749,58 @@ noRankEntry.append("text")
     const ZOOM_DELAY =0; 
 
 
-    const zoom = d3.zoom()
-        .scaleExtent([1, 24])
-    .translateExtent([[0, 0], [chartWidth, chartHeight]]) 
-    .extent([[0, 0], [chartWidth, chartHeight]]) 
-        .on("zoom", event => {
+  zoom = d3.zoom()
+  .scaleExtent([1, 24])
+  .translateExtent([[0, 0], [chartWidth, chartHeight]])
+  .extent([[0, 0], [chartWidth, chartHeight]])
+  .filter(event => {
+    
+    if (event.type === "wheel") return true;
+
+    
+    if (event.type === "mousedown" && event.button === 2) return true;
+
+    return false;
+  })
+  .on("zoom", event => {
+    applyZoomTransform(event.transform);
+  });
 
 
-    const transform = event.transform;
-    currentZoomLevel = transform.k;
-
-    const newX = transform.rescaleX(originalXScale);
-    const newY = transform.rescaleY(originalYScale);
-
-    xScale.domain(newX.domain());
-    yScale.domain(newY.domain());
-
-    updateAxes(symbol);
 
 
+  function applyZoomTransform(transform) {
+  
+  currentZoomLevel = transform.k;
 
-    const nowZoomedOut = transform.k < ZOOM_THRESHOLD;
+  const newX = transform.rescaleX(originalXScale);
+  const newY = transform.rescaleY(originalYScale);
 
-if (nowZoomedOut !== lastZoomedOut) {
-  const newVisible = actualFIlteredData
+  xScale.domain(newX.domain());
+  yScale.domain(newY.domain());
 
-  console.log(newVisible.length, "newVisible length");
-gClip.selectAll("circle")
-  .data(newVisible, d => d.name)
-  .join(
-    enter => styleAndBindDots(enter.append("circle")),
-    update => styleAndBindDots(update),
-    exit => exit.remove()
-  )
-  .attr("cx", d => xScale(d.avg_price))
-  .attr("cy", d => yScale(d.complexity));
+  updateAxes(symbol);
 
-  lastZoomedOut = nowZoomedOut;
+  const nowZoomedOut = transform.k < ZOOM_THRESHOLD;
+  if (nowZoomedOut !== lastZoomedOut) {
+    const newVisible = actualFIlteredData;
+
+    gClip.selectAll("circle")
+      .data(newVisible, d => d.name)
+      .join(
+        enter => styleAndBindDots(enter.append("circle")),
+        update => styleAndBindDots(update),
+        exit => exit.remove()
+      )
+      .attr("cx", d => xScale(d.avg_price))
+      .attr("cy", d => yScale(d.complexity));
+
+    lastZoomedOut = nowZoomedOut;
+  }
+
+  globalDots = gClip.selectAll("circle");
+  updatePointPositions(xScale, yScale);
 }
-
-globalDots = gClip.selectAll("circle");
-
-// Always update positions (even if no redraw)
-updatePointPositions(xScale, yScale);
-
-
-});
-
-
 
         svg.call(zoom);
 
@@ -806,7 +839,7 @@ svg.node().__scatterMeta__ = {
 
 export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_eur") {
 
-  console.log("Updating scatter plot...");
+  
   const hoveredCards = getState().hoveredCards || [];
 const hoveredSet = new Set(hoveredCards.map(c => c.name));
 
@@ -859,13 +892,13 @@ if (selectedPriceAttribute !== lastPriceAttribute) {
     
     filteredData.forEach(d => delete d.isZoomKey);
 
-    console.log(filteredData.length, "filteredData length");
+    
     tagZoomKeyPoints(filteredData, xScale, yScale);
 actualFIlteredData = filteredData; // Update the actual filtered data
 
-console.log(gClip.selectAll("circle").size(), "before removing circles");
+
   gClip.selectAll("circle").remove();
-console.log(gClip.selectAll("circle").size(), "after removing circles");
+
 // ✨ Bind new data and create fresh dots
 const dots = gClip.selectAll("circle")
   .data(filteredData, d => d.name)
