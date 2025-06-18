@@ -668,6 +668,12 @@ export function highlightAlluvialElementsHoverOnly(card) {
 export function clearAlluvialHoverOnly() {
   d3.selectAll("g.node rect").classed("hover-temp", false);
 }
+export function highlightAlluvialElementsHoverOnlyFromSet(originalities, rarities) {
+  d3.selectAll("g.node rect").classed("hover-temp", d =>
+    (d.x0 === 0 && originalities.has(d.name)) ||
+    (d.x0 !== 0 && rarities.has(d.name))
+  );
+}
 
 
 

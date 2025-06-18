@@ -167,6 +167,13 @@ body {
   stroke-width: 2px;
 }
 
+.Scatterplot circle.hover-temp:not(.selected) {
+  stroke: orange !important;
+  stroke-width: 2.5px !important;
+  r: 4 !important;
+}
+
+
   .node rect.highlighted {
     stroke: orange;
     stroke-width: 3px;

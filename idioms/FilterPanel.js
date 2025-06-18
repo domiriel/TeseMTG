@@ -586,7 +586,7 @@ VISIBLE_FILTER_CATEGORIES.forEach(category => {
         pills.enter()
           .append("div")
           .attr("class", "pill")
-          .style("background", "#007bff")
+          .style("background",  "#8A9CE4")
           .style("color", "white")
           .style("padding", "2px 8px")
           .style("border-radius", "12px")

@@ -2,7 +2,7 @@
 import { updateState, getState } from "../state.js";
 import { highlightAlluvialElementsHoverOnly, clearAlluvialHoverOnly } from "./AlluvialChart.js";
 import { highlightIcicleRectHoverOnly, clearIcicleHoverOnly } from "./IcicleChart.js";
-import { highlightLineChartHoverOnly, clearLineChartHoverOnly, highlightLineChart } from "./LineChart.js";
+import { highlightLineChartHoverOnly, clearLineChartHoverOnly} from "./LineChart.js";
 import { highlightTimelineSetsHoverOnly, clearTimelineHoverOnly } from "./TimelineView.js";
 const colorGroups = [
     { range: [1, 5691], color: "#594A3A" },  
@@ -938,7 +938,18 @@ d3.selectAll(".dots circle")
   });
 }
 
+export function highlightScatterDotsFromSet(setName) {
+  console.log("Highlighting dots for set:", setName);
+  d3.select(".Scatterplot").selectAll(".dots circle")
+    .each(function(d) {
+  if (d.all_sets?.some(s => s.name === setName)) {
+    console.log("Highlighting dot for:", d.name);
+    d3.select(this).classed("hover-temp", true);
+  }
+});
+}
 
-
-
+export function clearScatterHoverOnly() {
+  d3.selectAll(".dots circle").classed("hover-temp", false);
+}
 

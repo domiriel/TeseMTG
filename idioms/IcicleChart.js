@@ -625,4 +625,8 @@ export function clearIcicleHoverOnly() {
 
 }
 
-
+export function highlightIcicleRectHoverOnlyFromSet(colorIdentities) {
+  d3.selectAll("rect.icicle-rect")
+    .filter(d => d.depth === 2)
+    .classed("hover-temp", d => colorIdentities.has(d.data.name));
+}

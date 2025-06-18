@@ -1,8 +1,14 @@
 
 import { updateState, getState } from "../state.js";
 import { updateFilterPanel } from "./FilterPanel.js";
+import { highlightAlluvialElementsHoverOnlyFromSet, clearAlluvialHoverOnly } from "./AlluvialChart.js";
+import { highlightIcicleRectHoverOnlyFromSet, clearIcicleHoverOnly } from "./IcicleChart.js";
+import { highlightLineChartHoverOnlyFromSet, clearLineChartHoverOnly} from "./LineChart.js";
+import { highlightScatterDotsFromSet, clearScatterHoverOnly} from "./Scatterplot.js";
 
 
+let uniqueSets = null;
+const mtgColorOrder = { W: 0, U: 1, R: 2, B: 3, G: 4 };
 const timelineTooltipText = `
 <strong>Timeline Interactions:</strong><br>
 • <strong>Click</strong> a year: toggle filter by year.<br>
@@ -74,14 +80,34 @@ export function createTimelineView(data, containerId, isUpdate = false) {
                 name: setName,
                 releaseDate: card._parsedDate,
                 setType: card.set_type,
-                cardCount: 0 
+                cardCount: 0 ,
+                originalities: new Set(),
+                rarities: new Set(),
+                colorIdentities: new Set(),
             });
         }
         setMap.get(setName).cardCount += 1;
+        const setEntry = setMap.get(setName);
+        if (card.originality) {
+            setEntry.originalities.add(card.originality.toLowerCase());
+        }
+        // Add rarity
+        if (card.rarity) {
+        setEntry.rarities.add(card.rarity.toLowerCase());
+        }
+
+        // Add color identity
+        let identity;
+        if (!card.color_identity || card.color_identity.length === 0) {
+        identity = "Colorless";
+        } else {
+        identity = card.color_identity.slice().sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b]).join("");
+        }
+        setEntry.colorIdentities.add(identity);
     });
 
  
-    let uniqueSets = Array.from(setMap.values()).sort((a, b) => a.releaseDate - b.releaseDate);
+    uniqueSets = Array.from(setMap.values()).sort((a, b) => a.releaseDate - b.releaseDate);
     const yearTypeCounts = new Map();
     const typeCounts = new Map();
 
@@ -474,9 +500,11 @@ chartGroup.append("g")
                 tooltip
                     .style("left", `${left}px`)
                     .style("top", `${top}px`);
+                highlightAllViewsForSet(d.name); // Highlight all views for this set
             })
             .on("mouseout", function () {
                 d3.select("#tooltip").style("display", "none");
+                clearAllViewsHoverOnly(); // Clear highlights in all views
             })
              .on("click", function (event, d) {
                 const updatedFilters = getClonedFilters();
@@ -717,3 +745,21 @@ export function clearTimelineHoverOnly() {
     d3.selectAll(".set-rect").classed("hover-temp", false);
 }
 
+
+function highlightAllViewsForSet(setName) {
+  const setEntry = uniqueSets.find(d => d.name === setName);
+  if (!setEntry) return;
+
+  highlightAlluvialElementsHoverOnlyFromSet(setEntry.originalities, setEntry.rarities);
+  highlightIcicleRectHoverOnlyFromSet(setEntry.colorIdentities);
+  highlightLineChartHoverOnlyFromSet(setEntry.releaseDate);
+  highlightScatterDotsFromSet(setEntry.name);
+}
+
+function clearAllViewsHoverOnly() {
+  clearAlluvialHoverOnly();
+  clearIcicleHoverOnly();
+  clearLineChartHoverOnly();
+  clearScatterHoverOnly();
+
+}

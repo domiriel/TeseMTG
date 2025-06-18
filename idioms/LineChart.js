@@ -563,3 +563,13 @@ export function clearLineChartHoverOnly() {
     d3.select(".LineChart").selectAll("circle.data-point")
       .classed("hover-temp", false);
 }
+
+export function highlightLineChartHoverOnlyFromSet(setReleaseDate) {
+  if (!setReleaseDate) return;
+
+  const year = setReleaseDate.getFullYear().toString();
+
+  d3.select(".LineChart")
+    .selectAll(`circle.data-point[data-year='${year}']`)
+    .classed("hover-temp", true);
+}
