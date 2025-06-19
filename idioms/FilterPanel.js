@@ -101,7 +101,16 @@ export function createFilterPanel(data,filteredCards, containerId, selectedFilte
         .style("box-sizing", "border-box");
 
     const selectedFilters = selectedFiltersFromState;
-    const allFilters = computeFilterCounts(data, selectedFilters);
+    const groupedData = getState().groupedData;
+
+const allFilters = Object.fromEntries(
+  Object.entries(groupedData)
+    .filter(([category]) => VISIBLE_FILTER_CATEGORIES.includes(category))
+    .map(([category, map]) => [
+      category,
+      Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+    ])
+);
 
     const filters = Object.fromEntries(Object.entries(allFilters).filter(([category]) =>
             VISIBLE_FILTER_CATEGORIES.includes(category)
@@ -148,7 +157,7 @@ wrapper.append("input")
    const terms = searchText.match(/(?:\w+\s*:\s*[^ ]+)|(?:[^\s]+)/g) || [];
 
 const currentFilters = cloneFilters(getState().selectedFilters);
-console.log("Current filters before:", currentFilters);
+
    if (!currentFilters["FreeTextSearch"]) currentFilters["FreeTextSearch"] = new Set();
 
 terms.forEach(rawTerm => {
@@ -195,7 +204,7 @@ terms.forEach(rawTerm => {
     currentFilters["FreeTextSearch"].add(term);
   }
 });
-    console.log("Current filters after:", currentFilters);
+    
     updateState({ selectedFilters: currentFilters, updateContext: "TextSearch" });
     
     this.value = ""; // Clear input after
@@ -601,7 +610,7 @@ export function updateFilterPanel(originalData, filteredCards, selectedFilters, 
     selectedFilters = selectedFilters || {};
 
 
-    console.log("Filtered cards:", filteredCards.length);
+    
 
     const uniqueCardNames = Array.from(new Set(filteredCards.map(card => card.name))).sort();
 
@@ -616,39 +625,30 @@ export function updateFilterPanel(originalData, filteredCards, selectedFilters, 
         exit => exit.remove()
       );
     const filters = new Map();
+const t0 = performance.now();
+const groupedData = getState().groupedData;
+const filteredSet = new Set(filteredCards.map(card => card.name)); // exact names
+
+
 
 VISIBLE_FILTER_CATEGORIES.forEach(category => {
-    const partialFilters = Object.fromEntries(
-        Object.entries(selectedFilters).map(([k, v]) => [k, new Set(v)])
-    );
-    partialFilters[category] = new Set();
+  const categoryGroup = groupedData[category];
+  if (!categoryGroup) return;
 
-    const partiallyFilteredData = originalData.filter(card => {
-        for (const [cat, values] of Object.entries(partialFilters)) {
-            if (!values || values.size === 0) continue;
-            const cardValue = extractCardValue(card, cat);
-            if (!cardValue) return false;
+  const optionCounts = new Map();
+  categoryGroup.forEach((cards, value) => {
+    const count = cards.reduce((acc, card) =>
+      acc + filteredSet.has(card.name), 0);
 
-            const isSplittable = ["Supertypes", "Types", "Subtypes"].includes(cat);
-            const cardValues = Array.isArray(cardValue)
-                ? cardValue.map(v => v.trim().toLowerCase())
-                : (isSplittable
-                    ? cardValue.split(/[\s/]+/).map(v => v.trim().toLowerCase())
-                    : [cardValue.trim().toLowerCase()]);
+    optionCounts.set(value, count);
+  });
 
-            const filterValues = new Set([...values].map(v => v.trim().toLowerCase()));
-            if (!cardValues.some(v => filterValues.has(v))) return false;
-        }
-        return true;
-    });
-
-    const filterCounts = computeFilterCounts(partiallyFilteredData, partialFilters, []);
-
-    filters.set(category, new Map(filterCounts[category]));
+  filters.set(category, optionCounts);
 });
 
 
 
+const t1 = performance.now();
     window.requestAnimationFrame(() => {
         optionMap.forEach((el, key) => {
             const [category, value] = key.split("|");
@@ -698,6 +698,7 @@ VISIBLE_FILTER_CATEGORIES.forEach(category => {
         pills.exit().remove();
       });
     
+
 
 }
 

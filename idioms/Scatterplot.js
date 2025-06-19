@@ -386,7 +386,7 @@ infoGroup.append("circle")
   .attr("fill", "#8A9CE4")
   .attr("stroke", "#fff");
 
-  
+
 infoGroup.append("text")
   .attr("text-anchor", "middle")
   .attr("dy", "0.35em")
@@ -941,11 +941,11 @@ d3.selectAll(".dots circle")
 }
 
 export function highlightScatterDotsFromSet(setName) {
-  console.log("Highlighting dots for set:", setName);
+
   d3.select(".Scatterplot").selectAll(".dots circle")
     .each(function(d) {
   if (d.all_sets?.some(s => s.name === setName)) {
-    console.log("Highlighting dot for:", d.name);
+    
     d3.select(this).classed("hover-temp", true);
   }
 });

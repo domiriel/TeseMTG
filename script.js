@@ -37,6 +37,7 @@ function loadCardData() {
 let isUpdatingFilteredData = false;
 const mtgColorOrder = { W: 0, U: 1, R: 2, B: 3, G: 4 };
 function init() {
+
   showLoader();
   if (!d3.select("#tooltip").node()) {
     d3.select("body")
@@ -47,11 +48,22 @@ function init() {
       .style("pointer-events", "none")
       .style("display", "none");
   }
+  const t0 = performance.now();
     d3.json("./data/dataset_card_details.json").then(function (data) {
+
       const originalData = JSON.parse(JSON.stringify(data));  
+      const tDataLoaded = performance.now();
+      console.log("Data loaded in", (tDataLoaded - t0).toFixed(2), "ms");
+
+
       const groupedData = buildGroupedData(originalData);
+      const tgrouped = performance.now();
+      console.log("Grouped data in", (tgrouped - t0).toFixed(2), "ms");
+
       console.log(groupedData)
+
       updateState({ originalData, groupedData });
+      const t1 = performance.now();
     let hoverTimeout = null;
       getState().onChange("hoveredCards", (hoveredCards) => {
       if (hoverTimeout) clearTimeout(hoverTimeout);
@@ -76,7 +88,7 @@ function init() {
 
         // Delay hiding to allow animation to show without flickering
         setTimeout(hideLoader, 150);
-      }, 60);
+      }, );
 
       });
       
@@ -88,26 +100,41 @@ function init() {
       const freeTextSearch = stateSnapshot.freeTextSearch;
       let selectedFilters = sharedFilters || stateSnapshot.selectedFilters;
 
+
       const filteredResults = getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
       const { default: filtered, icicle: IcicleFiltered, timeline: TimelineFiltered } = filteredResults;
 
 
-  
+
+
       createIcicleChart(IcicleFiltered, ".IcicleChart");
+
+
       createFilterPanel(originalData,filtered, ".FilterPanel", selectedFilters); 
+
+
       updateFilterPanel(originalData,filtered, selectedFilters);
+
+
       createAlluvialChart(filtered, ".AlluvialChart", false, selectedPriceAttribute);
+
+
       createHiddenDrawer(".HiddenDrawerArea");
+
+
       createTimelineView(filtered, ".TimelineView");
+
 
 
       const processedScatterData = prepareScatterData(filtered, selectedPriceAttribute);
       createScatterPlot(processedScatterData, ".Scatterplot", false, selectedPriceAttribute);
 
 
+
       createStackedLineChart(filtered, ".LineChart");
 
       
+
       highlightAlluvialElements([]);
       highlightIcicleRect([]);
       highlightTimelineSets([]);
@@ -124,7 +151,11 @@ function init() {
         lastFilteredData: filteredResults,
         originalSelectedFilters: cloneFilters(selectedFilters)
       });
+        const TFinal = performance.now();
+      console.log("All charts created in", (TFinal - t1).toFixed(2), "ms");
+      console.log("Total initialization time:", (TFinal - t0).toFixed(2), "ms");
         hideLoader();
+
       subscribe((state) => {
  
           if (isUpdatingFilteredData) return;
@@ -251,8 +282,8 @@ export function filterData(
 
         let matched = new Set();
         values.forEach(value => {
-          const normalizedValue = value.toLowerCase();
-          const group = categoryGroup.get(normalizedValue);
+          const group = categoryGroup.get(value);
+
           if (group) {
             group.forEach(card => matched.add(card));
           }
@@ -268,7 +299,7 @@ export function filterData(
 
     // Apply free text search
     const textTerms = selectedFilters["FreeTextSearch"];
- console.log("FreeTextSearch terms:", Array.from(textTerms));
+
 
 if (textTerms && textTerms.size > 0) {
   const searchTerms = Array.from(textTerms).map(t => t.toLowerCase());
@@ -289,11 +320,11 @@ if (textTerms && textTerms.size > 0) {
     results[context] = Array.from(filteredSet);
   });
 
-  console.log("Filtered results:", {
+ /* console.log("Filtered results:", {
     default: results.default.length,
     icicle: results.icicle.length,
     timeline: results.timeline.length
-  });
+  });*/
 
   return results;
 }
@@ -409,43 +440,40 @@ function shouldIncludeCard(card, selectedFilters) {
 function extractCardValues(card, category) {
   switch (category) {
     case "Originality":
-      return card.originality ? [card.originality.toLowerCase()] : [];
+      return card.originality ? [card.originality] : [];
     case "Keywords":
-  return Array.isArray(card.keywords)
-    ? card.keywords.map(k => k.toLowerCase())
-    : [];
+      return Array.isArray(card.keywords) ? card.keywords.map(k => k.trim()) : [];
     case "Rarity":
-      return card.rarity ? [card.rarity.toLowerCase()] : [];
+      return card.rarity ? [card.rarity] : [];
     case "Supertypes":
-      return card.supertype ? card.supertype.split(/[\s/]+/).map(v => v.trim().toLowerCase()) : [];
+      return card.supertype ? card.supertype.split(/[\s/]+/).map(v => v.trim()) : [];
     case "Types":
-      return card.type ? card.type.split(/[\s/]+/).map(v => v.trim().toLowerCase()) : [];
+      return card.type ? card.type.split(/[\s/]+/).map(v => v.trim()) : [];
     case "Subtypes":
-      return card.subtype ? card.subtype.split(/[\s/]+/).map(v => v.trim().toLowerCase()) : [];
+      return card.subtype ? card.subtype.split(/[\s/]+/).map(v => v.trim()) : [];
     case "Set Types":
-      return card.set_type ? [card.set_type.toLowerCase()] : [];
+      return card.set_type ? [card.set_type] : [];
     case "Set Names":
-      return card.set_name ? [card.set_name.toLowerCase()] : [];
+      return card.set_name ? [card.set_name] : [];
     case "Year":
       if (!card.release_date) return [];
       return [new Date(card.release_date).getFullYear().toString()];
     case "IcicleColorGroups":
-      if (card.number_of_colours >= 4) return ["+4 colors"];
-      if (card.number_of_colours === 1) return ["1 color"];
-      if (card.number_of_colours === 0) return ["colorless"];
-      return [`${card.number_of_colours} colors`];
+      if (card.number_of_colours >= 4) return ["+4 Colors"];
+      if (card.number_of_colours === 1) return ["1 Color"];
+      if (card.number_of_colours === 0) return ["Colorless"];
+      return [`${card.number_of_colours} Colors`];
     case "IcicleColorIdentity":
-  if (!Array.isArray(card.color_identity) || card.color_identity.length === 0) return ["colorless"];
-  const sortedColors = card.color_identity.slice().sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b]);
-  return [sortedColors.join("").toLowerCase()];
-      if (!Array.isArray(card.color_identity) || card.color_identity.length === 0) return ["colorless"];
-      return [card.color_identity.sort().join("").toLowerCase()];
+      if (!Array.isArray(card.color_identity) || card.color_identity.length === 0) return ["Colorless"];
+      const sortedColors = card.color_identity.slice().sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b]);
+      return [sortedColors.join("-")];  // Keep original letters, joined
     case "Foil Status":
-      return card.foil_status ? [card.foil_status.toLowerCase()] : [];
+      return card.foil_status ? [card.foil_status] : [];
     default:
       return [];
   }
 }
+
 
   function extractCardValue(card, category) {
     switch (category) {
@@ -485,7 +513,7 @@ function extractCardValues(card, category) {
   
 
   if (isFilterEmpty(selectedFilters) && !freeTextSearch) {
-    console.log("No filters applied, returning original data");
+  
     return {
       default: [...state.originalData],
       icicle: [...state.originalData],
@@ -498,7 +526,7 @@ function extractCardValues(card, category) {
     shallowCompareFilters(selectedFilters, state.originalSelectedFilters) &&
     !freeTextSearch
   ) {
-    console.log("Using cached original filtered data");
+    
     return state.originalFilteredData || {
       default: [...originalData],
       icicle: [...originalData],
