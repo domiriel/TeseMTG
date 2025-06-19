@@ -18,6 +18,55 @@ const VISIBLE_FILTER_CATEGORIES = [
 ];
 
 
+function capitalizeFirst(str) {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+
+function inferFilterCategoryFromValue(value, data, candidates = ["Supertypes", "Types", "Subtypes"]) {
+  const valueLower = value.trim().toLowerCase();
+  const counts = {};
+
+  candidates.forEach(category => {
+    counts[category] = 0;
+  });
+
+  data.forEach(card => {
+    candidates.forEach(category => {
+      const raw = extractCardValue(card, category);
+      if (!raw) return;
+
+      const isSplittable = ["Supertypes", "Types", "Subtypes"].includes(category);
+      const values = Array.isArray(raw)
+        ? raw.map(v => v.trim().toLowerCase())
+        : (isSplittable
+            ? raw.split(/[\s/]+/).map(v => v.trim().toLowerCase())
+            : [raw.trim().toLowerCase()]);
+
+      if (values.includes(valueLower)) {
+        counts[category]++;
+      }
+    });
+  });
+
+  const maxCategory = Object.entries(counts).reduce(
+    (a, b) => (b[1] > a[1] ? b : a),
+    ["", 0]
+  )[0];
+
+  return maxCategory;
+}
+
+
+const scryfallMap = {
+  "t": ["Types", "Supertypes", "Subtypes"],
+  "type": ["Types"],
+  "kw": ["Keywords"],
+  "keyword": ["Keywords"],
+  "r": ["Rarity"],
+  "s": ["Set Names"],
+  "st": ["Set Types"],
+};
 function addToMap(map, key) {
     if (!key) return;
     const trimmed = key.trim();
@@ -96,15 +145,59 @@ wrapper.append("input")
     const searchText = this.value.trim().toLowerCase();
     if (!searchText) return;
     
-    const terms = searchText.split(/\s+/); // Split by whitespace
-    const currentFilters = cloneFilters(getState().selectedFilters);
+   const terms = searchText.match(/(?:\w+\s*:\s*[^ ]+)|(?:[^\s]+)/g) || [];
+
+const currentFilters = cloneFilters(getState().selectedFilters);
+console.log("Current filters before:", currentFilters);
+   if (!currentFilters["FreeTextSearch"]) currentFilters["FreeTextSearch"] = new Set();
+
+terms.forEach(rawTerm => {
+  const term = rawTerm.replace(/\s+/g, ""); // Remove inner spaces like 't: goblin' → 't:goblin'
+  const match = term.match(/^(\w+):(.+)$/);
+
+  if (match) {
+    const key = match[1].toLowerCase();
+    const value = match[2].trim();
+    const categories = scryfallMap[key];
+
+  if (categories) {
+  let matched = false;
+
+  // Special case: t: → needs inference
+  if (key === "t") {
+    const inferredCat = inferFilterCategoryFromValue(value, data);
+    if (VISIBLE_FILTER_CATEGORIES.includes(inferredCat)) {
+      if (!currentFilters[inferredCat]) currentFilters[inferredCat] = new Set();
+      currentFilters[inferredCat].add(capitalizeFirst(value));
+      matched = true;
+    }
+  } else {
+    categories.forEach(cat => {
+      if (VISIBLE_FILTER_CATEGORIES.includes(cat)) {
+        if (!currentFilters[cat]) currentFilters[cat] = new Set();
+        currentFilters[cat].add(capitalizeFirst(value));
+        matched = true;
+      }
+    });
+  }
+
+  if (!matched) {
     if (!currentFilters["FreeTextSearch"]) currentFilters["FreeTextSearch"] = new Set();
-    
-    terms.forEach(term => currentFilters["FreeTextSearch"].add(term));
-
-
+    currentFilters["FreeTextSearch"].add(term);
+  }
+}
+ else {
+      if (!currentFilters["FreeTextSearch"]) currentFilters["FreeTextSearch"] = new Set();
+      currentFilters["FreeTextSearch"].add(term);
+    }
+  } else {
+    if (!currentFilters["FreeTextSearch"]) currentFilters["FreeTextSearch"] = new Set();
+    currentFilters["FreeTextSearch"].add(term);
+  }
+});
+    console.log("Current filters after:", currentFilters);
     updateState({ selectedFilters: currentFilters, updateContext: "TextSearch" });
-        console.log("Updated selectedFilters:", getState().selectedFilters);
+    
     this.value = ""; // Clear input after
   }
 });

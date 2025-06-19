@@ -383,15 +383,17 @@ const secondMinPrice = sortedPrices[1] || paddedMinPrice;
 
 infoGroup.append("circle")
   .attr("r", 10)
-  .attr("fill", "#ccc")
-  .attr("stroke", "#000");
+  .attr("fill", "#8A9CE4")
+  .attr("stroke", "#fff");
 
+  
 infoGroup.append("text")
   .attr("text-anchor", "middle")
   .attr("dy", "0.35em")
   .attr("font-size", "12px")
   .attr("font-weight", "bold")
-  .text("i")
+  .attr("fill","#fff")
+  .text("ℹ")
   .attr("pointer-events", "none");
     
 

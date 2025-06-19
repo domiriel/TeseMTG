@@ -172,6 +172,7 @@ export function createTimelineView(data, containerId, isUpdate = false) {
     const searchInput = container.select(".timeline-search-bar");
 const searchBounds = searchInput.node().getBoundingClientRect();
 
+
 const iconLeft = searchBounds.left + searchBounds.width + 8; // 8px spacing
 const relativeLeft = iconLeft - containerBounds.left;
     const infoGroup = container.append("div")
@@ -181,14 +182,17 @@ const relativeLeft = iconLeft - containerBounds.left;
   .style("left", `${relativeLeft}px`)
   .style("width", "20px")
   .style("height", "20px")
-  .style("background", "#ccc")
-  .style("border", "1px solid #000")
+  .style("background", "#8A9CE4")
+  .style("stroke", "#fff")
+  .style("border", "1px solid #fff")
   .style("border-radius", "50%")
   .style("text-align", "center")
+  .style("font-size", "12px")
   .style("line-height", "20px")
   .style("cursor", "help")
   .style("z-index", "10000")
-  .text("i")
+  .style("color", "#fff")
+  .text("ℹ")
   .on("mouseover", function (event) {
     d3.select("#tooltip")
       .style("display", "block")
