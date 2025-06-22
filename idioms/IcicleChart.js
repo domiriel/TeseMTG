@@ -2,8 +2,30 @@
 import { updateState, getState } from "../state.js";
 // @ts-ignore
 import { showLoader, hideLoader, showPopup } from "./LoadingAnimation.js";
+import { onHoverCard, onClearHover, onSetHover, onClearSetHover, emitIcicleRectHover, emitClearRectHover } from "./Events.js";
 let globalRects = null;  
 let clickTimer = null;
+
+
+
+onHoverCard(card => {
+  highlightIcicleRectHoverOnly(card);
+});
+
+onClearHover(() => {
+  clearIcicleHoverOnly();
+});
+
+onSetHover(setInfo => {
+
+  highlightIcicleRectHoverOnlyFromSet(
+    setInfo.colorIdentities
+  );
+})
+
+onClearSetHover(() => {
+  clearIcicleHoverOnly();
+})
 
 const infoTooltipText = `
 <strong>Icicle Chart Interactions:</strong><br>
@@ -11,7 +33,7 @@ const infoTooltipText = `
 • <strong>Double-click</strong> on a rectangle: apply a global filter to the dataset.<br>
 • <strong>Hover</strong> on a rectangle: see details.<br>
 `;
-const mtgColorOrder = { W: 0, U: 1, R: 2, B: 3, G: 4 };
+const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };
 
 const colorScale = [
     { range: [0, 20], color: "#ceb397" },
@@ -116,10 +138,15 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
                 originalCount: 0,
                 reprintCount: 0,
                 functionalReprintCount: 0,
-                children: []}
+                children: [],
+                originalities: new Set(),
+                rarities: new Set(),
+                years: new Set()
+                }
             groupMap.set(colorGroupName, targetGroup);
             groupedData.push(targetGroup);
         }
+        
 
         let colorEntry = targetGroup.children.find(c => c.name === colorKey);
     
@@ -128,14 +155,34 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
             if (card.originality === "original") colorEntry.originalCount += 1;
             if (card.originality === "reprint") colorEntry.reprintCount += 1;
             if (card.originality === "functional reprint") colorEntry.functionalReprintCount += 1;
-        } else {
-            targetGroup.children.push({ 
-                name: colorKey, 
-                value: 1, 
-                originalCount: card.originality === "original" ? 1 : 0,
-                reprintCount: card.originality === "reprint" ? 1 : 0,
-                functionalReprintCount: card.originality === "functional reprint" ? 1 : 0
-            });
+} else {
+    colorEntry = {
+        name: colorKey, 
+        value: 1, 
+        originalCount: card.originality === "original" ? 1 : 0,
+        reprintCount: card.originality === "reprint" ? 1 : 0,
+        functionalReprintCount: card.originality === "functional reprint" ? 1 : 0,
+        originalities: new Set(),
+        rarities: new Set(),
+        years: new Set()
+    };
+    targetGroup.children.push(colorEntry);
+}
+        const cardOriginality = card.originality?.toLowerCase();
+        const cardRarity = card.rarity?.toLowerCase();
+        const cardYear = new Date(card.release_date).getFullYear().toString();
+
+        if (cardOriginality) {
+            colorEntry.originalities.add(cardOriginality);
+            targetGroup.originalities.add(cardOriginality);
+        }
+        if (cardRarity) {
+            colorEntry.rarities.add(cardRarity);
+            targetGroup.rarities.add(cardRarity);
+        }
+        if (cardYear) {
+            colorEntry.years.add(cardYear);
+            targetGroup.years.add(cardYear);
         }
     });
 
@@ -190,6 +237,17 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
         });
     });
 
+    groupedData.forEach(group => {
+  group.originalities = Array.from(group.originalities);
+  group.rarities = Array.from(group.rarities);
+  group.years = Array.from(group.years);
+
+  group.children.forEach(c => {
+    c.originalities = Array.from(c.originalities);
+    c.rarities = Array.from(c.rarities);
+    c.years = Array.from(c.years);
+  });
+});
     
     const hierarchy = { children: groupedData };
     
@@ -212,7 +270,7 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
     const yOffset = -(containerHeight - chartHeight)/2 + 5; 
 
 
-    const margin = { top: (containerHeight - chartHeight)/2 + 1 , right: 50, bottom: 20, left: (containerWidth - chartWidth)/2 - 40 }; 
+    const margin = { top: (containerHeight - chartHeight)/2 + 1 , right: 18, bottom: 20, left: containerWidth * 0.015 }; 
 
 if (isUpdate) {
     d3.select(containerId).select("svg").remove(); 
@@ -226,26 +284,32 @@ const svg = container.append("svg")
     .attr("height", containerHeight)
     .attr("preserveAspectRatio", "xMidYMid meet");
 
+console.log(containerWidth)
+const iconX = containerWidth * 0.03;
+const iconY = containerHeight * 0.07;
+const iconRadius = containerWidth * 0.015;
+console.log(iconRadius)
+const infoTextSize = Math.min(containerWidth * 0.0187, 15);
 const infoGroup = svg.append("g")
   .attr("class", "info-icon")
-  .attr("transform", `translate(20, 20)`);
+  .attr("transform", `translate(${iconX}, ${iconY})`);
 
 infoGroup.append("circle")
-  .attr("r", 10)
+  .attr("r", iconRadius)
   .attr("fill", "#8A9CE4")
   .attr("stroke", "#fff");
 
 infoGroup.append("text")
   .attr("text-anchor", "middle")
   .attr("dy", "0.35em")
-  .attr("font-size", "12px")
+  .attr("font-size", `${infoTextSize}px`)
   .attr("font-weight", "bold")
   .attr("fill","#fff")
   .text("ℹ")
   .attr("pointer-events", "none");
 
 
-infoGroup
+  infoGroup
   .on("mouseover", function(event) {
     d3.select("#tooltip")
       .style("display", "block")
@@ -276,7 +340,7 @@ infoGroup
   });
 const chartGroup = svg.append("g")
     .attr("class", "chart-group")
-    .attr("transform", `translate(${xOffset}, ${yOffset})`);
+    .attr("transform", `translate(${margin.left}, ${yOffset})`);
 
 
 chartGroup.append("clipPath")
@@ -351,6 +415,7 @@ const levelHeight = chartHeight / depth;
                         Reprint: ${d.data.reprintCount || 0} cards<br>
                         Functional Reprint: ${d.data.functionalReprintCount || 0} cards
                     `);
+                highlightAllViewsForRect(d.data.name);
             })
             .on("mousemove", function(event) {
                 const tooltip = d3.select("#tooltip");
@@ -375,6 +440,7 @@ const levelHeight = chartHeight / depth;
             })
             .on("mouseout", function() {
                 d3.select("#tooltip").style("display", "none");
+                clearAllViewsHoverOnly();
             }),
 
         update => update
@@ -522,65 +588,70 @@ function clickedFilter(event, d) {
 
     
     
-    const legendX = margin.left + chartWidth + 15;
+    const legendX = chartWidth + margin.right;
     const legendY = margin.top + 5; 
-
+    const rectDimensions = Math.min(chartHeight*0.097, 22);
+    const legendFontSize = Math.min(containerWidth * 0.0187, 13);
 
     const legend = svg.append("g")
         .attr("class", "legend")
         .attr("transform", `translate(${legendX}, ${legendY})`);
 
 
-    const rectHeight = 20;
     const extraSpacing = 0
 
     legend.append("text")
     .attr("x", 0)
-    .attr("y", 120)
+    .attr("y",Math.min(rectDimensions* 6, 132))
     .text("Original")
     .attr("fill", "#000")
-    .style("font-size", "12px")
+    .style("font-size", `${legendFontSize}px`)
+    .style("shape-rendering", "crispEdges")
     .style("font-weight", "bold");
 
 legend.append("text")
     .attr("x", 0)
-    .attr("y", 135)
+    .attr("y", Math.min(rectDimensions * 6.75, 149))
     .text("Cards (%)")
     .attr("fill", "#000")
-    .style("font-size", "12px")
+    .style("font-size", `${legendFontSize}px`)
+    .style("shape-rendering", "crispEdges")
     .style("font-weight", "bold");
 
 
     colorScale.slice().reverse().forEach((interval, i) => {
         const legendEntry = legend.append("g")
-            .attr("transform", `translate(0, ${i * (rectHeight + extraSpacing)})`);
+            .attr("transform", `translate(0, ${i * (rectDimensions + extraSpacing)})`);
 
         legendEntry.append("rect")
-            .attr("width", 20)
+            .attr("width", rectDimensions)
             .attr("class", "legend-box")
-            .attr("height", rectHeight)
+            .attr("height", rectDimensions)
+            .style("shape-rendering", "crispEdges")
             .attr("fill", interval.color)
             .attr("stroke", "#000");
 
         legendEntry.append("text")
-            .attr("x", 30)
-            .attr("y", 5)
+            .attr("x", chartWidth * 0.054)
+            .attr("y", rectDimensions * 0.25 -1)
             .text(`${interval.range[1]}%`)
             .attr("fill", "#000")
-            .style("font-size", "12px");
+            .style("font-size", `${legendFontSize}px`)
+            .style("shape-rendering", "crispEdges");
     });
 
     
 const zeroLabel = legend.append("g")
-.attr("transform", `translate(0, ${colorScale.length * rectHeight})`);
+.attr("transform", `translate(0, ${colorScale.length * rectDimensions})`);
 
 
 zeroLabel.append("text")
-.attr("x", 30)
-.attr("y", 5)
+.attr("x", chartWidth * 0.054)
+.attr("y", rectDimensions * 0.25 - 1)
 .text(`0%`)
 .attr("fill", "#000")
-.style("font-size", "12px");
+.style("font-size", `${legendFontSize}px`)
+.style("shape-rendering", "crispEdges");
 
     
 }
@@ -630,4 +701,26 @@ export function highlightIcicleRectHoverOnlyFromSet(colorIdentities) {
   d3.selectAll("rect.icicle-rect")
     .filter(d => d.depth === 2)
     .classed("hover-temp", d => colorIdentities.has(d.data.name));
+}
+
+
+function highlightAllViewsForRect(rectName) {
+  if (!globalRects) return;
+
+  const rectDatum = globalRects.data().find(d => d.data?.name === rectName);
+  if (!rectDatum || (rectDatum.depth !== 2 && rectDatum.data.name !== "Colorless")) return;
+  emitIcicleRectHover({
+    name: rectDatum.data.name,
+    isGroup: false,
+    colorIdentities: new Set([
+  rectDatum.data.name === "Colorless" ? "" : rectDatum.data.name
+]),
+    numColors: undefined,
+    originalities: new Set(rectDatum.data.originalities || []),
+    rarities: new Set(rectDatum.data.rarities || []),
+    years: new Set(rectDatum.data.years || [])
+  });
+}
+function clearAllViewsHoverOnly() {
+  emitClearRectHover();
 }

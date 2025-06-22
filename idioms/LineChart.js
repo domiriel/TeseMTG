@@ -1,5 +1,6 @@
 
 import { updateState, getState } from "../state.js";
+import { onHoverCard, onClearHover, onSetHover, onClearSetHover, onRectHover, onClearRectHover   } from "./Events.js";
 const lineChartTooltipText = `
 <strong>Timeline Interactions:</strong><br>
 • <strong>Hover</strong> a circle: view year and metrics.<br>
@@ -8,6 +9,30 @@ const lineChartTooltipText = `
 • <strong>Hover</strong> a line: inspect metric value at that year.<br>
 • <strong>Zoom</strong>: scroll to focus a time range.<br>
 `;
+onHoverCard(card => {
+  highlightLineChartHoverOnly(card);
+});
+
+onClearHover(() => {
+  clearLineChartHoverOnly();
+});
+
+onSetHover(setInfo => {
+
+ highlightLineChartHoverOnlyFromSet(setInfo.releaseDate);
+})
+
+onClearSetHover(() => {
+  clearLineChartHoverOnly();
+})
+
+onRectHover(rectInfo => {
+highlightLineChartFromIcicle(rectInfo)
+})
+
+onClearRectHover(() => {
+  clearLineChartHoverOnly()
+})
 
 let brushing = false;
 
@@ -76,7 +101,7 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
     const containerWidth = containerBounds.width;
     const containerHeight = containerBounds.height;
 
-    const margin = { top: 20, right: 50, bottom: 30, left: 60 };
+    const margin = { top: 20, right: 21, bottom: 30, left: 60 };
     const width = containerWidth - margin.left - margin.right;
     const chartHeight = containerHeight*0.9 / 4; 
     const chartSpacing = 15;
@@ -105,19 +130,23 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
         .call(zoom);
 
 
-    const infoGroup = svg.append("g")
+ const iconX = containerWidth * 0.03;
+const iconY = containerHeight * 0.07;
+const iconRadius = containerWidth*0.93 * 0.015;
+const infoTextSize = Math.min(containerWidth * 0.0187, 15);
+const infoGroup = svg.append("g")
   .attr("class", "info-icon")
-  .attr("transform", `translate(${containerWidth - 20}, 25)`); // Top-right position
+  .attr("transform", `translate(${iconX}, ${iconY})`);
 
 infoGroup.append("circle")
-  .attr("r", 10)
+  .attr("r", iconRadius)
   .attr("fill", "#8A9CE4")
   .attr("stroke", "#fff");
 
 infoGroup.append("text")
   .attr("text-anchor", "middle")
   .attr("dy", "0.35em")
-  .attr("font-size", "12px")
+  .attr("font-size", `${infoTextSize}px`)
   .attr("font-weight", "bold")
   .attr("fill","#fff")
   .text("ℹ")
@@ -189,7 +218,7 @@ infoGroup.append("text")
         .append("rect")
         .attr("x", 0)
         .attr("y", 0)
-        .attr("width", width + 20)  
+        .attr("width", width+ 11)  
         .attr("height", containerHeight);  
 
 
@@ -415,6 +444,8 @@ infoGroup.append("text")
             updateContext: "TimelineFilter"
         });
         d3.select(this).call(brush.move, null);
+        
+
 
         }
         circleGroups.push({ group: g, yScale: y, metric });  
@@ -560,12 +591,26 @@ export function highlightLineChartHoverOnly(card) {
     d3.select(".LineChart").selectAll(`circle.data-point[data-year='${year}']`)
       .classed("hover-temp", true);
 }
+
+function highlightLineChartFromIcicle(rectInfo) {
+  const { years } = rectInfo;
+  if (!years || years.size === 0) return;
+
+  d3.select(".LineChart")
+    .selectAll("circle.data-point")
+    .classed("hover-temp", function() {
+      const year = this.getAttribute("data-year");
+      return years.has(year);
+    });
+}
 export function clearLineChartHoverOnly() {
     d3.select(".LineChart").selectAll("circle.data-point")
       .classed("hover-temp", false);
 }
 
+
 export function highlightLineChartHoverOnlyFromSet(setReleaseDate) {
+
   if (!setReleaseDate) return;
 
   const year = setReleaseDate.getFullYear().toString();

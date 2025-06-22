@@ -1,9 +1,7 @@
 
 import { updateState, getState } from "../state.js";
-import { highlightAlluvialElementsHoverOnly, clearAlluvialHoverOnly } from "./AlluvialChart.js";
-import { highlightIcicleRectHoverOnly, clearIcicleHoverOnly } from "./IcicleChart.js";
-import { highlightLineChartHoverOnly, clearLineChartHoverOnly} from "./LineChart.js";
-import { highlightTimelineSetsHoverOnly, clearTimelineHoverOnly } from "./TimelineView.js";
+import { emitHoverCard, emitClearHover,onSetHover, onClearSetHover, onRectHover, onClearRectHover } from "./Events.js";
+
 const colorGroups = [
     { range: [1, 5691], color: "#594A3A" },  
     { range: [5692, 11382], color:  "#736659" },
@@ -26,19 +24,31 @@ const scatterTooltipText = `
 • <strong>Moving mouse while holding right-click</strong>: Panning<br>
 `;
 
+onSetHover(setInfo => {
+
+  highlightScatterDotsFromSet(setInfo.name);
+})
+
+onClearSetHover(() => {
+  clearScatterHoverOnly();
+})
+
+onRectHover(rectInfo => {
+  highlightScatterDotsFromIcicle(rectInfo);
+})
+
+onClearRectHover(() => {
+  clearScatterHoverOnly();
+})
+
 export function hoverOnlyHighlightCard(card) {
-  highlightAlluvialElementsHoverOnly(card);
-  highlightIcicleRectHoverOnly(card);
-  highlightLineChartHoverOnly(card);
-  highlightTimelineSetsHoverOnly(card);
+  emitHoverCard(card);
+  
   // Add others if needed
 }
 
 export function clearHoverOnlyHighlight() {
-  clearAlluvialHoverOnly();
-  clearIcicleHoverOnly();
-  clearLineChartHoverOnly();
-  clearTimelineHoverOnly();
+  emitClearHover();
   // Add others if needed
 }
 
@@ -143,7 +153,7 @@ function mouseoverFn(event, d) {
           Supertypes: ${d.supertype}<br>
           Type: ${d.type}<br>
           Subtype: ${d.subtype}<br>
-          Colors: ${d.color_identity}<br>
+          Colors: ${d.color_identity.join("")}<br>
           Avg Price: ${d.was_price_invalid ? "NaN" : "$" + d.avg_price.toFixed(3)}<br>
           All Sets: ${d.all_sets.map(set => `${set.name} (${set.type})`).join("<br>")}<br>
           Number of Prints: ${d.all_print_images.length}<br>
@@ -210,13 +220,14 @@ function updatePointPositions(xScale, yScale) {
   globalDots
     .attr("cx", d => xScale(d.avg_price))
     .attr("cy", d => yScale(d.complexity))
-    .style("display", d => {
+     .style("display", function(d) {
       const cx = xScale(d.avg_price);
       const cy = yScale(d.complexity);
       const inBounds = cx >= 0 && cx <= chartWidth && cy >= 0 && cy <= chartHeight;
       const hoveredCards = getState().hoveredCards || [];
       const hoveredSet = new Set(hoveredCards.map(c => c.name));
-      const showDot = currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey || hoveredSet.has(d.name);
+      const el = d3.select(this);
+      const showDot =  el.classed("hover-temp") || currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey || hoveredSet.has(d.name);
       return (inBounds && showDot) ? null : "none";
     });
 }
@@ -360,7 +371,7 @@ const secondMinPrice = sortedPrices[1] || paddedMinPrice;
 
     const container = d3.select(containerId).node();
     const { width, height } = container.getBoundingClientRect();
-    const margin = { top: 35, right: 60, bottom: 35, left: 60 };
+    const margin = { top: 35, right: 14, bottom: 35, left: 60 };
     const chartWidth = width - margin.left - margin.right;
     const chartHeight = height - margin.top - margin.bottom;
 
@@ -376,13 +387,17 @@ const secondMinPrice = sortedPrices[1] || paddedMinPrice;
   .on("contextmenu", event => event.preventDefault());
 
 
-
-    const infoGroup = svg.append("g")
+  console.log(width)
+  const iconX = width * 0.97;
+  const iconY = height * 0.07;
+  const iconRadius = width*0.93 * 0.015;
+  const infoTextSize = Math.min(width * 0.0187, 15);
+  const infoGroup = svg.append("g")
   .attr("class", "info-icon")
-  .attr("transform", `translate(${width - 35}, 30)`);
+  .attr("transform", `translate(${iconX},${iconY} )`);
 
 infoGroup.append("circle")
-  .attr("r", 10)
+  .attr("r", iconRadius)
   .attr("fill", "#8A9CE4")
   .attr("stroke", "#fff");
 
@@ -390,7 +405,7 @@ infoGroup.append("circle")
 infoGroup.append("text")
   .attr("text-anchor", "middle")
   .attr("dy", "0.35em")
-  .attr("font-size", "12px")
+  .attr("font-size", `${infoTextSize}px`)
   .attr("font-weight", "bold")
   .attr("fill","#fff")
   .text("ℹ")
@@ -433,7 +448,7 @@ infoGroup.append("text")
 const originalXScale = d3.scaleLog()
     .domain([
         minPrice,
-        paddedMaxPrice
+        maxPrice
     ])
     .range([10, chartWidth]);
 
@@ -500,9 +515,9 @@ function updateAxes(symbol) {
         .style("font-size", "14px")
         .style("font-weight", "bold")
         .text(() => {
-            if (selectedPriceAttribute.includes("eur")) return "Price (€)";
-            if (selectedPriceAttribute.includes("thx")) return "Price";
-            return "Price ($)";
+            if (selectedPriceAttribute.includes("eur")) return "Avg Price (€)";
+            if (selectedPriceAttribute.includes("thx")) return "Avg Price";
+            return "Avg Price ($)";
         })
         .on("mouseover", (event) => {
         d3.select("#tooltip")
@@ -644,6 +659,7 @@ const visibleData = filteredData
   .join("circle")
   .attr("cx", d => xScale(d.avg_price))
   .attr("cy", d => yScale(d.complexity))
+  .attr("class", d => `dots ci-${d.color_identity.join("")}`)
   .attr("r", 2.5)
   .style("cursor", "pointer")
   .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
@@ -886,9 +902,9 @@ if (selectedPriceAttribute !== lastPriceAttribute) {
 
     svg.select(".x-axis-label")
         .text(() => {
-            if (selectedPriceAttribute.includes("eur")) return "Price (€)";
-            if (selectedPriceAttribute.includes("thx")) return "Price";
-            return "Price ($)";
+            if (selectedPriceAttribute.includes("eur")) return "Avg Price (€)";
+            if (selectedPriceAttribute.includes("thx")) return "Avg Price";
+            return "Avg Price ($)";
         });
 
     
@@ -906,6 +922,7 @@ const dots = gClip.selectAll("circle")
   .data(filteredData, d => d.name)
   .enter()
   .append("circle")
+  .attr("class", d => `dots ci-${d.color_identity.join("")}`)
   .attr("r", 2.5)
   .style("cursor", "pointer")
   .attr("opacity", 0.8)
@@ -949,7 +966,23 @@ export function highlightScatterDotsFromSet(setName) {
     d3.select(this).classed("hover-temp", true);
   }
 });
+const svg = d3.select(".Scatterplot svg");
+const { xScale, yScale } = svg.node().__scales__;
+updatePointPositions(xScale, yScale);
 }
+
+function highlightScatterDotsFromIcicle(rectInfo) {
+const [targetIdentity] = [...rectInfo.colorIdentities];
+console.log(targetIdentity)
+
+  d3.selectAll(`.dots.ci-${targetIdentity}`).classed("hover-temp", true);
+
+  // const svg = d3.select(".Scatterplot svg");
+  // const { xScale, yScale } = svg.node().__scales__ || {};
+  // if (xScale && yScale) updatePointPositions(xScale, yScale);
+}
+
+
 
 export function clearScatterHoverOnly() {
   d3.selectAll(".dots circle").classed("hover-temp", false);

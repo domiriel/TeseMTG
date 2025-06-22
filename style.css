@@ -119,7 +119,7 @@ body {
   }
 
 
-  .FilterPanel, .TimelineView, .Title, .ISTLogo {
+  .FilterPanel,.TimelineView, .Title, .ISTLogo {
     border: 1px solid black; 
   }
   

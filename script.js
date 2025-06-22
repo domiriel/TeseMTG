@@ -1,15 +1,15 @@
 import { getState, subscribe, updateState, loadFiltersFromURL } from "./state.js";
 import { createIcicleChart, highlightIcicleRect } from "./idioms/IcicleChart.js";
-import { createAlluvialChart, highlightAlluvialElements} from "./idioms/AlluvialChart.js";
+import { createAlluvialChart, highlightAlluvialElements } from "./idioms/AlluvialChart.js";
 import { createTimelineView, highlightTimelineSets } from "./idioms/TimelineView.js";
-import { createScatterPlot, updateScatterPlot, prepareScatterData} from "./idioms/Scatterplot.js";
+import { createScatterPlot, updateScatterPlot, prepareScatterData } from "./idioms/Scatterplot.js";
 import { createStackedLineChart, highlightLineChart } from "./idioms/LineChart.js";
 import { createFilterPanel, updateFilterPanel } from "./idioms/FilterPanel.js";
 import { createHiddenDrawer, updateDrawer } from "./idioms/HiddenDrawer.js";
 import { showLoader, hideLoader } from "./idioms/LoadingAnimation.js";
 
 const filterApplicationOrder = [
-  "FreeTextSearch",      
+  "FreeTextSearch",
   "Set Names",
   "Set Types",
   "Keywords",
@@ -24,212 +24,91 @@ const filterApplicationOrder = [
   "Subtypes"
 ];
 
-function loadCardData() {
-  const localPath = "./data/card_details.json";
-  const googleDriveURL = "https://drive.google.com/uc?export=download&id=1q3PD40N8nLbpMBknczyxJhDqFahQr2d3";
+async function writeGroupedDataToOPFS(groupedData) {
+  const serializable = {};
+  for (const [category, map] of Object.entries(groupedData)) {
+    serializable[category] = {};
+    for (const [key, cards] of map.entries()) {
+      serializable[category][key] = cards.map(card => card.index); // Store only indexes
 
-  return d3.json(localPath)
-    .catch((err) => {
-      console.warn("Local JSON load failed, falling back to Google Drive:", err);
-      return d3.json(googleDriveURL);
-    });
+    }
+  }
+
+  const root = await navigator.storage.getDirectory();
+  const handle = await root.getFileHandle("groupedData.json", { create: true });
+  const writable = await handle.createWritable();
+  await writable.write(JSON.stringify(serializable));
+  await writable.close();
 }
+
+async function readGroupedDataFromOPFS(originalData) {
+  console.log("hi")
+  try {
+    const root = await navigator.storage.getDirectory();
+    const handle = await root.getFileHandle("groupedData.json");
+    const file = await handle.getFile();
+    const text = await file.text();
+    const raw = JSON.parse(text);
+
+    const revived = {};
+    for (const [category, obj] of Object.entries(raw)) {
+      revived[category] = new Map();
+      for (const [key, cards] of Object.entries(obj)) {
+        revived[category].set(key, cards.map(index => originalData[index]));
+      }
+    }
+    return revived;
+  } catch (err) {
+    console.warn("OPFS cache miss:", err);
+    return null;
+  }
+}
+
+
+
 let isUpdatingFilteredData = false;
 const mtgColorOrder = { W: 0, U: 1, R: 2, B: 3, G: 4 };
-function init() {
 
+async function init() {
   showLoader();
+
   if (!d3.select("#tooltip").node()) {
     d3.select("body")
       .append("div")
       .attr("id", "tooltip")
       .style("position", "absolute")
-      
       .style("pointer-events", "none")
       .style("display", "none");
   }
+
   const t0 = performance.now();
-    d3.json("./data/dataset_card_details.json").then(function (data) {
+ let originalData;
+const raw = await d3.json("./data/dataset_card_details.json");
+originalData = JSON.parse(JSON.stringify(raw));
 
-      const originalData = JSON.parse(JSON.stringify(data));  
-      const tDataLoaded = performance.now();
-      console.log("Data loaded in", (tDataLoaded - t0).toFixed(2), "ms");
+let groupedData = await readGroupedDataFromOPFS(originalData);
 
+ if (!groupedData) {
+    const raw = await d3.json("./data/dataset_card_details.json");
+    originalData = JSON.parse(JSON.stringify(raw));
+    const tDataLoaded = performance.now();
+    console.log("Data loaded in", (tDataLoaded - t0).toFixed(2), "ms");
 
-      const groupedData = buildGroupedData(originalData);
-      const tgrouped = performance.now();
-      console.log("Grouped data in", (tgrouped - t0).toFixed(2), "ms");
+    groupedData = buildGroupedData(originalData);
+    await writeGroupedDataToOPFS(groupedData);
 
-      console.log(groupedData)
+    const tgrouped = performance.now();
+    console.log("Grouped data in", (tgrouped - t0).toFixed(2), "ms");
+  }
 
-      updateState({ originalData, groupedData });
-      const t1 = performance.now();
-    let hoverTimeout = null;
-      getState().onChange("hoveredCards", (hoveredCards) => {
-      if (hoverTimeout) clearTimeout(hoverTimeout);
-        hoverTimeout = setTimeout(() => {
-        showLoader();
+  updateState({ originalData, groupedData });
+  const t1 = performance.now();
 
-        highlightAlluvialElements(hoveredCards);
-        highlightIcicleRect(hoveredCards);
-        highlightTimelineSets(hoveredCards);
-        highlightLineChart(hoveredCards);
-        updateDrawer(hoveredCards);
-
-        const hoveredSet = new Set(hoveredCards.map(c => c.name));
-        
-        d3.selectAll(".dots circle")
-          .style("stroke", d => hoveredSet.has(d.name)
-        ? "orange"
-        : (+d.edhrec_rank > 0 ? "none" : "black"))
-      .style("stroke-width", d => hoveredSet.has(d.name)
-        ? 2.5
-        : (+d.edhrec_rank > 0 ? 0 : 1.2));
-
-        // Delay hiding to allow animation to show without flickering
-        setTimeout(hideLoader, 150);
-      }, );
-
-      });
-      
-
-      const stateSnapshot = getState();
-      const sharedFilters = loadFiltersFromURL();
-
-      const selectedPriceAttribute = stateSnapshot.selectedPriceAttribute;
-      const freeTextSearch = stateSnapshot.freeTextSearch;
-      let selectedFilters = sharedFilters || stateSnapshot.selectedFilters;
-
-
-      const filteredResults = getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
-      const { default: filtered, icicle: IcicleFiltered, timeline: TimelineFiltered } = filteredResults;
-
-
-
-
-      createIcicleChart(IcicleFiltered, ".IcicleChart");
-
-
-      createFilterPanel(originalData,filtered, ".FilterPanel", selectedFilters); 
-
-
-      updateFilterPanel(originalData,filtered, selectedFilters);
-
-
-      createAlluvialChart(filtered, ".AlluvialChart", false, selectedPriceAttribute);
-
-
-      createHiddenDrawer(".HiddenDrawerArea");
-
-
-      createTimelineView(filtered, ".TimelineView");
-
-
-
-      const processedScatterData = prepareScatterData(filtered, selectedPriceAttribute);
-      createScatterPlot(processedScatterData, ".Scatterplot", false, selectedPriceAttribute);
-
-
-
-      createStackedLineChart(filtered, ".LineChart");
-
-      
-
-      highlightAlluvialElements([]);
-      highlightIcicleRect([]);
-      highlightTimelineSets([]);
-      highlightLineChart([]);
-      updateDrawer([]);
-      updateState({
-        lastFilterInputs: { 
-        selectedFilters: cloneFilters(selectedFilters),
-        selectedPriceAttribute,
-        freeTextSearch
-      },
-        originalFilteredData: filteredResults,   // Save the first filtered results
-        previousFilteredData: filteredResults,   // Initially same as first filtered
-        lastFilteredData: filteredResults,
-        originalSelectedFilters: cloneFilters(selectedFilters)
-      });
-        const TFinal = performance.now();
-      console.log("All charts created in", (TFinal - t1).toFixed(2), "ms");
-      console.log("Total initialization time:", (TFinal - t0).toFixed(2), "ms");
-        hideLoader();
-
-      subscribe((state) => {
- 
-          if (isUpdatingFilteredData) return;
-
-          const context = state.updateContext || "default";
-          const { selectedFilters, selectedPriceAttribute, freeTextSearch } = state;
-
-          const { default: filteredData, icicle: IcicleFiltered, timeline: TimelineFiltered } = 
-            getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
-
-          // Skip repeated state updates here to avoid the infinite loop!
-
-          if (window._prevFilteredLength === filteredData.length &&
-              window._prevPriceAttribute === selectedPriceAttribute &&
-              context === "default") {
-            return;
-          }
-
-          window._prevFilteredLength = filteredData.length;
-          window._prevPriceAttribute = selectedPriceAttribute;
-
-          if (context !== "IcicleFilter") {
-            createIcicleChart(IcicleFiltered, ".IcicleChart", true);
-          }
-          if (context !== "TimelineFilter") {
-            createTimelineView(TimelineFiltered, ".TimelineView", true);
-            createStackedLineChart(TimelineFiltered, ".LineChart", true);
-          }
-          createAlluvialChart(filteredData, ".AlluvialChart", true, selectedPriceAttribute);
-
-          const processedData = prepareScatterData(filteredData, selectedPriceAttribute);
-          updateScatterPlot(processedData, selectedPriceAttribute);
-
-          setTimeout(() => {
-            updateFilterPanel(originalData,filteredData, selectedFilters, ".FilterPanel");
-          }, 10);
-
-          let { hoveredCards } = getState();
-          const filteredNames = new Set(filteredData.map(d => d.name));
-
-          // Filter out any hovered cards that are no longer in the filtered dataset
-          hoveredCards = hoveredCards.filter(card => filteredNames.has(card.name));
-
-          // Optionally: update state to reflect trimmed list (only if it changed)
-          if (hoveredCards.length !== getState().hoveredCards.length) {
-            updateState({ hoveredCards });
-          }
-
-          highlightAlluvialElements(hoveredCards);
-          highlightIcicleRect(hoveredCards);
-          highlightTimelineSets(hoveredCards);
-          highlightLineChart(hoveredCards);
-          updateDrawer(hoveredCards);
-});
-
-
-      
-    
-      
-    });
-  
-    window.addEventListener("resize", () => {
-
-      const { selectedFilters, selectedPriceAttribute, freeTextSearch } = getState();
-      const { hoveredCards } = getState();
-      const originalData = getState().originalData;
-      const { default: filteredData, icicle: IcicleFiltered, timeline: TimelineFiltered } = 
-      getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
-      createAlluvialChart(filteredData, ".AlluvialChart", true, selectedPriceAttribute);
-      createTimelineView(TimelineFiltered, ".TimelineView", true);
-      createStackedLineChart(filteredData, ".LineChart", true);
-      createIcicleChart(IcicleFiltered, ".IcicleChart", true);
-      updateScatterPlot(prepareScatterData(filteredData, selectedPriceAttribute), selectedPriceAttribute);
-      createFilterPanel(getState().originalData,filteredData, ".FilterPanel", selectedFilters); 
+  let hoverTimeout = null;
+  getState().onChange("hoveredCards", (hoveredCards) => {
+    if (hoverTimeout) clearTimeout(hoverTimeout);
+    hoverTimeout = setTimeout(() => {
+      showLoader();
 
       highlightAlluvialElements(hoveredCards);
       highlightIcicleRect(hoveredCards);
@@ -237,9 +116,125 @@ function init() {
       highlightLineChart(hoveredCards);
       updateDrawer(hoveredCards);
 
+      const hoveredSet = new Set(hoveredCards.map(c => c.name));
 
-    });
-  }
+      d3.selectAll(".dots circle")
+        .style("stroke", d => hoveredSet.has(d.name) ? "orange" : (+d.edhrec_rank > 0 ? "none" : "black"))
+        .style("stroke-width", d => hoveredSet.has(d.name) ? 2.5 : (+d.edhrec_rank > 0 ? 0 : 1.2));
+
+      setTimeout(hideLoader, 150);
+    }, 0);
+  });
+
+  const stateSnapshot = getState();
+  const sharedFilters = loadFiltersFromURL();
+
+  const selectedPriceAttribute = stateSnapshot.selectedPriceAttribute;
+  const freeTextSearch = stateSnapshot.freeTextSearch;
+  let selectedFilters = sharedFilters || stateSnapshot.selectedFilters;
+
+  const filteredResults = getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
+  const { default: filtered, icicle: IcicleFiltered, timeline: TimelineFiltered } = filteredResults;
+
+  createIcicleChart(IcicleFiltered, ".IcicleChart");
+  createFilterPanel(originalData, filtered, ".FilterPanel", selectedFilters);
+  updateFilterPanel(originalData, filtered, selectedFilters);
+  createAlluvialChart(filtered, ".AlluvialChart", false, selectedPriceAttribute);
+  createHiddenDrawer(".HiddenDrawerArea");
+  createTimelineView(filtered, ".TimelineView");
+  const processedScatterData = prepareScatterData(filtered, selectedPriceAttribute);
+  createScatterPlot(processedScatterData, ".Scatterplot", false, selectedPriceAttribute);
+  createStackedLineChart(filtered, ".LineChart");
+
+  highlightAlluvialElements([]);
+  highlightIcicleRect([]);
+  highlightTimelineSets([]);
+  highlightLineChart([]);
+  updateDrawer([]);
+
+  updateState({
+    lastFilterInputs: {
+      selectedFilters: cloneFilters(selectedFilters),
+      selectedPriceAttribute,
+      freeTextSearch
+    },
+    originalFilteredData: filteredResults,
+    previousFilteredData: filteredResults,
+    lastFilteredData: filteredResults,
+    originalSelectedFilters: cloneFilters(selectedFilters)
+  });
+
+  const TFinal = performance.now();
+  console.log("All charts created in", (TFinal - t1).toFixed(2), "ms");
+  console.log("Total initialization time:", (TFinal - t0).toFixed(2), "ms");
+
+  hideLoader();
+
+  subscribe((state) => {
+    if (isUpdatingFilteredData) return;
+    const context = state.updateContext || "default";
+    const { selectedFilters, selectedPriceAttribute, freeTextSearch } = state;
+
+    const { default: filteredData, icicle: IcicleFiltered, timeline: TimelineFiltered } =
+      getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
+
+    if (window._prevFilteredLength === filteredData.length &&
+        window._prevPriceAttribute === selectedPriceAttribute &&
+        context === "default") {
+      return;
+    }
+
+    window._prevFilteredLength = filteredData.length;
+    window._prevPriceAttribute = selectedPriceAttribute;
+
+    if (context !== "IcicleFilter") {
+      createIcicleChart(IcicleFiltered, ".IcicleChart", true);
+    }
+    if (context !== "TimelineFilter") {
+      createTimelineView(TimelineFiltered, ".TimelineView", true);
+      createStackedLineChart(TimelineFiltered, ".LineChart", true);
+    }
+    createAlluvialChart(filteredData, ".AlluvialChart", true, selectedPriceAttribute);
+    const processedData = prepareScatterData(filteredData, selectedPriceAttribute);
+    updateScatterPlot(processedData, selectedPriceAttribute);
+
+    setTimeout(() => {
+      updateFilterPanel(originalData, filteredData, selectedFilters, ".FilterPanel");
+    }, 10);
+
+    let { hoveredCards } = getState();
+    const filteredNames = new Set(filteredData.map(d => d.name));
+    hoveredCards = hoveredCards.filter(card => filteredNames.has(card.name));
+
+    if (hoveredCards.length !== getState().hoveredCards.length) {
+      updateState({ hoveredCards });
+    }
+
+    highlightAlluvialElements(hoveredCards);
+    highlightIcicleRect(hoveredCards);
+    highlightTimelineSets(hoveredCards);
+    highlightLineChart(hoveredCards);
+    updateDrawer(hoveredCards);
+  });
+
+  window.addEventListener("resize", () => {
+    const { selectedFilters, selectedPriceAttribute, freeTextSearch, hoveredCards } = getState();
+    const { default: filteredData, icicle: IcicleFiltered, timeline: TimelineFiltered } =
+      getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
+    createAlluvialChart(filteredData, ".AlluvialChart", true, selectedPriceAttribute);
+    createTimelineView(TimelineFiltered, ".TimelineView", true);
+    createStackedLineChart(filteredData, ".LineChart", true);
+    createIcicleChart(IcicleFiltered, ".IcicleChart", true);
+    updateScatterPlot(prepareScatterData(filteredData, selectedPriceAttribute), selectedPriceAttribute);
+    createFilterPanel(originalData, filteredData, ".FilterPanel", selectedFilters);
+
+    highlightAlluvialElements(hoveredCards);
+    highlightIcicleRect(hoveredCards);
+    highlightTimelineSets(hoveredCards);
+    highlightLineChart(hoveredCards);
+    updateDrawer(hoveredCards);
+  });
+}
   
 
 
@@ -363,7 +358,7 @@ function shouldIncludeCard(card, selectedFilters) {
   // IcicleColorIdentity
   if (selectedFilters["IcicleColorIdentity"]?.size > 0) {
     const identity = Array.isArray(card.color_identity)
-      ? card.color_identity.sort().join("") || "Colorless"
+      ? card.color_identity.join("") || "Colorless"
       : "Colorless";
     if (!selectedFilters["IcicleColorIdentity"].has(identity)) return false;
   }
@@ -465,8 +460,8 @@ function extractCardValues(card, category) {
       return [`${card.number_of_colours} Colors`];
     case "IcicleColorIdentity":
       if (!Array.isArray(card.color_identity) || card.color_identity.length === 0) return ["Colorless"];
-      const sortedColors = card.color_identity.slice().sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b]);
-      return [sortedColors.join("-")];  // Keep original letters, joined
+      const sortedColors = card.color_identity.slice();
+      return [sortedColors];  // Keep original letters, joined
     case "Foil Status":
       return card.foil_status ? [card.foil_status] : [];
     default:
@@ -500,7 +495,7 @@ function extractCardValues(card, category) {
         if (!Array.isArray(card.color_identity) || card.color_identity.length === 0) {
           return "Colorless";
         }
-        return card.color_identity.sort().join("");  
+        return card.color_identity.join("");  
       case "Foil Status": return card.foil_status;
         
       default: return null;
@@ -592,5 +587,5 @@ function cloneFilters(filters) {
   return cloned;
 }
   
-    init();
+    init().catch(console.error);
     

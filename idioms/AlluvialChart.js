@@ -1,6 +1,7 @@
 
 import { updateState, getState } from "../state.js";
 import { updateFilterPanel } from "./FilterPanel.js"; 
+import { onHoverCard, onClearHover, onSetHover, onClearSetHover,  onRectHover, onClearRectHover  } from "./Events.js";
 
   const customOrder = [
     "original", "reprint", "functional reprint",
@@ -14,6 +15,35 @@ function getDiscreteColor(percentage) {
   return "#594a3a"; 
 }
   
+
+onHoverCard(card => {
+  highlightAlluvialElementsHoverOnly(card);
+});
+
+onClearHover(() => {
+  clearAlluvialHoverOnly();
+});
+
+
+onSetHover(setInfo => {
+  highlightAlluvialElementsHoverOnlyFromSet(
+    setInfo.originalities, setInfo.rarities
+  );
+})
+
+onClearSetHover(() => {
+  clearAlluvialHoverOnly();
+})
+
+
+onRectHover(rectInfo => {
+highlightAlluvialElementsFromIcicle(rectInfo)
+})
+
+onClearRectHover(() => {
+  clearAlluvialHoverOnly();
+})
+
 let localChartFilters = {
   Originality: new Set(),
   Rarity: new Set()
@@ -69,16 +99,13 @@ const container = d3.select(containerId);
 const { width, height } = container.node().getBoundingClientRect();
 const svgWidth = width;
 const svgHeight = height;
-const screenSize = d3.select("body").node().getBoundingClientRect();
 
   
-const marginLeftOffset = getMarginLeftOffset(screenSize.width);
 const chartWidth = svgWidth * 0.85
 const chartHeight = svgHeight * 0.75
-const chartXOffset = (svgWidth - chartWidth) / 2 - 40; 
-const chartYOffset = (svgHeight - chartHeight) / 2; 
 
-const margin = { top: 45, right: 18, bottom: 40, left: 10 };
+const margin = { top: height * 0.17, right: 18, bottom: 40, left: width *0.015 };
+
 const originalitySet = new Set();
 const raritySet = new Set();
 data.forEach(card => {
@@ -166,19 +193,25 @@ rarityCategories.forEach(r => (rarityPriceSums[r] = rarityPriceCounts[r] = 0));
   svg.selectAll("g").remove();
   const sankeyGroup = svg.append("g").attr("transform", `translate(${margin.left}, ${margin.top})`);
 
+
+  //20 and 30, r=10
+const iconX = svgWidth * 0.03;
+const iconY = svgHeight * 0.1;
+const iconRadius = svgWidth * 0.015;
+const infoTextSize = Math.min(svgWidth * 0.0187, 15);
 const infoGroup = svg.append("g")
   .attr("class", "info-icon")
-  .attr("transform", `translate(20, 30)`);
+  .attr("transform", `translate(${iconX}, ${iconY})`);
 
 infoGroup.append("circle")
-  .attr("r", 10)
+  .attr("r", iconRadius)
   .attr("fill", "#8A9CE4")
   .attr("stroke", "#fff");
 
 infoGroup.append("text")
   .attr("text-anchor", "middle")
   .attr("dy", "0.35em")
-  .attr("font-size", "12px")
+  .attr("font-size", `${infoTextSize}px`)
   .attr("font-weight", "bold")
   .attr("fill","#fff")
   .text("ℹ")
@@ -212,7 +245,7 @@ infoGroup.append("text")
     tooltip.style("display", "none");
   });
 
-  const sankey = d3.sankey().nodeWidth(20).nodePadding(20).extent([[0, 0], [chartWidth, chartHeight]]);
+  const sankey = d3.sankey().nodeWidth(Math.min(chartHeight*0.097, 20)).nodePadding(Math.min(chartHeight*0.097, 20)).extent([[0, 0], [chartWidth, chartHeight]]);
   const sankeyData = sankey({
     nodes: nodes.map(d => ({ ...d })),
     links: links.map(d => ({ ...d }))
@@ -461,6 +494,7 @@ const nodeGroups = sankeyGroup.selectAll(".node")
 
     });
 
+      const nodeTextSize = Math.min(svgWidth * 0.0187, 13);
         g.append("text")
           .attr("x", d => {
       const centerX = (d.x0 + d.x1) / 2;
@@ -474,7 +508,7 @@ const nodeGroups = sankeyGroup.selectAll(".node")
       return isLeftSide ? "start" : "end";
   })
           .text(d => d.name)
-          .attr("font-size", "12px")
+          .attr("font-size", `${nodeTextSize}px`)
           .style("shape-rendering", "crispEdges")
           .attr("fill", "#000")
           .style("pointer-events", "auto")
@@ -573,62 +607,64 @@ function applyLocalChartFilter() {
   
 const legendX = chartWidth + margin.right;  // slight adjustment inward
 const legendY = margin.top;
-const rectHeight = 20;
+const rectDimensions = Math.min(chartHeight*0.097, 22);
+
 const extraSpacing = 0;
 
+const legendFontSize = Math.min(svgWidth * 0.0187, 13);
 const legend = svg.append("g")
     .attr("class", "legend")
     .attr("transform", `translate(${legendX}, ${legendY})`);
 
     legend.append("text")
     .attr("x", 0)
-    .attr("y", 120)
+    .attr("y", Math.min(rectDimensions* 6, 132))
     .text("Avg Price")
     .attr("fill", "#000")
-    .style("font-size", "12px")
+    .style("font-size", `${legendFontSize}px`)
     .style("shape-rendering", "crispEdges")
     .style("font-weight", "bold");
 
 legend.append("text")
     .attr("x", 0)
-    .attr("y", 135)
+    .attr("y", Math.min(rectDimensions * 6.75, 149))
     .text("(" + formatPriceLabel(priceAttr)+ ")")
     .attr("fill", "#000")
-    .style("font-size", "12px")
+    .style("font-size", `${legendFontSize}px`)
     .style("shape-rendering", "crispEdges")
     .style("font-weight", "bold");
 
 
 dynamicLegendData.forEach((interval, i) => {
     const legendEntry = legend.append("g")
-      .attr("transform", `translate(0, ${i * (rectHeight + extraSpacing)})`);
+      .attr("transform", `translate(0, ${i * (rectDimensions + extraSpacing)})`);
 
     legendEntry.append("rect")
-        .attr("width", 20)
-        .attr("height", rectHeight)
+        .attr("width", rectDimensions)
+        .attr("height", rectDimensions)
         .style("shape-rendering", "crispEdges")
         .attr("fill", interval.color)
         .attr("stroke", "#000");
 
     legendEntry.append("text")
-        .attr("x", 30) 
-        .attr("y",rectHeight-16)
+        .attr("x", chartWidth * 0.054) 
+        .attr("y",rectDimensions * 0.25 -1) 
         .text(interval.label) 
         .attr("fill", "#000")
-        .style("font-size", "12px")
+        .style("font-size", `${legendFontSize}px`)
         .style("shape-rendering", "crispEdges");
 });
 
 
 const zeroEntry = legend.append("g")
-    .attr("transform", `translate(0, ${numBins * (rectHeight + extraSpacing)})`);
+    .attr("transform", `translate(0, ${numBins * (rectDimensions + extraSpacing)})`);
 
 zeroEntry.append("text")
-    .attr("x", 30)
-    .attr("y", rectHeight - 16)
+    .attr("x", chartWidth * 0.054)
+    .attr("y", rectDimensions * 0.25-1)
     .text(`${symbol} 0.00`)
     .attr("fill", "#000")
-    .style("font-size", "12px")
+    .style("font-size", `${legendFontSize}px`)
     .style("shape-rendering", "crispEdges");
 
 }
@@ -665,6 +701,21 @@ export function highlightAlluvialElementsHoverOnly(card) {
     .filter(d => d.x0 !== 0 && d.name === rarity)
     .classed("hover-temp", true);
 }
+
+
+export function highlightAlluvialElementsFromIcicle(rectInfo) {
+  const { originalities, rarities } = rectInfo;
+  if (!originalities && !rarities) return;
+
+  d3.selectAll("g.node rect").classed("hover-temp", d => {
+    const isOriginalityNode = d.x0 === 0;
+    const isRarityNode = d.x0 !== 0;
+
+    return (isOriginalityNode && originalities?.has(d.name)) ||
+           (isRarityNode && rarities?.has(d.name));
+  });
+}
+
 
 export function clearAlluvialHoverOnly() {
   d3.selectAll("g.node rect").classed("hover-temp", false);

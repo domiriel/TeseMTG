@@ -1,11 +1,25 @@
 
 import { updateState, getState } from "../state.js";
 import { updateFilterPanel } from "./FilterPanel.js";
-import { highlightAlluvialElementsHoverOnlyFromSet, clearAlluvialHoverOnly } from "./AlluvialChart.js";
-import { highlightIcicleRectHoverOnlyFromSet, clearIcicleHoverOnly } from "./IcicleChart.js";
-import { highlightLineChartHoverOnlyFromSet, clearLineChartHoverOnly} from "./LineChart.js";
-import { highlightScatterDotsFromSet, clearScatterHoverOnly} from "./Scatterplot.js";
+import { onHoverCard, onClearHover, emitSetHover, emitClearHover, emitClearSetHover, onRectHover, onClearRectHover } from "./Events.js";
 
+
+onHoverCard(card => {
+  highlightTimelineSetsHoverOnly(card);
+});
+
+onClearHover(() => {
+  clearTimelineHoverOnly();
+});
+
+onRectHover(rectInfo => {
+
+  highlightTimelineSetsFromIcicle(rectInfo)
+})
+
+onClearRectHover(() => {
+  clearTimelineHoverOnly();
+})
 
 let uniqueSets = null;
 const mtgColorOrder = { W: 0, U: 1, R: 2, B: 3, G: 4 };
@@ -136,9 +150,9 @@ export function createTimelineView(data, containerId, isUpdate = false) {
     const containerBounds = container.node().getBoundingClientRect();
 
     const containerWidth = containerBounds.width * 0.89;
+   
     const searchContainerwidth = containerBounds.width * 0.07;
     const containerHeight = containerBounds.height;
-
     const chartWidth = containerWidth * 0.927;
     const chartHeight = containerHeight;
 
@@ -146,7 +160,7 @@ export function createTimelineView(data, containerId, isUpdate = false) {
         top: 50, 
         right: 50, 
         bottom: 10, 
-        left: 100 
+        left: containerWidth * 0.06 
     };
 
 
@@ -172,7 +186,10 @@ export function createTimelineView(data, containerId, isUpdate = false) {
     const searchInput = container.select(".timeline-search-bar");
 const searchBounds = searchInput.node().getBoundingClientRect();
 
-
+console.log(containerBounds.width* 0.43)
+const iconRadius = containerBounds.width*0.43 * 0.015;
+const iconSize = iconRadius * 2;
+const infoTextSize = Math.min(containerBounds.width * 0.0187, 15);
 const iconLeft = searchBounds.left + searchBounds.width + 8; // 8px spacing
 const relativeLeft = iconLeft - containerBounds.left;
     const infoGroup = container.append("div")
@@ -180,15 +197,15 @@ const relativeLeft = iconLeft - containerBounds.left;
   .style("position", "absolute")
   .style("top", "16px")
   .style("left", `${relativeLeft}px`)
-  .style("width", "20px")
-  .style("height", "20px")
+  .style("width", `${iconSize}px`)
+.style("height", `${iconSize}px`)
   .style("background", "#8A9CE4")
   .style("stroke", "#fff")
   .style("border", "1px solid #fff")
   .style("border-radius", "50%")
   .style("text-align", "center")
-  .style("font-size", "12px")
-  .style("line-height", "20px")
+.style("font-size", `${infoTextSize}px`)
+.style("line-height", `${iconSize}px`)
   .style("cursor", "help")
   .style("z-index", "10000")
   .style("color", "#fff")
@@ -750,20 +767,39 @@ export function clearTimelineHoverOnly() {
 }
 
 
+function highlightTimelineSetsFromIcicle(rectInfo) {
+  const [targetIdentity] = [...rectInfo.colorIdentities];
+  if (targetIdentity === undefined) return;
+
+  const actualIdentity = targetIdentity === "" ? "Colorless" : targetIdentity;
+
+  d3.selectAll(".set-rect")
+    .filter(d => {
+      const ids = d.colorIdentities || new Set();
+      return ids.has(actualIdentity);
+    })
+    .classed("hover-temp", true);
+}
+
+
+
+
 function highlightAllViewsForSet(setName) {
   const setEntry = uniqueSets.find(d => d.name === setName);
   if (!setEntry) return;
 
-  highlightAlluvialElementsHoverOnlyFromSet(setEntry.originalities, setEntry.rarities);
-  highlightIcicleRectHoverOnlyFromSet(setEntry.colorIdentities);
-  highlightLineChartHoverOnlyFromSet(setEntry.releaseDate);
-  highlightScatterDotsFromSet(setEntry.name);
+  emitSetHover({
+    name: setEntry.name,
+    releaseDate: setEntry.releaseDate,
+    setType: setEntry.setType,
+    cardCount: setEntry.cardCount,
+    originalities: new Set(setEntry.originalities),
+    rarities: new Set(setEntry.rarities),
+    colorIdentities: new Set(setEntry.colorIdentities)
+});
 }
 
 function clearAllViewsHoverOnly() {
-  clearAlluvialHoverOnly();
-  clearIcicleHoverOnly();
-  clearLineChartHoverOnly();
-  clearScatterHoverOnly();
+  emitClearSetHover();
 
 }
