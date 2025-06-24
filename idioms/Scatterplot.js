@@ -1,6 +1,6 @@
 
 import { updateState, getState } from "../state.js";
-import { emitHoverCard, emitClearHover,onSetHover, onClearSetHover, onRectHover, onClearRectHover } from "./Events.js";
+import { emitHoverCard, emitClearHover,onSetHover, onClearSetHover, onRectHover, onClearRectHover,onClearLineYearHover, onLineYearHover, onAlluvialHover, onClearAlluvialHover  } from "./Events.js";
 
 const colorGroups = [
     { range: [1, 5691], color: "#594A3A" },  
@@ -33,6 +33,15 @@ onClearSetHover(() => {
   clearScatterHoverOnly();
 })
 
+onLineYearHover(yearInfo => {
+
+  highlightScatterDotsFromYear(yearInfo.year)
+})
+
+onClearLineYearHover(() => {
+  clearScatterHoverOnly();
+})
+
 onRectHover(rectInfo => {
   highlightScatterDotsFromIcicle(rectInfo);
 })
@@ -40,6 +49,14 @@ onRectHover(rectInfo => {
 onClearRectHover(() => {
   clearScatterHoverOnly();
 })
+
+onAlluvialHover(({ category, value }) => {
+  highlightScatterDotsFromAlluvial(category, value);
+});
+
+onClearAlluvialHover(() => {
+  clearScatterHoverOnly();
+});
 
 export function hoverOnlyHighlightCard(card) {
   emitHoverCard(card);
@@ -197,13 +214,13 @@ function clickFn(event, d) {
 if (matchingCard) {
   newHoveredCards = [...hoveredCards, matchingCard];
 }
-    d3.select(this).raise().attr("stroke", "orange").attr("stroke-width", 2.5);
+    d3.select(this).raise().attr("stroke", "#9AA0BC").attr("stroke-width", 2.5);
   }
 
   updateState({ hoveredCards: newHoveredCards });
 
   d3.selectAll(".dots circle")
-    .style("stroke", d => newHoveredCards.some(c => c.name === d.name) ? "orange" : (+d.edhrec_rank > 0 ? "none" : "black"))
+    .style("stroke", d => newHoveredCards.some(c => c.name === d.name) ? "#9AA0BC" : (+d.edhrec_rank > 0 ? "none" : "black"))
     .style("stroke-width", d => newHoveredCards.some(c => c.name === d.name) ? 2.5 : (+d.edhrec_rank > 0 ? 0 : 1.2));
 }
 
@@ -260,6 +277,8 @@ export function prepareScatterData(data, selectedPriceAttribute) {
         printImages: [],
         tooltip_image: null,
         foundOriginal: false,
+        all_years: new Set(), 
+        all_originalities: new Set(),
       });
     }
 
@@ -273,6 +292,13 @@ export function prepareScatterData(data, selectedPriceAttribute) {
     if (!isNaN(card.complexity)) {
       entry.prices.push(price);
     }
+     if (card.release_date) {
+    const year = new Date(card.release_date).getFullYear();
+    if (!isNaN(year)) entry.all_years.add(year);
+  }
+    if (card.originality) {
+  entry.all_originalities.add(card.originality.toLowerCase());
+}
 
 
     if(card.image_normal){
@@ -301,6 +327,8 @@ export function prepareScatterData(data, selectedPriceAttribute) {
   const result = [];
   for (const card of cardMap.values()) {
     card.all_sets = Array.from(card.setTypes.entries()).map(([name, type]) => ({ name, type }));
+     card.all_years = Array.from(card.all_years);
+    card.all_originalities = Array.from(card.all_originalities);
     card.all_print_images = card.printImages;
     card.tooltip_image = card.tooltip_image || card.image_normal;
 
@@ -387,7 +415,7 @@ const secondMinPrice = sortedPrices[1] || paddedMinPrice;
   .on("contextmenu", event => event.preventDefault());
 
 
-  console.log(width)
+
   const iconX = width * 0.97;
   const iconY = height * 0.07;
   const iconRadius = width*0.93 * 0.015;
@@ -631,7 +659,7 @@ const brush = d3.brush()
 
         d3.selectAll(".dots circle")
             .style("stroke", d => newHoveredCards.some(c => c.name === d.name)
-                ? "orange"
+                ? "#9AA0BC"
                 : (+d.edhrec_rank > 0 ? "none" : "black"))
             .style("stroke-width", d => newHoveredCards.some(c => c.name === d.name)
                 ? 2.5
@@ -945,7 +973,7 @@ const dots = gClip.selectAll("circle")
 
 d3.selectAll(".dots circle")
   .style("stroke", d => hoveredCards.some(c => c.name === d.name)
-    ? "orange"
+    ? "#9AA0BC"
     : (+d.edhrec_rank > 0 ? "none" : "black"))
   .style("stroke-width", d => hoveredCards.some(c => c.name === d.name)
     ? 2.5
@@ -973,7 +1001,7 @@ updatePointPositions(xScale, yScale);
 
 function highlightScatterDotsFromIcicle(rectInfo) {
 const [targetIdentity] = [...rectInfo.colorIdentities];
-console.log(targetIdentity)
+
 
   d3.selectAll(`.dots.ci-${targetIdentity}`).classed("hover-temp", true);
 
@@ -983,6 +1011,37 @@ console.log(targetIdentity)
 }
 
 
+export function highlightScatterDotsFromYear(year) {
+  const targetYear = year.getFullYear();
+  d3.select(".Scatterplot").selectAll(".dots circle")
+    .each(function(d) {
+      if (d.all_years?.includes(targetYear)) {
+        d3.select(this).classed("hover-temp", true);
+      }
+    });
+
+  // const svg = d3.select(".Scatterplot svg");
+  // const { xScale, yScale } = svg.node().__scales__ || {};
+  // if (xScale && yScale) updatePointPositions(xScale, yScale);
+}
+
+
+function highlightScatterDotsFromAlluvial(category, value) {
+  const lowerVal = value.toLowerCase();
+
+  d3.select(".Scatterplot").selectAll(".dots circle")
+    .each(function(d) {
+      if (category === "Originality" && d.all_originalities?.includes(lowerVal)) {
+        d3.select(this).classed("hover-temp", true);
+      } else if (category === "Rarity" && d.rarity?.toLowerCase() === lowerVal) {
+        d3.select(this).classed("hover-temp", true);
+      }
+    });
+
+  // const svg = d3.select(".Scatterplot svg");
+  // const { xScale, yScale } = svg.node().__scales__ || {};
+  // if (xScale && yScale) updatePointPositions(xScale, yScale);
+}
 
 export function clearScatterHoverOnly() {
   d3.selectAll(".dots circle").classed("hover-temp", false);

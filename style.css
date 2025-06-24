@@ -62,8 +62,7 @@ body {
 
 
 .set-rect.hover-temp:not(.highlighted) {
-  stroke: orange;
-  stroke-width: 2px;
+  fill: #f2c46e
 }
   .Title { grid-area: 1 / 2 / 2 / 4; }
   .ISTLogo { grid-area: 1 / 1 / 2 / 2; 
@@ -157,19 +156,15 @@ body {
     fill-opacity: 1;
 }
 
-.IcicleChart rect.hover-temp:not(.highlighted) {
-  stroke: orange;
-  stroke-width: 2px;
-}
+
 
 .LineChart circle.hover-temp:not(.selected) {
-  stroke: orange;
-  stroke-width: 2px;
+  fill: #f2c46e
 }
 
 .Scatterplot circle.hover-temp:not(.selected) {
-  stroke: orange !important;
-  stroke-width: 2.5px !important;
+  stroke: #f2c46e !important;
+  stroke-width: 1.5px !important;
   r: 4 !important;
 }
 
@@ -181,10 +176,7 @@ body {
     
   }
   
-  g.node rect.hover-temp:not(.highlighted) {
-  stroke: orange;
-  stroke-width: 2px;
-}
+
 
   .links path.highlighted {
     stroke: orange !important;
@@ -192,8 +184,7 @@ body {
   }
   
   .set-rect.highlighted {
-    stroke: orange;
-    stroke-width: 3px;
+    fill: #9AA0BC
 }
 .alluvial-hidden {
   opacity: 0.1;

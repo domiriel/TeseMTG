@@ -2,9 +2,13 @@
 import { updateState, getState } from "../state.js";
 // @ts-ignore
 import { showLoader, hideLoader, showPopup } from "./LoadingAnimation.js";
-import { onHoverCard, onClearHover, onSetHover, onClearSetHover, emitIcicleRectHover, emitClearRectHover } from "./Events.js";
+import { onHoverCard, onClearHover, onSetHover, onClearSetHover, emitIcicleRectHover, emitClearRectHover, onClearLineYearHover, onLineYearHover, onAlluvialHover, onClearAlluvialHover } from "./Events.js";
 let globalRects = null;  
 let clickTimer = null;
+
+
+
+
 
 
 
@@ -27,6 +31,25 @@ onClearSetHover(() => {
   clearIcicleHoverOnly();
 })
 
+onLineYearHover(yearInfo => {
+
+  highlightIcicleRectHoverOnlyFromYear(
+    yearInfo.colorIdentities
+  );
+})
+
+onClearLineYearHover(() => {
+  clearIcicleHoverOnly();
+})
+
+onAlluvialHover(({ category, value }) => {
+  highlightIcicleRectHoverOnlyFromAlluvial(category, value);
+});
+
+onClearAlluvialHover(() => {
+  clearIcicleHoverOnly();
+});
+
 const infoTooltipText = `
 <strong>Icicle Chart Interactions:</strong><br>
 • <strong>Click</strong> on a rectangle: zoom into that section.<br>
@@ -43,16 +66,31 @@ const colorScale = [
     { range: [81, 100], color: "#594a3a" }
 ];
 
+const colorScaleHighlight = [
+    { range: [0, 20], color:  "#fbecd0"},
+    { range: [21, 40], color: "#f8dfb0" },
+    { range: [41, 60], color: "#f2c46e" },
+    { range: [61, 80], color: "#d89313" },
+    { range: [81, 100], color:"#9b690d" }
+];
 
+const colorScaleSelected = [
+    { range: [0, 20], color: "#dcdfef" },
+    { range: [21, 40], color: "#b9bfda" },
+    { range: [41, 60], color: "#9aa0bc" },
+    { range: [61, 80], color: "#6a708a" },
+    { range: [81, 100], color: "#3a4059" }
+];
 
-function getColorFromPercentage(percentage) {
-    for (let i = colorScale.length - 1; i >= 0; i--) { 
-        if (percentage >= colorScale[i].range[0]) {
-            return colorScale[i].color;
+function getColorFromPercentage(percentage, scale = colorScale) {
+    for (let i = scale.length - 1; i >= 0; i--) { 
+        if (percentage >= scale[i].range[0]) {
+            return scale[i].color;
         }
     }
-    return colorScale[0].color; 
+    return scale[0].color; 
 }
+
 
 
 function hexToRgb(hex) {
@@ -196,6 +234,8 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
         group.children.forEach(c => {
             let originalPercentage = (c.originalCount / c.value) * 100 || 0;
             c.color = getColorFromPercentage(originalPercentage);
+            c.highlightColor = getColorFromPercentage(originalPercentage, colorScaleHighlight);
+            c.selectedColor = getColorFromPercentage(originalPercentage, colorScaleSelected);
         });
 
         if (group.children.length > 0) {
@@ -284,11 +324,11 @@ const svg = container.append("svg")
     .attr("height", containerHeight)
     .attr("preserveAspectRatio", "xMidYMid meet");
 
-console.log(containerWidth)
+
 const iconX = containerWidth * 0.03;
 const iconY = containerHeight * 0.07;
 const iconRadius = containerWidth * 0.015;
-console.log(iconRadius)
+
 const infoTextSize = Math.min(containerWidth * 0.0187, 15);
 const infoGroup = svg.append("g")
   .attr("class", "info-icon")
@@ -493,7 +533,7 @@ const levelHeight = chartHeight / depth;
                 const rectHeight = levelHeight - 2;
                 const textLength = d.data.name.replaceAll("-", "").length * 6;
                 if (d.depth === 2) {
-                    return (rectHeight > textLength && rectWidth > 9) ? 1 : 0;
+                    return (rectHeight > textLength && rectWidth > 13) ? 1 : 0;
                 } else {
                     return (rectWidth > textLength && rectHeight > 12) ? 1 : 0;
                 }
@@ -673,9 +713,17 @@ export function highlightIcicleRect(hoveredCards) {
         identityMatches.add(identity);
     });
 
-    globalRects.classed("highlighted", d =>
-        d.depth === 2 && identityMatches.has(d.data.name)
-    );
+    globalRects.each(function(d) {
+        const rect = d3.select(this);
+
+        if (d.depth === 2 && identityMatches.has(d.data.name)) {
+            rect.classed("selectedHovered", true)
+                .attr("fill", d.data.selectedColor);
+        } else {
+            rect.classed("selectedHovered", false)
+                .attr("fill", d.data.color);
+        }
+    });
 }
 
 
@@ -687,22 +735,49 @@ export function highlightIcicleRectHoverOnly(card) {
     ? card.color_identity.slice().sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b]).join("")
     : "Colorless";
 
-  d3.select(".IcicleChart").selectAll("rect.icicle-rect")
+d3.select(".IcicleChart").selectAll("rect.icicle-rect")
   .filter(d => d.data?.name === identityKey && d.depth === 2)
-  .classed("hover-temp", true);
+  .each(function(d) {
+    const rect = d3.select(this);
+    rect.attr("fill", d.data.highlightColor);
+    rect.classed("hover-temp", true);
+  });
+
 }
 
-export function clearIcicleHoverOnly() {
-  d3.select(".IcicleChart").selectAll("rect.icicle-rect").classed("hover-temp", false);
-
+function clearIcicleHoverOnly() {
+  d3.select(".IcicleChart").selectAll("rect.icicle-rect")
+    .filter(d => d.depth === 2)
+    .classed("hover-temp", false)
+    .attr("fill", function(d) {
+      const rect = d3.select(this);
+      if (rect.classed("selectedHovered")) return d.data.selectedColor;
+      if (rect.classed("selected")) return d.data.selectedColor;
+      return d.data.color;
+    });
 }
+
 
 export function highlightIcicleRectHoverOnlyFromSet(colorIdentities) {
-  d3.selectAll("rect.icicle-rect")
-    .filter(d => d.depth === 2)
-    .classed("hover-temp", d => colorIdentities.has(d.data.name));
-}
+d3.selectAll("rect.icicle-rect")
+  .filter(d => d.depth === 2 && colorIdentities.has(d.data.name))
+  .each(function(d) {
+    const rect = d3.select(this);
+    rect.attr("fill", d.data.highlightColor);
+    rect.classed("hover-temp", true);
+  });
 
+}
+export function highlightIcicleRectHoverOnlyFromYear(colorIdentities) {
+d3.selectAll("rect.icicle-rect")
+  .filter(d => d.depth === 2 && colorIdentities.has(d.data.name))
+  .each(function(d) {
+    const rect = d3.select(this);
+    rect.attr("fill", d.data.highlightColor);
+    rect.classed("hover-temp", true);
+  });
+
+}
 
 function highlightAllViewsForRect(rectName) {
   if (!globalRects) return;
@@ -721,6 +796,27 @@ function highlightAllViewsForRect(rectName) {
     years: new Set(rectDatum.data.years || [])
   });
 }
+
+function highlightIcicleRectHoverOnlyFromAlluvial(category, value) {
+  const lowerValue = value.toLowerCase();
+
+  d3.selectAll("rect.icicle-rect")
+    .filter(d => {
+      if (!d || d.depth !== 2) return false;
+      if (category === "Originality") {
+        return d.data.originalities?.includes(lowerValue);
+      } else if (category === "Rarity") {
+        return d.data.rarities?.includes(lowerValue);
+      }
+      return false;
+    })
+    .each(function(d) {
+      const rect = d3.select(this);
+      rect.attr("fill", d.data.highlightColor);
+      rect.classed("hover-temp", true);
+    });
+}
+
 function clearAllViewsHoverOnly() {
   emitClearRectHover();
 }

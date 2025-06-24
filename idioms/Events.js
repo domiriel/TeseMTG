@@ -53,3 +53,38 @@ export function emitClearRectHover() {
 export function onClearRectHover(callback){
      emitter.addEventListener("rect-hover-clear", callback);
 }
+
+//Line Events
+
+export function emitLineYearHover(yearInfo) {
+  emitter.dispatchEvent(new CustomEvent("line-year-hover", { detail: yearInfo }));
+}
+export function onLineYearHover(callback) {
+  emitter.addEventListener("line-year-hover", e => callback(e.detail));
+}
+export function emitClearLineYearHover() {
+  emitter.dispatchEvent(new Event("line-year-hover-clear"));
+}
+export function onClearLineYearHover(callback) {
+  emitter.addEventListener("line-year-hover-clear", callback);
+}
+
+// Alluvial Events
+
+export function emitAlluvialHover(category, value) {
+  emitter.dispatchEvent(new CustomEvent("alluvial-hover", {
+    detail: { category, value }
+  }));
+}
+
+export function onAlluvialHover(callback) {
+  emitter.addEventListener("alluvial-hover", e => callback(e.detail));
+}
+
+export function emitClearAlluvialHover() {
+  emitter.dispatchEvent(new Event("alluvial-hover-clear"));
+}
+
+export function onClearAlluvialHover(callback) {
+  emitter.addEventListener("alluvial-hover-clear", callback);
+}

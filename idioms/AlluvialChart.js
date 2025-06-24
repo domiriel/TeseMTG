@@ -1,7 +1,7 @@
 
 import { updateState, getState } from "../state.js";
 import { updateFilterPanel } from "./FilterPanel.js"; 
-import { onHoverCard, onClearHover, onSetHover, onClearSetHover,  onRectHover, onClearRectHover  } from "./Events.js";
+import {emitAlluvialHover, emitClearAlluvialHover, onHoverCard, onClearHover, onSetHover, onClearSetHover,  onRectHover, onClearRectHover, onLineYearHover, onClearLineYearHover  } from "./Events.js";
 
   const customOrder = [
     "original", "reprint", "functional reprint",
@@ -14,7 +14,23 @@ function getDiscreteColor(percentage) {
   if (percentage < 80) return "#736659";
   return "#594a3a"; 
 }
-  
+
+function getHighlightedColor(percentage){
+if (percentage < 20) return "#fbecd0";
+  if (percentage < 40) return "#f8dfb0";
+  if (percentage < 60) return "#f2c46e";
+  if (percentage < 80) return "#d89313";
+  return "#9b690d"; 
+}
+
+function getSelectedColor(percentage){
+if (percentage < 20) return "#dcdfef";
+  if (percentage < 40) return "#b9bfda";
+  if (percentage < 60) return "#998066";
+  if (percentage < 80) return "#6a708a";
+  return "#3a4059"; 
+}
+
 
 onHoverCard(card => {
   highlightAlluvialElementsHoverOnly(card);
@@ -32,6 +48,16 @@ onSetHover(setInfo => {
 })
 
 onClearSetHover(() => {
+  clearAlluvialHoverOnly();
+})
+
+onLineYearHover(yearInfo => {
+  highlightAlluvialElementsHoverOnlyFromYear(
+    yearInfo.originalities, yearInfo.rarities
+  );
+})
+
+onClearLineYearHover(() => {
   clearAlluvialHoverOnly();
 })
 
@@ -433,10 +459,20 @@ const nodeGroups = sankeyGroup.selectAll(".node")
           .attr("height", d => d.y1 - d.y0)
           .style("shape-rendering", "crispEdges")
           .attr("stroke", "#000")
-          .call(sel => applyColorScale(sel, "fill", priceRange))
+.call(sel => {
+  sel.each(function(d) {
+    const color = getNodeColor(d.avgPrice, priceRange.min, priceRange.max);
+    d.baseColor = color;
+    d.highlightColor = getHighlightedColor(((d.avgPrice - priceRange.min) / (priceRange.max - priceRange.min)) * 100);
+    d.selectedColor = getSelectedColor(((d.avgPrice - priceRange.min) / (priceRange.max - priceRange.min)) * 100);
+    d3.select(this).attr("fill", color);
+  });
+})
           .on("mouseover", function(event, d) {
+
       tooltip.style("display", "block")
              .html(`Category: ${d.name}<br>Total cards: ${d.value}<br>Avg Price: $${d.avgPrice.toFixed(2)}`);
+             highlightAllViewsForAlluvial(d);
     })
           .on("mousemove", function(event) {
   const tooltipWidth = tooltip.node().offsetWidth;
@@ -458,6 +494,7 @@ const nodeGroups = sankeyGroup.selectAll(".node")
 })
           .on("mouseout", function() {
       tooltip.style("display", "none");
+      emitClearAlluvialHover(); 
     })
           .on("click", function(event, d) {
   const category = d.x0 === 0 ? "Originality" : "Rarity";
@@ -671,62 +708,135 @@ zeroEntry.append("text")
 
 
 export function highlightAlluvialElements(hoveredCards) {
+  const rects = d3.selectAll("g.node rect");
+
   if (!hoveredCards || hoveredCards.length === 0) {
-    // Remove all highlights if no hovered cards
-    d3.selectAll("g.node rect").classed("highlighted", false);
+    rects
+      .classed("selectedHovered", false)
+      .attr("fill", d => d.baseColor);
     return;
   }
 
-  // Build a set of hovered rarity categories
-  const hoveredRarities = new Set(
-    hoveredCards.map(card => card.rarity?.toLowerCase()).filter(Boolean)
-  );
+  const hoveredRarities = new Set();
+  const hoveredOriginalities = new Set();
 
+  hoveredCards.forEach(card => {
+    if (card.rarity) hoveredRarities.add(card.rarity.toLowerCase());
+    if (Array.isArray(card.all_originalities)) {
+      card.all_originalities.forEach(o => hoveredOriginalities.add(o.toLowerCase()));
+    }
+  });
 
-  // Highlight only the rarity nodes (x0 !== 0)
-  d3.selectAll("g.node rect").classed("highlighted", d => {
-    const isRarityNode = d.x0 !== 0;
-    return isRarityNode && hoveredRarities.has(d.name);
+  rects.each(function(d) {
+    const isRarity = d.x0 !== 0;
+    const isOriginality = d.x0 === 0;
+    const match =
+      (isRarity && hoveredRarities.has(d.name)) ||
+      (isOriginality && hoveredOriginalities.has(d.name));
+
+    d3.select(this)
+      .classed("selectedHovered", match)
+      .attr("fill", match ? d.selectedColor : d.baseColor);
   });
 }
 
+
 export function highlightAlluvialElementsHoverOnly(card) {
-  if (!card || !card.rarity) return;
+  if (!card) return;
 
-  const rarity = card.rarity.toLowerCase();
-  
+  const hoveredRarities = new Set();
+  const hoveredOriginalities = new Set();
 
-  
+  if (card.rarity) {
+    hoveredRarities.add(card.rarity.toLowerCase());
+  }
+
+  if (Array.isArray(card.all_originalities)) {
+    card.all_originalities.forEach(o => hoveredOriginalities.add(o.toLowerCase()));
+  }
+
   d3.selectAll("g.node rect")
-    .filter(d => d.x0 !== 0 && d.name === rarity)
-    .classed("hover-temp", true);
+    .filter(d =>
+      (d.x0 === 0 && hoveredOriginalities.has(d.name)) ||
+      (d.x0 !== 0 && hoveredRarities.has(d.name))
+    )
+    .each(function(d) {
+      const rect = d3.select(this);
+      rect
+        .attr("fill", d.highlightColor)
+        .classed("hover-temp", true);
+    });
 }
+
 
 
 export function highlightAlluvialElementsFromIcicle(rectInfo) {
   const { originalities, rarities } = rectInfo;
   if (!originalities && !rarities) return;
 
-  d3.selectAll("g.node rect").classed("hover-temp", d => {
-    const isOriginalityNode = d.x0 === 0;
-    const isRarityNode = d.x0 !== 0;
-
-    return (isOriginalityNode && originalities?.has(d.name)) ||
-           (isRarityNode && rarities?.has(d.name));
-  });
+  d3.selectAll("g.node rect")
+    .filter(d =>
+      (d.x0 === 0 && originalities?.has(d.name)) ||
+      (d.x0 !== 0 && rarities?.has(d.name))
+    )
+    .each(function(d) {
+      const rect = d3.select(this);
+      rect
+        .attr("fill", d.highlightColor)
+        .classed("hover-temp", true);
+      rect.classed("hover-temp", true);
+    });
 }
+
 
 
 export function clearAlluvialHoverOnly() {
-  d3.selectAll("g.node rect").classed("hover-temp", false);
+  d3.selectAll("g.node rect").each(function(d) {
+    const rect = d3.select(this);
+    rect.classed("hover-temp", false);
+
+    const isSelectedHovered = rect.classed("selectedHovered");
+    rect.attr("fill", isSelectedHovered ? d.selectedColor : d.baseColor);
+  });
 }
+
 export function highlightAlluvialElementsHoverOnlyFromSet(originalities, rarities) {
-  d3.selectAll("g.node rect").classed("hover-temp", d =>
-    (d.x0 === 0 && originalities.has(d.name)) ||
-    (d.x0 !== 0 && rarities.has(d.name))
-  );
+  d3.selectAll("g.node rect")
+    .filter(d =>
+      (d.x0 === 0 && originalities.has(d.name)) ||
+      (d.x0 !== 0 && rarities.has(d.name))
+    )
+    .each(function(d) {
+      const rect = d3.select(this);
+      rect
+        .attr("fill", d.highlightColor)
+        .classed("hover-temp", true);
+      rect.classed("hover-temp", true);
+    });
+}
+
+export function highlightAlluvialElementsHoverOnlyFromYear(originalities, rarities) {
+  d3.selectAll("g.node rect")
+    .filter(d =>
+      (d.x0 === 0 && originalities.has(d.name)) ||
+      (d.x0 !== 0 && rarities.has(d.name))
+    )
+    .each(function(d) {
+      const rect = d3.select(this);
+      rect
+        .attr("fill", d.highlightColor)
+        .classed("hover-temp", true);
+      rect.classed("hover-temp", true);
+    });
 }
 
 
 
+function highlightAllViewsForAlluvial(d) {
+  if (!d || !d.name) return;
 
+  const isOriginality = d.x0 === 0;
+  const category = isOriginality ? "Originality" : "Rarity";
+
+  emitAlluvialHover(category, d.name);
+}

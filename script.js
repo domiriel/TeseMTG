@@ -42,7 +42,6 @@ async function writeGroupedDataToOPFS(groupedData) {
 }
 
 async function readGroupedDataFromOPFS(originalData) {
-  console.log("hi")
   try {
     const root = await navigator.storage.getDirectory();
     const handle = await root.getFileHandle("groupedData.json");
@@ -119,7 +118,7 @@ let groupedData = await readGroupedDataFromOPFS(originalData);
       const hoveredSet = new Set(hoveredCards.map(c => c.name));
 
       d3.selectAll(".dots circle")
-        .style("stroke", d => hoveredSet.has(d.name) ? "orange" : (+d.edhrec_rank > 0 ? "none" : "black"))
+        .style("stroke", d => hoveredSet.has(d.name) ? "#9AA0BC" : (+d.edhrec_rank > 0 ? "none" : "black"))
         .style("stroke-width", d => hoveredSet.has(d.name) ? 2.5 : (+d.edhrec_rank > 0 ? 0 : 1.2));
 
       setTimeout(hideLoader, 150);
@@ -202,13 +201,13 @@ let groupedData = await readGroupedDataFromOPFS(originalData);
       updateFilterPanel(originalData, filteredData, selectedFilters, ".FilterPanel");
     }, 10);
 
-    let { hoveredCards } = getState();
-    const filteredNames = new Set(filteredData.map(d => d.name));
-    hoveredCards = hoveredCards.filter(card => filteredNames.has(card.name));
+     let { hoveredCards } = getState();
+    // const filteredNames = new Set(filteredData.map(d => d.name));
+    // hoveredCards = hoveredCards.filter(card => filteredNames.has(card.name));
 
-    if (hoveredCards.length !== getState().hoveredCards.length) {
-      updateState({ hoveredCards });
-    }
+    // if (hoveredCards.length !== getState().hoveredCards.length) {
+    //   updateState({ hoveredCards });
+    // }
 
     highlightAlluvialElements(hoveredCards);
     highlightIcicleRect(hoveredCards);

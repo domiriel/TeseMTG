@@ -1,6 +1,6 @@
 
 import { updateState, getState } from "../state.js";
-import { onHoverCard, onClearHover, onSetHover, onClearSetHover, onRectHover, onClearRectHover   } from "./Events.js";
+import { onHoverCard, onClearHover, onSetHover, onClearSetHover, onRectHover, onClearRectHover, emitLineYearHover, emitClearLineYearHover,onAlluvialHover, onClearAlluvialHover   } from "./Events.js";
 const lineChartTooltipText = `
 <strong>Timeline Interactions:</strong><br>
 • <strong>Hover</strong> a circle: view year and metrics.<br>
@@ -9,6 +9,8 @@ const lineChartTooltipText = `
 • <strong>Hover</strong> a line: inspect metric value at that year.<br>
 • <strong>Zoom</strong>: scroll to focus a time range.<br>
 `;
+
+const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };
 onHoverCard(card => {
   highlightLineChartHoverOnly(card);
 });
@@ -34,6 +36,15 @@ onClearRectHover(() => {
   clearLineChartHoverOnly()
 })
 
+onAlluvialHover(({ category, value }) => {
+  highlightLineChartFromAlluvialCategory(category, value);
+});
+
+onClearAlluvialHover(() => {
+  clearLineChartHoverOnly();
+});
+
+
 let brushing = false;
 
 function getClonedFilters() {
@@ -57,7 +68,22 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
             const avgComplexity = d3.mean(cards, c => +c.complexity || 0);
             const avgCMC = d3.mean(cards, c => +c.cmc || 0);
             
+            const originalities = new Set();
+            const rarities = new Set();
+            const colorIdentities = new Set();
 
+            cards.forEach(card => {
+      if (card.originality) originalities.add(card.originality.toLowerCase());
+      if (card.rarity) rarities.add(card.rarity.toLowerCase());
+
+      let identity;
+      if (!card.color_identity || card.color_identity.length === 0) {
+        identity = "Colorless";
+      } else {
+        identity = card.color_identity.slice().sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b]).join("");
+      }
+      colorIdentities.add(identity);
+    });
             if (cards[0] && new Date(cards[0].release_date).getFullYear() === 2004) {
                 cards.forEach(c => {
                     const raw = c.cmc;
@@ -75,7 +101,10 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
                 
                 reprints,
                 avgComplexity,
-                avgCMC
+                avgCMC,
+                originalities,
+                rarities,
+                colorIdentities,
             };
         },
         d => new Date(d.release_date).getFullYear()
@@ -120,6 +149,7 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
 
 
     const zoom = d3.zoom()
+    .filter(event => event.type === "wheel") // 👈 allow zooming ONLY via scroll
     .scaleExtent([1, 20])
     .translateExtent([[0, 0], [containerWidth, containerHeight]])
     .extent([[0, 0], [containerWidth, containerHeight]])
@@ -300,23 +330,27 @@ infoGroup.append("text")
                     
                     .attr("stroke", "#000")
                     .attr("stroke-width", 1.5);
+                highlightAllViewsForYear(d);
+
             })
             .on("mousemove", (event) => {
+                const [mouseX, mouseY] = d3.pointer(event, document.body); // relative to page
+
                 const tooltipNode = tooltip.node();
                 const tooltipWidth = tooltipNode.offsetWidth;
-                const pageX = event.pageX;
-                const pageY = event.pageY;
+                const tooltipHeight = tooltipNode.offsetHeight;
                 const padding = 10;
+
             
-                let left = pageX + padding;
+                let left = mouseX + padding;
             
                 if (left + tooltipWidth > window.innerWidth) {
-                    left = pageX - tooltipWidth - padding;
+                    left = mouseX - tooltipWidth - padding;
                 }
             
                 tooltip
                     .style("left", left + "px")
-                    .style("top", (pageY - 20) + "px");
+                    .style("top", (mouseY - 20) + "px");
             }) 
             .on("mouseout", () => {
                 tooltip.style("display", "none");
@@ -326,6 +360,7 @@ infoGroup.append("text")
                 d3.selectAll("circle.data-point")
                     .attr("r", 4)
                     .attr("stroke", "none");
+                emitClearLineYearHover();
             })
             .on("click", function(event, d) {
                 const selectedYear = d.year.getFullYear().toString();
@@ -352,16 +387,20 @@ infoGroup.append("text")
 
         const brush = d3.brushX()
             .extent([[0, 0], [width, height]])
-            .on("start", () => brushing = true)
+ .on("start", () => {
+    brushing = true;
+    brushGroup.select(".overlay").style("pointer-events", "all");
+  })
             .on("end", (event) => {
         brushing = false;
         brushed(event);
     });
 
-        svg.append("g")
-            .attr("class", "brush")
-            .attr("transform", `translate(${margin.left}, ${margin.top})`)
-            .call(brush).lower();
+        const brushGroup = svg.append("g")
+    .attr("class", "brush")
+    .attr("transform", `translate(${margin.left}, ${margin.top})`)
+    .call(brush)
+    .lower();
         
 
          svg.append("rect")
@@ -443,7 +482,15 @@ infoGroup.append("text")
             selectedFilters: updatedFilters,
             updateContext: "TimelineFilter"
         });
-        d3.select(this).call(brush.move, null);
+        brushGroup.call(brush.move, null);
+        // Fully remove the brush group
+        brushGroup.selectAll("*").remove();
+
+        // Re-append the brush from scratch
+        brushGroup.call(brush);
+
+
+        
         
 
 
@@ -571,7 +618,7 @@ export function highlightLineChart(hoveredCards) {
             })
             .attr("y1", +svg.select(".hover-line").attr("y1"))
             .attr("y2", +svg.select(".hover-line").attr("y2"))
-            .attr("stroke", "orange")
+            .attr("stroke", "#9AA0BC")
             .attr("stroke-width", 1.5)
             .attr("stroke-dasharray", "4 2")
             .lower();
@@ -618,4 +665,44 @@ export function highlightLineChartHoverOnlyFromSet(setReleaseDate) {
   d3.select(".LineChart")
     .selectAll(`circle.data-point[data-year='${year}']`)
     .classed("hover-temp", true);
+}
+
+export function highlightAllViewsForYear(entry) {
+
+  if (!entry) return;
+
+  emitLineYearHover({
+    year: entry.year,
+    reprints: entry.reprints,
+    avgComplexity: entry.avgComplexity,
+    avgCMC: entry.avgCMC,
+    originalities: new Set(entry.originalities),
+    rarities: new Set(entry.rarities),
+    colorIdentities: new Set(entry.colorIdentities),
+  });
+}
+
+function clearAllViewsHoverOnly() {
+  emitClearLineYearHover();
+
+}
+
+function highlightLineChartFromAlluvialCategory(category, value) {
+  if (!category || !value) return;
+
+  const lowerValue = value.toLowerCase();
+
+  d3.select(".LineChart")
+    .selectAll("circle.data-point")
+    .classed("hover-temp", function() {
+      const d = d3.select(this).datum();
+      if (!d) return false;
+
+      if (category === "Originality") {
+        return d.originalities?.has(lowerValue);
+      } else if (category === "Rarity") {
+        return d.rarities?.has(lowerValue);
+      }
+      return false;
+    });
 }

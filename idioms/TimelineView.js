@@ -1,7 +1,7 @@
 
 import { updateState, getState } from "../state.js";
 import { updateFilterPanel } from "./FilterPanel.js";
-import { onHoverCard, onClearHover, emitSetHover, emitClearHover, emitClearSetHover, onRectHover, onClearRectHover } from "./Events.js";
+import { onHoverCard, onClearHover, emitSetHover, emitClearHover, emitClearSetHover, onRectHover, onClearRectHover, onClearLineYearHover, onLineYearHover, onAlluvialHover, onClearAlluvialHover } from "./Events.js";
 
 
 onHoverCard(card => {
@@ -21,8 +21,24 @@ onClearRectHover(() => {
   clearTimelineHoverOnly();
 })
 
+onLineYearHover(yearInfo => {
+  highlightTimelineSetsFromYearInfo(yearInfo)
+})
+
+onClearLineYearHover(() => {
+  clearTimelineHoverOnly();
+})
+
+onAlluvialHover(({ category, value }) => {
+  highlightTimelineSetsFromAlluvialCategory(category, value);
+});
+
+onClearAlluvialHover(() => {
+  clearTimelineHoverOnly();
+});
+
 let uniqueSets = null;
-const mtgColorOrder = { W: 0, U: 1, R: 2, B: 3, G: 4 };
+const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };
 const timelineTooltipText = `
 <strong>Timeline Interactions:</strong><br>
 • <strong>Click</strong> a year: toggle filter by year.<br>
@@ -186,7 +202,7 @@ export function createTimelineView(data, containerId, isUpdate = false) {
     const searchInput = container.select(".timeline-search-bar");
 const searchBounds = searchInput.node().getBoundingClientRect();
 
-console.log(containerBounds.width* 0.43)
+
 const iconRadius = containerBounds.width*0.43 * 0.015;
 const iconSize = iconRadius * 2;
 const infoTextSize = Math.min(containerBounds.width * 0.0187, 15);
@@ -440,6 +456,7 @@ tooltip.style("left", `${left}px`)
     
 
     const zoom = d3.zoom()
+        .filter(event => event.type === "wheel") // 👈 allow zooming ONLY via scroll
         .scaleExtent([1, 10]) 
         .translateExtent([[0, 0], [chartWidth, adjustedChartHeight]])
         .on("zoom", zoomed);
@@ -732,6 +749,10 @@ function brushed(event) {
     }
 
     d3.select(chartGroup.select(".brush").node()).call(brush.move, null); // Clear brush
+    chartGroup.select(".brush").remove();
+
+    // Re-append the brush from scratch
+    chartGroup.call(brush);
 }
 
 }
@@ -802,4 +823,32 @@ function highlightAllViewsForSet(setName) {
 function clearAllViewsHoverOnly() {
   emitClearSetHover();
 
+}
+
+export function highlightTimelineSetsFromYearInfo(yearInfo) {
+  if (!yearInfo || !yearInfo.year) return;
+
+  const targetYear = yearInfo.year.getFullYear();
+
+  d3.selectAll(".set-rect")
+    .filter(d => d.releaseDate.getFullYear() === targetYear)
+    .classed("hover-temp", true);
+}
+
+
+function highlightTimelineSetsFromAlluvialCategory(category, value) {
+  if (!category || !value) return;
+
+  const lowerValue = value.toLowerCase();
+
+  d3.selectAll(".set-rect")
+    .filter(d => {
+      if (category === "Originality") {
+        return [...(d.originalities || [])].some(o => o === lowerValue);
+      } else if (category === "Rarity") {
+        return [...(d.rarities || [])].some(r => r === lowerValue);
+      }
+      return false;
+    })
+    .classed("hover-temp", true);
 }
