@@ -11,10 +11,10 @@ const state = {
       "IcicleColorIdentity": new Set(),
       "Set Names": new Set(),
       "Year": new Set(),
-      "Foil Status": new Set(),
       "FreeTextSearch": new Set()
     },
-    selectedPriceAttribute: "price_eur",
+    selectedPriceCurrency: "eur",            // One of "eur", "usd", or "tix"
+    selectedPriceSuffix: "",                 // "", "_foil", or "_etched"
     hoveredCards: [],
     updateContext: null,
     originalData: null,
@@ -135,7 +135,8 @@ export function resetState() {
   
   updateState({
     selectedFilters: getState().originalSelectedFilters , 
-    selectedPriceAttribute: "price_eur",
+    selectedPriceCurrency: "eur",            
+    selectedPriceSuffix: "",                 
     hoveredCards: [],
     updateContext: null,
     lastFilterInputs: null,

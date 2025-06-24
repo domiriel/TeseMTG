@@ -5,6 +5,13 @@ import { showLoader, hideLoader } from "./LoadingAnimation.js";
 const optionMap = new Map();  
 const pillMap = new Map();
 
+function getSuffixOptionsForCurrency(currency) {
+  if (currency === "eur") return ["", "_foil"];
+  if (currency === "usd") return ["", "_foil", "_etched"];
+  return [""]; // tix
+}
+
+
 const VISIBLE_FILTER_CATEGORIES = [
   "Keywords",
   "Supertypes",
@@ -13,8 +20,7 @@ const VISIBLE_FILTER_CATEGORIES = [
   "Set Types",
   "Set Names",
   "Originality",
-  "Rarity",
-  "Foil Status"
+  "Rarity"
 ];
 
 
@@ -101,6 +107,44 @@ export function createFilterPanel(data,filteredCards, containerId, selectedFilte
         .style("box-sizing", "border-box");
 
     const selectedFilters = selectedFiltersFromState;
+
+    const suffixWrapper = wrapper.append("div")
+  .style("margin-bottom", "12px");
+
+suffixWrapper.append("label")
+  .text("Select Price Suffix:")
+  .style("font-size", "14px")
+  .style("font-weight", "bold")
+  .style("display", "block")
+  .style("margin-bottom", "4px");
+
+const suffixSelect = suffixWrapper.append("select")
+  .style("padding", "6px")
+  .style("width", "70%")
+  .style("font-size", "14px")
+  .style("border", "1px solid #ccc")
+  .style("border-radius", "6px");
+
+function renderSuffixOptions(currency) {
+  const suffixOptions = getSuffixOptionsForCurrency(currency);
+  suffixSelect.selectAll("option").remove();
+
+  suffixSelect.selectAll("option")
+    .data(suffixOptions)
+    .enter()
+    .append("option")
+    .attr("value", d => d)
+    .text(d => d === "" ? "Regular" : d.replace("_", "").toUpperCase());
+
+  suffixSelect.property("value", getState().selectedPriceSuffix);
+}
+
+renderSuffixOptions(getState().selectedPriceCurrency);
+
+suffixSelect.on("change", function () {
+  updateState({ selectedPriceSuffix: this.value });
+});
+
     const groupedData = getState().groupedData;
 
 const allFilters = Object.fromEntries(
@@ -505,36 +549,50 @@ settingsHeader.on("click", function () {
 });
 
 // PRICE SELECT
-const priceWrapper = settingsContent.append("div")
-    .style("margin-bottom", "12px");
+const currencyWrapper = settingsContent.append("div")
+  .style("margin-bottom", "12px");
 
-priceWrapper.append("label")
-    .text("Select Price Attribute:")
-    .style("font-size", "14px")
-    .style("font-weight", "bold")
-    .style("display", "block")
-    .style("margin-bottom", "4px");
+currencyWrapper.append("label")
+  .text("Select Currency:")
+  .style("font-size", "14px")
+  .style("font-weight", "bold")
+  .style("display", "block")
+  .style("margin-bottom", "4px");
 
-const priceSelect = priceWrapper.append("select")
-    .attr("id", "priceAttributeSelect")
-    .style("padding", "6px")
-    .style("width", "100%")
-    .style("font-size", "14px")
-    .style("border", "1px solid #ccc")
-    .style("border-radius", "6px");
+const currencySelect = currencyWrapper.append("select")
+  .style("padding", "6px")
+  .style("width", "100%")
+  .style("font-size", "14px")
+  .style("border", "1px solid #ccc")
+  .style("border-radius", "6px");
 
-priceSelect.selectAll("option")
-    .data(sortedPriceFields)
-    .enter()
-    .append("option")
-    .attr("value", d => d)
-    .text(d => d.replace("price_", "").toUpperCase());
+const currencyOptions = ["eur", "usd", "tix"];
 
-priceSelect.property("value", getState().selectedPriceAttribute);
-priceSelect.on("change", function () {
-    const selectedPriceAttribute = this.value;
-    updateState({ selectedPriceAttribute });
+currencySelect.selectAll("option")
+  .data(currencyOptions)
+  .enter()
+  .append("option")
+  .attr("value", d => d)
+  .text(d => d.toUpperCase());
+
+currencySelect.property("value", getState().selectedPriceCurrency);
+
+currencySelect.on("change", function () {
+  const selectedCurrency = this.value;
+  const suffixOptions = getSuffixOptionsForCurrency(selectedCurrency);
+  const currentSuffix = getState().selectedPriceSuffix;
+
+  // Update state
+  updateState({
+    selectedPriceCurrency: selectedCurrency,
+    selectedPriceSuffix: suffixOptions.includes(currentSuffix) ? currentSuffix : ""
+  });
+
+  // Re-render suffix dropdown
+  renderSuffixOptions(selectedCurrency);
 });
+
+
 
 // BUTTONS
 settingsContent.append("button")
@@ -714,7 +772,6 @@ function extractCardValue(card, category) {
         case "Originality": return card.originality;
         case "Rarity": return card.rarity;
         case "Set Names": return card.set_name;
-        case "Foil Status": return card.foil_status;
         case "Year": return card.release_date ? new Date(card.release_date).getFullYear().toString() : null;
         case "IcicleColorGroups":
             if (card.number_of_colours >= 4) return "+4 Colors";

@@ -16,7 +16,6 @@ const filterApplicationOrder = [
   "Year",
   "Originality",
   "Rarity",
-  "Foil Status",
   "IcicleColorGroups",
   "IcicleColorIdentity",
   "Supertypes",
@@ -24,7 +23,15 @@ const filterApplicationOrder = [
   "Subtypes"
 ];
 
+function getEffectivePriceAttribute(state) {
+  const { selectedPriceCurrency, selectedPriceSuffix } = state;
+  return selectedPriceCurrency === "tix"
+    ? "price_tix"
+    : `price_${selectedPriceCurrency}${selectedPriceSuffix}`;
+}
+
 async function writeGroupedDataToOPFS(groupedData) {
+  console.log("saving Data")
   const serializable = {};
   for (const [category, map] of Object.entries(groupedData)) {
     serializable[category] = {};
@@ -128,10 +135,11 @@ let groupedData = await readGroupedDataFromOPFS(originalData);
   const stateSnapshot = getState();
   const sharedFilters = loadFiltersFromURL();
 
-  const selectedPriceAttribute = stateSnapshot.selectedPriceAttribute;
+  const selectedPriceAttribute = getEffectivePriceAttribute(stateSnapshot);
   const freeTextSearch = stateSnapshot.freeTextSearch;
   let selectedFilters = sharedFilters || stateSnapshot.selectedFilters;
 
+  console.log("Effective price attr on load:", selectedPriceAttribute);
   const filteredResults = getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
   const { default: filtered, icicle: IcicleFiltered, timeline: TimelineFiltered } = filteredResults;
 
@@ -154,7 +162,8 @@ let groupedData = await readGroupedDataFromOPFS(originalData);
   updateState({
     lastFilterInputs: {
       selectedFilters: cloneFilters(selectedFilters),
-      selectedPriceAttribute,
+selectedPriceCurrency: stateSnapshot.selectedPriceCurrency,
+    selectedPriceSuffix: stateSnapshot.selectedPriceSuffix,
       freeTextSearch
     },
     originalFilteredData: filteredResults,
@@ -172,7 +181,10 @@ let groupedData = await readGroupedDataFromOPFS(originalData);
   subscribe((state) => {
     if (isUpdatingFilteredData) return;
     const context = state.updateContext || "default";
-    const { selectedFilters, selectedPriceAttribute, freeTextSearch } = state;
+
+    const { selectedFilters, freeTextSearch } = state;
+
+    const selectedPriceAttribute = getEffectivePriceAttribute(state)
 
     const { default: filteredData, icicle: IcicleFiltered, timeline: TimelineFiltered } =
       getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
@@ -217,7 +229,8 @@ let groupedData = await readGroupedDataFromOPFS(originalData);
   });
 
   window.addEventListener("resize", () => {
-    const { selectedFilters, selectedPriceAttribute, freeTextSearch, hoveredCards } = getState();
+    const { selectedFilters, freeTextSearch, hoveredCards } = getState();
+    const selectedPriceAttribute = getEffectivePriceAttribute(getState());
     const { default: filteredData, icicle: IcicleFiltered, timeline: TimelineFiltered } =
       getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
     createAlluvialChart(filteredData, ".AlluvialChart", true, selectedPriceAttribute);
@@ -308,10 +321,10 @@ if (textTerms && textTerms.size > 0) {
     );
   }));
 }
-
-
-    // Save results
+    console.log(selectedPriceAttribute)
+      // Save results
     results[context] = Array.from(filteredSet);
+
   });
 
  /* console.log("Filtered results:", {
@@ -412,7 +425,6 @@ function shouldIncludeCard(card, selectedFilters) {
     Year: new Map(),
     IcicleColorGroups: new Map(),
     IcicleColorIdentity: new Map(),
-    "Foil Status": new Map()
   };
 
   data.forEach(card => {
@@ -461,8 +473,6 @@ function extractCardValues(card, category) {
       if (!Array.isArray(card.color_identity) || card.color_identity.length === 0) return ["Colorless"];
       const sortedColors = card.color_identity.slice();
       return [sortedColors];  // Keep original letters, joined
-    case "Foil Status":
-      return card.foil_status ? [card.foil_status] : [];
     default:
       return [];
   }
@@ -495,53 +505,58 @@ function extractCardValues(card, category) {
           return "Colorless";
         }
         return card.color_identity.join("");  
-      case "Foil Status": return card.foil_status;
         
       default: return null;
     }
   }
-  export function getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch = "") {
+export function getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch = "") {
   const state = getState();
-  
   const groupedData = state.groupedData || buildGroupedData(originalData);
-  
 
+  // Case 1: No filters at all → fallback to raw data
   if (isFilterEmpty(selectedFilters) && !freeTextSearch) {
-  
-    return {
-      default: [...state.originalData],
-      icicle: [...state.originalData],
-      timeline: [...state.originalData]
-    };
-  }
+  console.log("Resetting Data");
+  const fullResults = {
+    default: originalData,
+    icicle: originalData,
+    timeline: originalData
+  };
+  return filterPriceOnly(fullResults, selectedPriceAttribute);
+}
 
 
+  // Case 2: Same as original, no change
+  const currentPriceAttribute = getEffectivePriceAttribute(state);
   if (
     shallowCompareFilters(selectedFilters, state.originalSelectedFilters) &&
-    !freeTextSearch
+    !freeTextSearch &&
+    currentPriceAttribute === getEffectivePriceAttribute({
+      selectedPriceCurrency: state.lastFilterInputs?.selectedPriceCurrency,
+      selectedPriceSuffix: state.lastFilterInputs?.selectedPriceSuffix
+    })
   ) {
-    
-    return state.originalFilteredData || {
-      default: [...originalData],
-      icicle: [...originalData],
-      timeline: [...originalData]
-    };
+    console.log("Going to originalFIlteredData")
+    return state.originalFilteredData || filterPriceOnly(originalData, selectedPriceAttribute);
   }
 
+  // Case 3: Same inputs as last time
   const lastInputs = state.lastFilterInputs || {};
   const inputsMatch = 
     shallowCompareFilters(selectedFilters, lastInputs.selectedFilters) &&
-    selectedPriceAttribute === lastInputs.selectedPriceAttribute &&
+    lastInputs.selectedPriceCurrency === state.selectedPriceCurrency &&
+    lastInputs.selectedPriceSuffix === state.selectedPriceSuffix &&
     freeTextSearch === lastInputs.freeTextSearch;
 
   if (inputsMatch && state.lastFilteredData) {
-
+    console.log("stupid");
     return state.lastFilteredData;
   }
 
   isUpdatingFilteredData = true;
 
   const filteredResults = filterData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch, groupedData);
+  console.log(filteredResults)
+  const cleanedResults = filterPriceOnly(filteredResults, selectedPriceAttribute);
 
   updateState({
     lastFilterInputs: { 
@@ -549,11 +564,41 @@ function extractCardValues(card, category) {
       selectedPriceAttribute,
       freeTextSearch
     },
-    lastFilteredData: filteredResults
+    lastFilteredData: cleanedResults
   });
-isUpdatingFilteredData = false;
-  return filteredResults;
+  isUpdatingFilteredData = false;
+
+  console.log("Filtered results:", {
+    default: cleanedResults.default.length,
+    icicle: cleanedResults.icicle.length,
+    timeline: cleanedResults.timeline.length
+  });
+
+  return cleanedResults;
 }
+
+
+function filterPriceOnly(results, priceAttr) {
+  const filter = arr =>
+    arr.filter(card => typeof card[priceAttr] === "number" && card[priceAttr] > 0);
+
+  const cleaned = {
+    default: filter(results.default),
+    icicle: filter(results.icicle),
+    timeline: filter(results.timeline)
+  };
+
+  console.log("Price filter applied:", {
+    [priceAttr]: true,
+    default: cleaned.default.length,
+    icicle: cleaned.icicle.length,
+    timeline: cleaned.timeline.length
+  });
+
+  return cleaned;
+}
+
+
 
 // Helper: shallow compare two filter sets
 function shallowCompareFilters(a, b) {

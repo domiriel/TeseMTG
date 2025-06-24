@@ -2,7 +2,7 @@ import os
 import json
 from decimal import Decimal
 from collections import Counter, defaultdict
-
+mtg_color_order = {"W": 0, "U": 1, "B": 2, "R": 3, "G": 4}
 MTG_SUPERTYPES = {"Basic", "Legendary", "Ongoing","Token", "Snow", "World", "Host", "Elite"}
 MTG_CARD_TYPES = {
     "Artifact", "Conspiracy", "Creature","Dungeon", "Emblem", "Enchantment","Hero", "Instant","Kindred", "Land", "Phenomenon",
@@ -117,6 +117,7 @@ color_count = Counter()
 color_identity_count = Counter()
 rarity_count = Counter()
 originality_count = Counter()
+price_field_count = Counter()
 supertype_count = Counter()
 type_count = Counter()
 subtype_count = Counter()
@@ -132,6 +133,7 @@ with open(output_file, 'w') as outfile:
             continue  # Skip memorabilia cards entirely
 
         color_identity = card.get('color_identity', [])
+        color_identity = sorted(color_identity, key=lambda c: mtg_color_order.get(c, 99))
         type_line = card.get('type_line', '')
 
         # Extract supertype, type, and subtype
@@ -148,23 +150,21 @@ with open(output_file, 'w') as outfile:
         type_count[type_] += 1
         subtype_count[subtype] += 1
 
+        for field in [
+            "usd", "usd_foil", "usd_etched",
+            "eur", "eur_foil",
+            "tix"
+        ]:
+            price_value = card.get('prices', {}).get(field)
+            try:
+                if price_value and float(price_value) > 0:
+                    price_field_count[field] += 1
+            except (TypeError, ValueError):
+                continue
         # Update counters
         color_count[len(color_identity)] += 1
         color_identity_count[tuple(sorted(color_identity))] += 1
         rarity_count[card.get('rarity', 'unknown')] += 1
-
-        # Determine foil_status
-        price_usd = float(card.get('prices', {}).get('usd', 0) or 0)
-        price_usd_foil = float(card.get('prices', {}).get('usd_foil', 0) or 0)
-        price_eur = float(card.get('prices', {}).get('eur', 0) or 0)
-        price_eur_foil = float(card.get('prices', {}).get('eur_foil', 0) or 0)
-
-        if (price_usd == 0 and price_eur == 0) and (price_usd_foil > 0 or price_eur_foil > 0):
-            foil_status = 'always_foil'
-        elif (price_usd_foil == 0 and price_eur_foil == 0):
-            foil_status = 'always_non_foil'
-        else:
-            foil_status = 'can_be_foil'
 
         originality = determine_originality(card)
         originality_count[originality] += 1
@@ -188,6 +188,16 @@ with open(output_file, 'w') as outfile:
                 "image_normal": image_uris.get('normal', ''),
             })
 
+        excluded_set_types = {"memorabilia", "alchemy", "token"}
+        excluded_set_names = ["Arena", "Alchemy", "Digital"]
+        excluded_types = []  # You can list excluded types here if needed
+
+        fit_for_scatter = not (
+            card.get('digital', False) or
+            card.get('set_type') in excluded_set_types or
+            any(name in card.get('set_name', '') for name in excluded_set_names) or
+            card.get('type') in excluded_types
+)
         card_details = {
             "name": card.get('name'),
             "cmc": float(card.get('cmc', 0)),
@@ -213,7 +223,8 @@ with open(output_file, 'w') as outfile:
             "set_type": card.get('set_type', 'Unknown'),
             "image_normal": image_uris.get('normal', ''),
             "faces": faces_data,
-            "foil_status": foil_status,
+            "index": written_index,
+            "fit_for_scatter": fit_for_scatter
         }
 
         if written_index > 0:
@@ -232,5 +243,8 @@ subtype_total = sum(subtype_count.values())
 
 
 print("Originality distribution:", dict(originality_count))
+print("Price availability counts (non-zero):")
+for field, count in price_field_count.items():
+    print(f"  {field}: {count}")
 
 
