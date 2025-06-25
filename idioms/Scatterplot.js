@@ -81,7 +81,7 @@ function getColorIdentityBackground(colorIdentity) {
     G: "#b6d7b3",
   };
 
-  const mtgColorOrder = { W: 0, U: 1, R: 2, B: 3, G: 4 };
+  const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };
 
   // Sort identity based on defined order
   const sorted = [...colorIdentity].sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b]);

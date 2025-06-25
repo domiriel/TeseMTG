@@ -16,13 +16,13 @@ const filterApplicationOrder = [
   "Year",
   "Originality",
   "Rarity",
-  "IcicleColorGroups",
-  "IcicleColorIdentity",
+  "Nº of Colors",
+  "Color Identity",
   "Supertypes",
   "Types",
   "Subtypes"
 ];
-
+const GROUPED_DATA_VERSION = "v4";
 function getEffectivePriceAttribute(state) {
   const { selectedPriceCurrency, selectedPriceSuffix } = state;
   return selectedPriceCurrency === "tix"
@@ -31,13 +31,16 @@ function getEffectivePriceAttribute(state) {
 }
 
 async function writeGroupedDataToOPFS(groupedData) {
-  console.log("saving Data")
-  const serializable = {};
-  for (const [category, map] of Object.entries(groupedData)) {
-    serializable[category] = {};
-    for (const [key, cards] of map.entries()) {
-      serializable[category][key] = cards.map(card => card.index); // Store only indexes
+  console.log("Saving grouped data to OPFS");
+  const serializable = {
+    __version: GROUPED_DATA_VERSION, // Save the version
+    data: {}
+  };
 
+  for (const [category, map] of Object.entries(groupedData)) {
+    serializable.data[category] = {};
+    for (const [key, cards] of map.entries()) {
+      serializable.data[category][key] = cards.map(card => card.index);
     }
   }
 
@@ -48,14 +51,22 @@ async function writeGroupedDataToOPFS(groupedData) {
   await writable.close();
 }
 
+
 async function readGroupedDataFromOPFS(originalData) {
   try {
     const root = await navigator.storage.getDirectory();
     const handle = await root.getFileHandle("groupedData.json");
     const file = await handle.getFile();
     const text = await file.text();
-    const raw = JSON.parse(text);
+    const parsed = JSON.parse(text);
 
+    console.log(parsed.__version)
+    if (parsed.__version !== GROUPED_DATA_VERSION) {
+      console.warn("Grouped data version mismatch. Rebuilding cache.");
+      return null;
+    }
+
+    const raw = parsed.data;
     const revived = {};
     for (const [category, obj] of Object.entries(raw)) {
       revived[category] = new Map();
@@ -65,15 +76,24 @@ async function readGroupedDataFromOPFS(originalData) {
     }
     return revived;
   } catch (err) {
-    console.warn("OPFS cache miss:", err);
+    console.warn("OPFS cache miss or error:", err);
     return null;
   }
 }
 
 
+async function clearOPFSCache() {
+  const root = await navigator.storage.getDirectory();
+  try {
+    await root.removeEntry("groupedData.json");
+    console.log("OPFS cache cleared.");
+  } catch (err) {
+    console.warn("No groupedData.json found in OPFS.");
+  }
+}
 
 let isUpdatingFilteredData = false;
-const mtgColorOrder = { W: 0, U: 1, R: 2, B: 3, G: 4 };
+const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };
 
 async function init() {
   showLoader();
@@ -93,7 +113,7 @@ const raw = await d3.json("./data/dataset_card_details.json");
 originalData = JSON.parse(JSON.stringify(raw));
 
 let groupedData = await readGroupedDataFromOPFS(originalData);
-
+console.log(groupedData)
  if (!groupedData) {
     const raw = await d3.json("./data/dataset_card_details.json");
     originalData = JSON.parse(JSON.stringify(raw));
@@ -140,10 +160,10 @@ let groupedData = await readGroupedDataFromOPFS(originalData);
   let selectedFilters = sharedFilters || stateSnapshot.selectedFilters;
 
   console.log("Effective price attr on load:", selectedPriceAttribute);
-  const filteredResults = getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
-  const { default: filtered, icicle: IcicleFiltered, timeline: TimelineFiltered } = filteredResults;
+  const filtered = getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
+ 
 
-  createIcicleChart(IcicleFiltered, ".IcicleChart");
+  createIcicleChart(filtered, ".IcicleChart");
   createFilterPanel(originalData, filtered, ".FilterPanel", selectedFilters);
   updateFilterPanel(originalData, filtered, selectedFilters);
   createAlluvialChart(filtered, ".AlluvialChart", false, selectedPriceAttribute);
@@ -166,9 +186,9 @@ selectedPriceCurrency: stateSnapshot.selectedPriceCurrency,
     selectedPriceSuffix: stateSnapshot.selectedPriceSuffix,
       freeTextSearch
     },
-    originalFilteredData: filteredResults,
-    previousFilteredData: filteredResults,
-    lastFilteredData: filteredResults,
+    originalFilteredData: filtered,
+    previousFilteredData: filtered,
+    lastFilteredData: filtered,
     originalSelectedFilters: cloneFilters(selectedFilters)
   });
 
@@ -186,8 +206,7 @@ selectedPriceCurrency: stateSnapshot.selectedPriceCurrency,
 
     const selectedPriceAttribute = getEffectivePriceAttribute(state)
 
-    const { default: filteredData, icicle: IcicleFiltered, timeline: TimelineFiltered } =
-      getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
+    const filteredData = getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
 
     if (window._prevFilteredLength === filteredData.length &&
         window._prevPriceAttribute === selectedPriceAttribute &&
@@ -198,13 +217,13 @@ selectedPriceCurrency: stateSnapshot.selectedPriceCurrency,
     window._prevFilteredLength = filteredData.length;
     window._prevPriceAttribute = selectedPriceAttribute;
 
-    if (context !== "IcicleFilter") {
-      createIcicleChart(IcicleFiltered, ".IcicleChart", true);
-    }
-    if (context !== "TimelineFilter") {
-      createTimelineView(TimelineFiltered, ".TimelineView", true);
-      createStackedLineChart(TimelineFiltered, ".LineChart", true);
-    }
+
+      createIcicleChart(filteredData, ".IcicleChart", true);
+
+
+      createTimelineView(filteredData, ".TimelineView", true);
+      createStackedLineChart(filteredData, ".LineChart", true);
+
     createAlluvialChart(filteredData, ".AlluvialChart", true, selectedPriceAttribute);
     const processedData = prepareScatterData(filteredData, selectedPriceAttribute);
     updateScatterPlot(processedData, selectedPriceAttribute);
@@ -250,103 +269,49 @@ selectedPriceCurrency: stateSnapshot.selectedPriceCurrency,
   
 
 
-export function filterData(
-  data,
-  selectedFilters,
-  selectedPriceAttribute,
-  freeTextSearch = "",
-  groupedData = null
-) {
+export function filterData(data, selectedFilters, selectedPriceAttribute, freeTextSearch = "", groupedData = null) {
+  let filteredSet = new Set(data);
+  console.log(selectedFilters)
+  if (groupedData) {
+    for (const category of filterApplicationOrder) {
+      const values = selectedFilters[category];
+      if (!values || values.size === 0) continue;
+      const group = groupedData[category];
+      if (!group) continue;
 
+      let matched = new Set();
+      values.forEach(value => {
+        const group = groupedData[category].get(value);
+        if (group) group.forEach(card => matched.add(card));
+      });
 
-
-  const state = getState();
-  const originalSelectedFilters = state.originalSelectedFilters;
-
-  // Prepare context-specific filter sets
-  const contextFilters = {
-    default: selectedFilters,
-    icicle: omitFilters(selectedFilters, ["IcicleColorGroups", "IcicleColorIdentity"]),
-    timeline: omitFilters(selectedFilters, ["Set Types", "Set Names", "Year"]),
-  };
-
-  const results = {
-    default: [],
-    icicle: [],
-    timeline: [],
-  };
-
-  // For each context, apply filtering separately
-  Object.entries(contextFilters).forEach(([context, filters]) => {
-    let filteredSet = new Set(data);
-
-    if (groupedData) {
-     for (const category of filterApplicationOrder) {
-        const values = filters[category];
-        if (!values || values.size === 0) continue;
-        const categoryGroup = groupedData[category];
-        if (!categoryGroup) continue;
-
-        let matched = new Set();
-        values.forEach(value => {
-          const group = categoryGroup.get(value);
-
-          if (group) {
-            group.forEach(card => matched.add(card));
-          }
-        });
-
-        filteredSet = intersectSets(filteredSet, matched);
-      }
-    } else {
-      filteredSet = new Set(
-        data.filter(card => shouldIncludeCard(card, filters))
-      );
+      filteredSet = intersectSets(filteredSet, matched);
     }
+  } else {
+    filteredSet = new Set(data.filter(card => shouldIncludeCard(card, selectedFilters)));
+  }
 
-    // Apply free text search
-    const textTerms = selectedFilters["FreeTextSearch"];
+  // Apply free text search
+  const textTerms = selectedFilters["FreeTextSearch"];
+  if (textTerms?.size > 0) {
+    const searchTerms = Array.from(textTerms).map(t => t.toLowerCase());
+    filteredSet = new Set([...filteredSet].filter(card => {
+      const cardText = [
+        card.name?.toLowerCase() || "",
+        ...(card.keywords || []).map(k => k.toLowerCase()),
+        card.subtype?.toLowerCase() || ""
+      ];
+      return searchTerms.some(term =>
+        cardText.some(text => text.includes(term))
+      );
+    }));
+  }
 
-
-if (textTerms && textTerms.size > 0) {
-  const searchTerms = Array.from(textTerms).map(t => t.toLowerCase());
-  filteredSet = new Set([...filteredSet].filter(card => {
-    const cardText = [
-      card.name?.toLowerCase() || "",
-      ...(card.keywords || []).map(k => k.toLowerCase()),
-      card.subtype?.toLowerCase() || ""
-    ];
-    return searchTerms.some(term =>
-      cardText.some(text => text.includes(term))
-    );
-  }));
-}
-    console.log(selectedPriceAttribute)
-      // Save results
-    results[context] = Array.from(filteredSet);
-
-  });
-
- /* console.log("Filtered results:", {
-    default: results.default.length,
-    icicle: results.icicle.length,
-    timeline: results.timeline.length
-  });*/
-
-  return results;
+  return Array.from(filteredSet);
 }
 
 
 // Helper to create a copy of selectedFilters omitting some categories
-function omitFilters(filters, omitKeys) {
-  const result = {};
-  for (const [key, value] of Object.entries(filters)) {
-    if (!omitKeys.includes(key)) {
-      result[key] = value;
-    }
-  }
-  return result;
-}
 
 // Helper for intersecting two sets
 function intersectSets(setA, setB) {
@@ -423,8 +388,8 @@ function shouldIncludeCard(card, selectedFilters) {
     "Set Types": new Map(),
     "Set Names": new Map(),
     Year: new Map(),
-    IcicleColorGroups: new Map(),
-    IcicleColorIdentity: new Map(),
+    "Nº of Colors": new Map(),
+    "Color Identity": new Map(),
   };
 
   data.forEach(card => {
@@ -464,15 +429,20 @@ function extractCardValues(card, category) {
     case "Year":
       if (!card.release_date) return [];
       return [new Date(card.release_date).getFullYear().toString()];
-    case "IcicleColorGroups":
-      if (card.number_of_colours >= 4) return ["+4 Colors"];
-      if (card.number_of_colours === 1) return ["1 Color"];
-      if (card.number_of_colours === 0) return ["Colorless"];
-      return [`${card.number_of_colours} Colors`];
-    case "IcicleColorIdentity":
-      if (!Array.isArray(card.color_identity) || card.color_identity.length === 0) return ["Colorless"];
-      const sortedColors = card.color_identity.slice();
-      return [sortedColors];  // Keep original letters, joined
+    case "Nº of Colors":
+      if (card.number_of_colours >= 4) return ["+4 colors"];
+      if (card.number_of_colours === 1) return ["1 color"];
+      if (card.number_of_colours === 0) return ["colorless"];
+      return [`${card.number_of_colours} colors`];
+    case "Color Identity":
+      if (!Array.isArray(card.color_identity) || card.color_identity.length === 0) return ["colorless"];
+      const sortedColors = card.color_identity
+        .slice()
+        .sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b])
+        .join("");
+      return [sortedColors.toLowerCase()];
+
+
     default:
       return [];
   }
@@ -495,16 +465,22 @@ function extractCardValues(card, category) {
         if (!card.release_date) return null;
         return new Date(card.release_date).getFullYear().toString();
     
-      case "IcicleColorGroups":
-        if (card.number_of_colours >= 4) return "+4 Colors";
-        if (card.number_of_colours === 0) return "Colorless";
-        return `${card.number_of_colours} Colors`;
+      case "Nº of Colors":
+        if (card.number_of_colours >= 4) return "+4 colors";
+        if (card.number_of_colours === 0) return "colorless";
+        return `${card.number_of_colours} colors`;
   
-      case "IcicleColorIdentity":
-        if (!Array.isArray(card.color_identity) || card.color_identity.length === 0) {
-          return "Colorless";
-        }
-        return card.color_identity.join("");  
+case "Color Identity":
+  if (!Array.isArray(card.color_identity) || card.color_identity.length === 0) {
+    return "colorless";
+  }
+  return card.color_identity
+    .slice()
+    .sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b])
+    .join("")
+    .toLowerCase();
+
+
         
       default: return null;
     }
@@ -513,16 +489,9 @@ export function getFilteredData(originalData, selectedFilters, selectedPriceAttr
   const state = getState();
   const groupedData = state.groupedData || buildGroupedData(originalData);
 
-  // Case 1: No filters at all → fallback to raw data
   if (isFilterEmpty(selectedFilters) && !freeTextSearch) {
-  console.log("Resetting Data");
-  const fullResults = {
-    default: originalData,
-    icicle: originalData,
-    timeline: originalData
-  };
-  return filterPriceOnly(fullResults, selectedPriceAttribute);
-}
+    return filterPriceOnly(originalData, selectedPriceAttribute);
+  }
 
 
   // Case 2: Same as original, no change
@@ -535,7 +504,6 @@ export function getFilteredData(originalData, selectedFilters, selectedPriceAttr
       selectedPriceSuffix: state.lastFilterInputs?.selectedPriceSuffix
     })
   ) {
-    console.log("Going to originalFIlteredData")
     return state.originalFilteredData || filterPriceOnly(originalData, selectedPriceAttribute);
   }
 
@@ -548,55 +516,35 @@ export function getFilteredData(originalData, selectedFilters, selectedPriceAttr
     freeTextSearch === lastInputs.freeTextSearch;
 
   if (inputsMatch && state.lastFilteredData) {
-    console.log("stupid");
     return state.lastFilteredData;
   }
 
   isUpdatingFilteredData = true;
 
-  const filteredResults = filterData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch, groupedData);
-  console.log(filteredResults)
-  const cleanedResults = filterPriceOnly(filteredResults, selectedPriceAttribute);
+  const filtered = filterData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch, groupedData);
 
+  const cleaned = filterPriceOnly(filtered, selectedPriceAttribute);
+  console.log(cleaned)
   updateState({
     lastFilterInputs: { 
       selectedFilters: cloneFilters(selectedFilters),
       selectedPriceAttribute,
       freeTextSearch
     },
-    lastFilteredData: cleanedResults
+    lastFilteredData: cleaned
   });
   isUpdatingFilteredData = false;
 
-  console.log("Filtered results:", {
-    default: cleanedResults.default.length,
-    icicle: cleanedResults.icicle.length,
-    timeline: cleanedResults.timeline.length
-  });
-
-  return cleanedResults;
-}
-
-
-function filterPriceOnly(results, priceAttr) {
-  const filter = arr =>
-    arr.filter(card => typeof card[priceAttr] === "number" && card[priceAttr] > 0);
-
-  const cleaned = {
-    default: filter(results.default),
-    icicle: filter(results.icicle),
-    timeline: filter(results.timeline)
-  };
-
-  console.log("Price filter applied:", {
-    [priceAttr]: true,
-    default: cleaned.default.length,
-    icicle: cleaned.icicle.length,
-    timeline: cleaned.timeline.length
-  });
+  
 
   return cleaned;
 }
+
+
+function filterPriceOnly(cards, priceAttr) {
+  return cards.filter(card => typeof card[priceAttr] === "number" && card[priceAttr] > 0);
+}
+
 
 
 

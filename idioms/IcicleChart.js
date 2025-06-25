@@ -108,8 +108,8 @@ function rgbToHex(r, g, b) {
 }
 
 function validateFilterCombination(filters) {
-    const groups = filters.IcicleColorGroups || new Set();
-    const identities = filters.IcicleColorIdentity || new Set();
+    const groups = filters["Nº of Colors"] || new Set();
+    const identities = filters["Color Identity"] || new Set();
 
     if (groups.size === 0 || identities.size === 0) return true;
 
@@ -608,11 +608,11 @@ function clickedFilter(event, d) {
     const val = d.data.name.toLowerCase();
 
     if (isGroup) {
-        if (!newFilters.IcicleColorGroups) newFilters.IcicleColorGroups = new Set();
-        wasSelected ? newFilters.IcicleColorGroups.delete(val) : newFilters.IcicleColorGroups.add(val);
+        if (!newFilters["Nº of Colors"]) newFilters["Nº of Colors"] = new Set();
+        wasSelected ? newFilters["Nº of Colors"].delete(val) : newFilters["Nº of Colors"].add(val);
     } else if (isIdentity) {
-        if (!newFilters.IcicleColorIdentity) newFilters.IcicleColorIdentity = new Set();
-        wasSelected ? newFilters.IcicleColorIdentity.delete(val) : newFilters.IcicleColorIdentity.add(val);
+        if (!newFilters["Color Identity"]) newFilters["Color Identity"] = new Set();
+        wasSelected ? newFilters["Color Identity"].delete(val) : newFilters["Color Identity"].add(val);
     }
 
     if (!validateFilterCombination(newFilters)) {

@@ -4,13 +4,32 @@ import { filterData, getFilteredData, } from "../script.js";
 import { showLoader, hideLoader } from "./LoadingAnimation.js";
 const optionMap = new Map();  
 const pillMap = new Map();
+const mtgColorOrder = { w: 0, u: 1, b: 2, r: 3, g: 4 };
+
+const numColorsOrder = ["Colorless", "1 Color", "2 Colors", "3 Colors", "4 Colors", "+4 Colors"];
+const colorIdentityOrder = ["colorless", 
+                            "w", "u", "b", "r", "g", 
+                            "wu", "wb", "wr", "wg", "ub", "ur", "ug", "br", "bg", "rg", 
+                            "wub", "wur", "wug", "wbr", "wbg", "wrg", "ubr", "ubg", "urg", "brg",
+                            "wubr", "wubg", "wurg", "wbrg", "ubrg",
+                            "wubrg"];
 
 function getSuffixOptionsForCurrency(currency) {
   if (currency === "eur") return ["", "_foil"];
   if (currency === "usd") return ["", "_foil", "_etched"];
   return [""]; // tix
 }
-
+function formatDisplayLabel(category, value) {
+  if (category === "Color Identity") {
+    // Capitalize letters (e.g. wub → WUB)
+    return value.toUpperCase();
+  }
+  if (category === "Nº of Colors") {
+    // Capitalize first letter only
+    return value.charAt(0).toUpperCase() + value.slice(1);
+  }
+  return value; // default
+}
 
 const VISIBLE_FILTER_CATEGORIES = [
   "Keywords",
@@ -20,7 +39,10 @@ const VISIBLE_FILTER_CATEGORIES = [
   "Set Types",
   "Set Names",
   "Originality",
-  "Rarity"
+  "Rarity",
+  "Year", 
+  "Nº of Colors",
+  "Color Identity"
 ];
 
 
@@ -152,7 +174,15 @@ const allFilters = Object.fromEntries(
     .filter(([category]) => VISIBLE_FILTER_CATEGORIES.includes(category))
     .map(([category, map]) => [
       category,
-      Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+      Array.from(map.entries()).sort((a, b) => {
+        if (category === "Nº of Colors") {
+          return numColorsOrder.indexOf(a[0]) - numColorsOrder.indexOf(b[0]);
+        }
+        if (category === "Color Identity") {
+          return colorIdentityOrder.indexOf(a[0]) - colorIdentityOrder.indexOf(b[0]);
+        }
+        return a[0].localeCompare(b[0]);
+      })
     ])
 );
 
@@ -360,7 +390,7 @@ searchInput.on("change", function () {
     .on("click", () => {
         showLoader();
         resetState();  // calls the new reset function in state.js
-        createFilterPanel(data, containerId, getState().selectedFilters, true);
+        createFilterPanel(data,data, containerId, getState().selectedFilters, true);
         hideLoader();
     });
 
@@ -446,7 +476,7 @@ searchInput.on("change", function () {
                 .style("padding", "2px 8px")
                 .style("border-radius", "12px")
                 .style("font-size", "12px")
-                .text(d => d)
+                .text(d => formatDisplayLabel(category, d))
                 .append("span")
                 .style("margin-left", "6px")
                 .style("cursor", "pointer")
@@ -502,12 +532,13 @@ searchInput.on("change", function () {
             });
 
         option.append("span")
-            .text(d => `${d.value} (${d.count})`)
+            .text(d => `${formatDisplayLabel(d.category, d.value)} (${d.count})`)
             .attr("data-count", d => d.count)
             .style("margin-right", "10px");
 
         option.each(function (d) {
-            const key = `${category}|${d.value}`;
+            const rawValue = d.value.toLowerCase(); // normalize for internal map
+            const key = `${category}|${rawValue}`;
             optionMap.set(key, d3.select(this));
         });
 
@@ -665,7 +696,18 @@ wrapper.append("input")
 }
 
 export function updateFilterPanel(originalData, filteredCards, selectedFilters, containerId = ".FilterPanel") {
+
+
     selectedFilters = selectedFilters || {};
+  function getOrderIndex(category, value) {
+  if (category === "Nº of Colors") {
+    return numColorsOrder.indexOf(value);
+  }
+  if (category === "Color Identity") {
+    return colorIdentityOrder.indexOf(value.toLowerCase());
+  }
+  return value;
+}
 
 
     
@@ -701,7 +743,24 @@ VISIBLE_FILTER_CATEGORIES.forEach(category => {
     optionCounts.set(value, count);
   });
 
-  filters.set(category, optionCounts);
+  const sortedEntries = Array.from(optionCounts.entries()).sort((a, b) => {
+  const aVal = getOrderIndex(category, a[0]);
+  const bVal = getOrderIndex(category, b[0]);
+  if (typeof aVal === "number" && typeof bVal === "number") {
+    return aVal - bVal;
+  }
+  return a[0].localeCompare(b[0]);
+});
+
+filters.set(category, new Map(sortedEntries));
+
+if (category === "Color Identity") {
+  // console.log("Sorted filter keys for Color Identity:");
+  // console.log(Array.from(filters.get(category).keys()));
+}
+
+// console.log("OptionMap keys:");
+// console.log(Array.from(optionMap.keys()).filter(k => k.startsWith("Color Identity")));
 });
 
 
@@ -712,12 +771,13 @@ const t1 = performance.now();
             const [category, value] = key.split("|");
             if (!filters.has(category)) return;
 
-            const count = filters.get(category)?.get(value) || 0;
+            const rawValue = value.toLowerCase();
+            const count = filters.get(category)?.get(rawValue) || 0;
             const span = el.select("span");
-            span.text(`${value} (${count})`).attr("data-count", count);
+            span.text(`${formatDisplayLabel(category, value)} (${count})`).attr("data-count", count);
 
             const selectedSet = selectedFilters[category] || new Set();
-            const isSelected = selectedSet.has(value);
+            const isSelected = selectedSet.has(value.toLowerCase());
 
             el.style("opacity", count === 0 && !isSelected ? 0.4 : 1);
             el.style("pointer-events", count === 0 && !isSelected ? "none" : "auto");
@@ -742,7 +802,8 @@ const t1 = performance.now();
           .style("padding", "2px 8px")
           .style("border-radius", "12px")
           .style("font-size", "12px")
-          .text(d => d)
+          .text(d => formatDisplayLabel(category, d))
+
           .append("span")
           .style("margin-left", "6px")
           .style("cursor", "pointer")
@@ -773,13 +834,18 @@ function extractCardValue(card, category) {
         case "Rarity": return card.rarity;
         case "Set Names": return card.set_name;
         case "Year": return card.release_date ? new Date(card.release_date).getFullYear().toString() : null;
-        case "IcicleColorGroups":
+        case "Nº of Colors":
             if (card.number_of_colours >= 4) return "+4 Colors";
             if (card.number_of_colours === 0) return "Colorless";
             return `${card.number_of_colours} Colors`;
-        case "IcicleColorIdentity":
-            if (!Array.isArray(card.color_identity) || card.color_identity.length === 0) return "Colorless";
-            return card.color_identity.sort().join("-");
+        case "Color Identity":
+            if (!Array.isArray(card.color_identity) || card.color_identity.length === 0) return "colorless";
+            return card.color_identity
+                .slice()
+                .sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b])
+                .join("")
+                .toLowerCase();
+
         default: return null;
     }
 } 

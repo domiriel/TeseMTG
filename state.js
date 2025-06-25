@@ -7,8 +7,8 @@ const state = {
       "Subtypes": new Set(),
       "Set Types": new Set(["archenemy", "arsenal", "box", "commander", "core", "draft_innovation", "duel_deck", "expansion", "from_the_vault", "masterpiece", "masters", "premium_deck", "spellbook", "starter"]),
       "Originality": new Set(),
-      "IcicleColorGroups": new Set(),
-      "IcicleColorIdentity": new Set(),
+      "Nº of Colors": new Set(),
+      "Color Identity": new Set(),
       "Set Names": new Set(),
       "Year": new Set(),
       "FreeTextSearch": new Set()
