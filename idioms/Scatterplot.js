@@ -1,7 +1,7 @@
 
 import { updateState, getState } from "../state.js";
 import { emitHoverCard, emitClearHover,onSetHover, onClearSetHover, onRectHover, onClearRectHover,onClearLineYearHover, onLineYearHover, onAlluvialHover, onClearAlluvialHover  } from "./Events.js";
-
+import { getEffectivePriceAttribute } from "../script.js"; 
 const colorGroups = [
     { range: [1, 5691], color: "#594A3A" },  
     { range: [5692, 11382], color:  "#736659" },
@@ -14,6 +14,30 @@ function getSymbolFromAttribute(attr) {
     if (attr.includes("usd")) return "$";
     return "";
 }
+
+function updateSelectedHoverClass() {
+  const hoveredCards = getState().hoveredCards || [];
+  const hoveredMap = new Map(hoveredCards.map(c => [c.name, c]));
+  const updatedNames = new Set(hoveredCards.map(c => c.name));
+  applySelectedHoverClass(hoveredMap, updatedNames);
+}
+
+function applySelectedHoverClass(hoveredMap, updatedNames) {
+  const t0 = performance.now();
+  const dots = d3.selectAll(".dots circle")
+    .filter(d => updatedNames.has(d.name));
+  const t1 = performance.now();
+
+  dots.classed("selected-hover", d => hoveredMap.has(d.name));
+  const t2 = performance.now();
+
+  // console.log(`[Perf] applySelectedHoverClass:
+  //   • Select & filter dots: ${(t1 - t0).toFixed(2)} ms
+  //   • Apply class toggle:   ${(t2 - t1).toFixed(2)} ms
+  //   • TOTAL:                ${(t2 - t0).toFixed(2)} ms`);
+}
+
+
 const scatterTooltipText = `
 <strong>Scatterplot Interactions:</strong><br>
 • <strong>Hover on dots</strong>: view card details and highlight related data across views.<br>
@@ -119,8 +143,8 @@ function styleAndBindDots(selection) {
     .attr("r", 2.5)
     .style("cursor", "pointer")
     .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
-    .style("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
-    .style("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
+    .attr("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
+    .attr("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
     .attr("opacity", 0.8)
     .on("mouseover", mouseoverFn)
     .on("mousemove", mousemoveFn)
@@ -145,11 +169,24 @@ function downsamplePoints(data, xScale, yScale, cellSize = 6) {
   return Array.from(grid.values());
 }
 function tagZoomKeyPoints(data, xScale, yScale, cellSize = 6) {
-  const zoomKeys = downsamplePoints(data, xScale, yScale, cellSize);
-  const keepSet = new Set(zoomKeys.map(d => d.name)); // or d.id if more unique
-  data.forEach(d => {
-    d.isZoomKey = keepSet.has(d.name);
-  });
+  const grid = new Map();
+
+  for (const d of data) {
+    const cx = Math.floor(xScale(d.avg_price) / cellSize);
+    const cy = Math.floor(yScale(d.complexity) / cellSize);
+    const key = `${cx},${cy}`;
+    
+    d.__x = cx * cellSize;  // optionally cache scaled pos
+    d.__y = cy * cellSize;
+    
+    if (!grid.has(key)) {
+      grid.set(key, true);
+      d.isZoomKey = true;
+    } else {
+      d.isZoomKey = false;
+    }
+  }
+
   return data;
 }
 
@@ -157,6 +194,7 @@ function tagZoomKeyPoints(data, xScale, yScale, cellSize = 6) {
 let globalDots = null;
 
 function mouseoverFn(event, d) {
+  const symbol = getSymbolFromAttribute(getEffectivePriceAttribute(getState()));
   d3.select("#tooltip").style("display", "block")
     .style("background", getColorIdentityBackground(d.color_identity))
     .style("color", "black")
@@ -171,7 +209,7 @@ function mouseoverFn(event, d) {
           Type: ${d.type}<br>
           Subtype: ${d.subtype}<br>
           Colors: ${d.color_identity.join("")}<br>
-          Avg Price: ${d.was_price_invalid ? "NaN" : "$" + d.avg_price.toFixed(3)}<br>
+          Avg Price: ${symbol}${d.avg_price.toFixed(3)}<br>
           All Sets: ${d.all_sets.map(set => `${set.name} (${set.type})`).join("<br>")}<br>
           Number of Prints: ${d.all_print_images.length}<br>
         </div>
@@ -202,26 +240,21 @@ function mouseoutFn(event, d) {
 
 
 function clickFn(event, d) {
-  const { hoveredCards } = getState();
-  const isAlreadySelected = hoveredCards.some(c => c.name === d.name);
-  let newHoveredCards;
+  const hoveredCards = getState().hoveredCards || [];
+  const index = hoveredCards.findIndex(c => c.name === d.name);
 
-  if (isAlreadySelected) {
-    newHoveredCards = hoveredCards.filter(c => c.name !== d.name);
-    d3.select(this).attr("stroke", "none").attr("stroke-width", null);
+  let newHoveredCards;
+  if (index !== -1) {
+    // Remove card
+    newHoveredCards = [...hoveredCards.slice(0, index), ...hoveredCards.slice(index + 1)];
+    d3.select(this).classed("selected-hover", false);
   } else {
-    const matchingCard = actualFIlteredData.find(c => c.name === d.name);
-if (matchingCard) {
-  newHoveredCards = [...hoveredCards, matchingCard];
-}
-    d3.select(this).raise().attr("stroke", "#9AA0BC").attr("stroke-width", 2.5);
+    // Add card
+    newHoveredCards = [...hoveredCards, d];
+    d3.select(this).classed("selected-hover", true);
   }
 
-  updateState({ hoveredCards: newHoveredCards });
-
-  d3.selectAll(".dots circle")
-    .style("stroke", d => newHoveredCards.some(c => c.name === d.name) ? "#9AA0BC" : (+d.edhrec_rank > 0 ? "none" : "black"))
-    .style("stroke-width", d => newHoveredCards.some(c => c.name === d.name) ? 2.5 : (+d.edhrec_rank > 0 ? 0 : 1.2));
+  updateState({ hoveredCards: newHoveredCards, isHoverUpdate: true });
 }
 
 
@@ -292,6 +325,9 @@ export function prepareScatterData(data, selectedPriceAttribute) {
     if (!isNaN(card.complexity)) {
       entry.prices.push(price);
     }
+
+
+
      if (card.release_date) {
     const year = new Date(card.release_date).getFullYear();
     if (!isNaN(year)) entry.all_years.add(year);
@@ -335,11 +371,6 @@ export function prepareScatterData(data, selectedPriceAttribute) {
     const sum = card.prices.reduce((a, b) => a + b, 0);
     card.avg_price = card.prices.length > 0 ? sum / card.prices.length : 0;
 
-    card.was_price_invalid = card.avg_price <= 0;
-    if (card.was_price_invalid) {
-      card.avg_price = 0.001;
-    }
-
     result.push(card);
   }
 
@@ -378,24 +409,10 @@ const filteredData = data
 
     const minPrice = d3.min(filteredData, d => d.avg_price);
 const maxPrice = d3.max(filteredData, d => d.avg_price);
-const safeMinPrice = Math.max(0.001, minPrice);
-const pricePadding = (maxPrice - safeMinPrice) * 0.01;
-const paddedMinPrice = 0.0009
-const paddedMaxPrice = maxPrice + pricePadding;
-
-filteredData.forEach(d => {
-    if (d.avg_price <= 0 || isNaN(d.avg_price)) {
-        d.avg_price = safeMinPrice;
-    }
-});
 
 
-const sortedPrices = filteredData
-  .map(d => d.avg_price)
-  .filter(p => p > 0.001) // ignore placeholder values
-  .sort((a, b) => a - b);
 
-const secondMinPrice = sortedPrices[1] || paddedMinPrice;
+
 
     const container = d3.select(containerId).node();
     const { width, height } = container.getBoundingClientRect();
@@ -522,10 +539,8 @@ function updateAxes(symbol) {
         ticks[0] = 0.001;
     }
 
-    const formatPrice = d => {
-        if (Math.abs(d - 0.001) < 1e-3) return '(NaN)';
-        return `${symbol}${d.toFixed(3)}`;
-    };
+const formatPrice = d => `${symbol}${d.toFixed(3)}`;
+
     xAxisG.call(d3.axisBottom(xScale).tickValues(ticks).tickFormat(formatPrice));
     yAxisG.call(d3.axisLeft(yScale).ticks(numTicks));
 }
@@ -632,47 +647,67 @@ function updateAxes(symbol) {
 const brush = d3.brush()
     .extent([[0, 0], [chartWidth, chartHeight]])
     .on("start", () => svg.on(".zoom", null))
-    .on("end", function(event) {
-        svg.call(zoom); // Re-enable zoom
-        if (!event.selection) return;
+.on("end", function(event) {
+  const t0 = performance.now();
 
-        const [[x0, y0], [x1, y1]] = event.selection;
+  svg.call(zoom); // Re-enable zoom
+  if (!event.selection) return;
 
-        const brushedCards = filteredData.filter(d => {
-            const cx = xScale(d.avg_price);
-            const cy = yScale(d.complexity);
-            return cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1;
-        });
+  const [[x0, y0], [x1, y1]] = event.selection;
 
-        const { hoveredCards } = getState();
-        const updatedHovered = new Map(hoveredCards.map(c => [c.name, c]));
-        for (const card of brushedCards) {
-            if (updatedHovered.has(card.name)) {
-                updatedHovered.delete(card.name);
-            } else {
-                updatedHovered.set(card.name, card);
-            }
-        }
+  const t1 = performance.now();
+  // Collect brushed cards by name
+  const brushedNames = new Set();
+  for (const d of filteredData) {
+    const cx = xScale(d.avg_price);
+    const cy = yScale(d.complexity);
+    if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) {
+      brushedNames.add(d.name);
+    }
+  }
 
-        const newHoveredCards = Array.from(updatedHovered.values());
-        updateState({ hoveredCards: newHoveredCards });
+  const t2 = performance.now();
+  const hoveredCards = getState().hoveredCards || [];
+  const hoveredNames = new Set(hoveredCards.map(c => c.name));
+  const hoveredMap = new Map(hoveredCards.map(c => [c.name, c]));
 
-        d3.selectAll(".dots circle")
-            .style("stroke", d => newHoveredCards.some(c => c.name === d.name)
-                ? "#9AA0BC"
-                : (+d.edhrec_rank > 0 ? "none" : "black"))
-            .style("stroke-width", d => newHoveredCards.some(c => c.name === d.name)
-                ? 2.5
-                : (+d.edhrec_rank > 0 ? 0 : 1.2))
-            .each(function (d) {
-                if (newHoveredCards.some(c => c.name === d.name)) {
-                    this.parentNode.appendChild(this);
-                }
-            });
+  const actualCardMap = new Map(actualFIlteredData.map(c => [c.name, c]));
 
-        // ✅ Remove selection box after brush
-        brushOverlay.call(brush.move, null);
-    });
+for (const name of brushedNames) {
+  if (hoveredMap.has(name)) {
+    hoveredMap.delete(name);
+  } else {
+    const match = actualCardMap.get(name);
+    if (match) hoveredMap.set(name, match);
+  }
+}
+
+  const t3 = performance.now();
+  const newHoveredCards = Array.from(hoveredMap.values());
+  updateState({ hoveredCards: newHoveredCards, isHoverUpdate: true });
+
+  const t4 = performance.now();
+  const updatedNames = new Set([...brushedNames, ...hoveredNames]);
+  applySelectedHoverClass(hoveredMap, updatedNames);
+
+  const t5 = performance.now();
+
+  brushOverlay.call(brush.move, null); // Clear brush selection
+
+  const t6 = performance.now();
+
+  // console.log(`Brush Interaction Timing:
+  //   • Extract selection bounds:       ${(t1 - t0).toFixed(2)} ms
+  //   • Collect brushed names:          ${(t2 - t1).toFixed(2)} ms
+  //   • Toggle brushed cards:           ${(t3 - t2).toFixed(2)} ms
+  //   • Update state:                   ${(t4 - t3).toFixed(2)} ms
+  //   • Apply selected hover class:     ${(t5 - t4).toFixed(2)} ms
+  //   • Clear brush selection:          ${(t6 - t5).toFixed(2)} ms
+  //   • TOTAL:                          ${(t6 - t0).toFixed(2)} ms
+  // `);
+})
+
+
 
 
 
@@ -691,8 +726,8 @@ const visibleData = filteredData
   .attr("r", 2.5)
   .style("cursor", "pointer")
   .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
-  .style("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
-  .style("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
+  .attr("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
+  .attr("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
   .attr("opacity", 0.8)
   .style("display", d =>(currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey || hoveredSet.has(d.name)) ? null : "none");
 
@@ -955,8 +990,8 @@ const dots = gClip.selectAll("circle")
   .style("cursor", "pointer")
   .attr("opacity", 0.8)
   .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
-  .style("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
-  .style("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
+  .attr("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
+  .attr("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
   .style("display", d => (currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey || hoveredSet.has(d.name)) ? null : "none")
   .attr("cx", d => xScale(d.avg_price))
   .attr("cy", d => yScale(d.complexity))
@@ -971,18 +1006,7 @@ const dots = gClip.selectAll("circle")
     updatePointPositions(xScale, yScale);
 
 
-d3.selectAll(".dots circle")
-  .style("stroke", d => hoveredCards.some(c => c.name === d.name)
-    ? "#9AA0BC"
-    : (+d.edhrec_rank > 0 ? "none" : "black"))
-  .style("stroke-width", d => hoveredCards.some(c => c.name === d.name)
-    ? 2.5
-    : (+d.edhrec_rank > 0 ? 0 : 1.2))
-  .each(function (d) {
-    if (hoveredCards.some(c => c.name === d.name)) {
-      this.parentNode.appendChild(this); 
-    }
-  });
+updateSelectedHoverClass();
 }
 
 export function highlightScatterDotsFromSet(setName) {

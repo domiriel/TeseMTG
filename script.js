@@ -23,7 +23,7 @@ const filterApplicationOrder = [
   "Subtypes"
 ];
 const GROUPED_DATA_VERSION = "v4";
-function getEffectivePriceAttribute(state) {
+export function getEffectivePriceAttribute(state) {
   const { selectedPriceCurrency, selectedPriceSuffix } = state;
   return selectedPriceCurrency === "tix"
     ? "price_tix"
@@ -131,26 +131,44 @@ console.log(groupedData)
   const t1 = performance.now();
 
   let hoverTimeout = null;
-  getState().onChange("hoveredCards", (hoveredCards) => {
-    if (hoverTimeout) clearTimeout(hoverTimeout);
-    hoverTimeout = setTimeout(() => {
-      showLoader();
+getState().onChange("hoveredCards", (hoveredCards) => {
+  if (hoverTimeout) clearTimeout(hoverTimeout);
+  hoverTimeout = setTimeout(() => {
+    const t0 = performance.now();
+    showLoader();
 
-      highlightAlluvialElements(hoveredCards);
-      highlightIcicleRect(hoveredCards);
-      highlightTimelineSets(hoveredCards);
-      highlightLineChart(hoveredCards);
-      updateDrawer(hoveredCards);
+    const t1 = performance.now();
+    highlightAlluvialElements(hoveredCards);
+    const t2 = performance.now();
 
-      const hoveredSet = new Set(hoveredCards.map(c => c.name));
+    highlightIcicleRect(hoveredCards);
+    const t3 = performance.now();
 
-      d3.selectAll(".dots circle")
-        .style("stroke", d => hoveredSet.has(d.name) ? "#9AA0BC" : (+d.edhrec_rank > 0 ? "none" : "black"))
-        .style("stroke-width", d => hoveredSet.has(d.name) ? 2.5 : (+d.edhrec_rank > 0 ? 0 : 1.2));
+    highlightTimelineSets(hoveredCards);
+    const t4 = performance.now();
 
-      setTimeout(hideLoader, 150);
-    }, 0);
-  });
+    highlightLineChart(hoveredCards);
+    const t5 = performance.now();
+
+    updateDrawer(hoveredCards);
+
+    const t6 = performance.now();
+
+    // console.log(`Hover update timings:
+    // Alluvial: ${(t2 - t1).toFixed(2)}ms
+    // Icicle: ${(t3 - t2).toFixed(2)}ms
+    // Timeline: ${(t4 - t3).toFixed(2)}ms
+    // Line chart: ${(t5 - t4).toFixed(2)}ms
+    // Drawer: ${(t6 - t5).toFixed(2)}ms
+    // Total: ${(t6 - t0).toFixed(2)}ms`);
+    updateState({
+  isHoverUpdate: false,
+  suppressGlobalNotify: true
+});
+    setTimeout(hideLoader, 150);
+  }, 0);
+});
+
 
   const stateSnapshot = getState();
   const sharedFilters = loadFiltersFromURL();
@@ -199,9 +217,13 @@ selectedPriceCurrency: stateSnapshot.selectedPriceCurrency,
   hideLoader();
 
   subscribe((state) => {
+
     if (isUpdatingFilteredData) return;
     const context = state.updateContext || "default";
 
+    if (state.isHoverUpdate) return;
+
+    console.log("Hi")
     const { selectedFilters, freeTextSearch } = state;
 
     const selectedPriceAttribute = getEffectivePriceAttribute(state)
@@ -233,12 +255,6 @@ selectedPriceCurrency: stateSnapshot.selectedPriceCurrency,
     }, 10);
 
      let { hoveredCards } = getState();
-    // const filteredNames = new Set(filteredData.map(d => d.name));
-    // hoveredCards = hoveredCards.filter(card => filteredNames.has(card.name));
-
-    // if (hoveredCards.length !== getState().hoveredCards.length) {
-    //   updateState({ hoveredCards });
-    // }
 
     highlightAlluvialElements(hoveredCards);
     highlightIcicleRect(hoveredCards);
@@ -269,28 +285,49 @@ selectedPriceCurrency: stateSnapshot.selectedPriceCurrency,
   
 
 
-export function filterData(data, selectedFilters, selectedPriceAttribute, freeTextSearch = "", groupedData = null) {
-  let filteredSet = new Set(data);
-  console.log(selectedFilters)
-  if (groupedData) {
-    for (const category of filterApplicationOrder) {
-      const values = selectedFilters[category];
-      if (!values || values.size === 0) continue;
-      const group = groupedData[category];
-      if (!group) continue;
+export function filterData(groupedData, selectedFilters, options = {}) {
+  const { excludeCategory } = options;
+  const mode = getState().filterLogicMode || "AND-OR";
+  const applyAndAcross = mode.startsWith("AND");
+  const applyAndWithin = mode.endsWith("AND");
 
-      let matched = new Set();
-      values.forEach(value => {
-        const group = groupedData[category].get(value);
-        if (group) group.forEach(card => matched.add(card));
+  let filteredSet = new Set();
+
+  const perCategoryMatches = [];
+
+  for (const category of getState().filterApplicationOrder || Object.keys(selectedFilters)) {
+    if (excludeCategory && category === excludeCategory) continue;
+
+    const values = selectedFilters[category];
+    if (!values || values.size === 0) continue;
+
+    const group = groupedData[category];
+    if (!group) continue;
+
+    let matched = new Set();
+
+    if (applyAndWithin) {
+      const sets = Array.from(values)
+        .map(val => group.get(val))
+        .filter(set => set);
+      if (sets.length > 0) {
+        matched = sets.reduce((a, b) => intersectSets(new Set(a), new Set(b)));
+      }
+    } else {
+      values.forEach(val => {
+        const set = group.get(val);
+        if (set) set.forEach(card => matched.add(card));
       });
-
-      filteredSet = intersectSets(filteredSet, matched);
     }
-  } else {
-    filteredSet = new Set(data.filter(card => shouldIncludeCard(card, selectedFilters)));
+
+    perCategoryMatches.push(matched);
   }
 
+  if (applyAndAcross) {
+    filteredSet = perCategoryMatches.reduce((a, b) => intersectSets(a, b), new Set(getState().originalData || []));
+  } else {
+    filteredSet = new Set(perCategoryMatches.flatMap(set => [...set]));
+  }
   // Apply free text search
   const textTerms = selectedFilters["FreeTextSearch"];
   if (textTerms?.size > 0) {
@@ -513,7 +550,8 @@ export function getFilteredData(originalData, selectedFilters, selectedPriceAttr
     shallowCompareFilters(selectedFilters, lastInputs.selectedFilters) &&
     lastInputs.selectedPriceCurrency === state.selectedPriceCurrency &&
     lastInputs.selectedPriceSuffix === state.selectedPriceSuffix &&
-    freeTextSearch === lastInputs.freeTextSearch;
+    freeTextSearch === lastInputs.freeTextSearch &&
+    lastInputs.filterLogicMode === state.filterLogicMode;;
 
   if (inputsMatch && state.lastFilteredData) {
     return state.lastFilteredData;
@@ -521,7 +559,7 @@ export function getFilteredData(originalData, selectedFilters, selectedPriceAttr
 
   isUpdatingFilteredData = true;
 
-  const filtered = filterData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch, groupedData);
+  const filtered = filterData(groupedData, selectedFilters);
 
   const cleaned = filterPriceOnly(filtered, selectedPriceAttribute);
   console.log(cleaned)
@@ -529,9 +567,10 @@ export function getFilteredData(originalData, selectedFilters, selectedPriceAttr
     lastFilterInputs: { 
       selectedFilters: cloneFilters(selectedFilters),
       selectedPriceAttribute,
-      freeTextSearch
+      freeTextSearch,
+      filterLogicMode: state.filterLogicMode
     },
-    lastFilteredData: cleaned
+    lastFilteredData: cleaned,
   });
   isUpdatingFilteredData = false;
 
@@ -541,7 +580,7 @@ export function getFilteredData(originalData, selectedFilters, selectedPriceAttr
 }
 
 
-function filterPriceOnly(cards, priceAttr) {
+export function filterPriceOnly(cards, priceAttr) {
   return cards.filter(card => typeof card[priceAttr] === "number" && card[priceAttr] > 0);
 }
 

@@ -1,6 +1,6 @@
 
 import { updateState, getState, saveFilterSettings, loadFilterSettings, generateFilterShareURL, resetState} from "../state.js";
-import { filterData, getFilteredData, } from "../script.js"; 
+import { filterData, filterPriceOnly, getEffectivePriceAttribute } from "../script.js"; 
 import { showLoader, hideLoader } from "./LoadingAnimation.js";
 const optionMap = new Map();  
 const pillMap = new Map();
@@ -21,15 +21,21 @@ function getSuffixOptionsForCurrency(currency) {
 }
 function formatDisplayLabel(category, value) {
   if (category === "Color Identity") {
-    // Capitalize letters (e.g. wub → WUB)
-    return value.toUpperCase();
+    if (value.toLowerCase() === "colorless") return "Colorless";
+    return value.toUpperCase(); // WUB, UBR, etc.
   }
+
   if (category === "Nº of Colors") {
-    // Capitalize first letter only
-    return value.charAt(0).toUpperCase() + value.slice(1);
+    // Capitalize each word, e.g., "1 color" → "1 Color", "+4 colors" → "+4 Colors"
+    return value
+      .split(" ")
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
   }
-  return value; // default
+
+  return value; // default fallback
 }
+
 
 const VISIBLE_FILTER_CATEGORIES = [
   "Keywords",
@@ -314,26 +320,17 @@ searchInput.on("change", function () {
     const { hoveredCards } = getState();
     const isAlreadySelected = hoveredCards.some(c => c.name === card.name);
 
+    
     let newHoveredCards = isAlreadySelected
     ? hoveredCards
     : [...hoveredCards, card];
 
-    updateState({ hoveredCards: newHoveredCards });
+    updateState({ hoveredCards: newHoveredCards, isHoverUpdate: true });
 
-    // Immediately reflect in scatterplot
     d3.selectAll(".dots circle")
-  .style("stroke", d => newHoveredCards.some(c => c.name === d.name)
-    ? "orange"
-    : (+d.edhrec_rank > 0 ? "none" : "black"))
-  .style("stroke-width", d => newHoveredCards.some(c => c.name === d.name)
-    ? 2.5
-    : (+d.edhrec_rank > 0 ? 0 : 1.2))
-  .each(function (d) {
-    if (newHoveredCards.some(c => c.name === d.name)) {
-    
-      this.parentNode.appendChild(this); // bring to front
-    }
-  });
+  .filter(d => d.name === card.name)
+  .classed("selected-hover", !isAlreadySelected);
+
 });
 
     const priceFields = new Set();
@@ -616,13 +613,41 @@ currencySelect.on("change", function () {
   // Update state
   updateState({
     selectedPriceCurrency: selectedCurrency,
-    selectedPriceSuffix: suffixOptions.includes(currentSuffix) ? currentSuffix : ""
+    selectedPriceSuffix: suffixOptions.includes(currentSuffix) ? currentSuffix : "", 
+    priceAttributeChanged: true
   });
 
   // Re-render suffix dropdown
   renderSuffixOptions(selectedCurrency);
 });
 
+settingsContent.append("label")
+  .text("Filter Logic Mode:")
+  .style("display", "block")
+  .style("margin", "8px 0 4px 0")
+  .style("font-weight", "bold");
+
+const logicModes = ["AND-OR", "AND-AND"];
+
+const logicSelect = settingsContent.append("select")
+  .style("padding", "6px")
+  .style("font-size", "14px")
+  .style("border", "1px solid #ccc")
+  .style("border-radius", "6px")
+  .style("width", "100%");
+
+logicSelect.selectAll("option")
+  .data(logicModes)
+  .enter()
+  .append("option")
+  .attr("value", d => d)
+  .text(d => d.replace("-", " across / ") + " within");
+
+logicSelect.property("value", getState().filterLogicMode || "AND-OR");
+
+logicSelect.on("change", function () {
+  updateState({ filterLogicMode: this.value});
+});
 
 
 // BUTTONS
@@ -727,21 +752,45 @@ export function updateFilterPanel(originalData, filteredCards, selectedFilters, 
     const filters = new Map();
 const t0 = performance.now();
 const groupedData = getState().groupedData;
-const filteredSet = new Set(filteredCards.map(card => card.name)); // exact names
+const priceAttr = getEffectivePriceAttribute(getState());
 
+function getFilteredSetExcluding(categoryToIgnore, selectedFiltersArg) {
+  const filtered = filterData(groupedData, selectedFiltersArg, { excludeCategory: categoryToIgnore });
+  const cleaned = filterPriceOnly(filtered, priceAttr);
 
+  return cleaned
+}
 
+const mode = getState().filterLogicMode || "AND-OR";
+const applyAndWithin = mode.endsWith("AND");
+const applyAndAcross = mode.startsWith("AND");
+let cachedFilteredSet = null;
 VISIBLE_FILTER_CATEGORIES.forEach(category => {
   const categoryGroup = groupedData[category];
   if (!categoryGroup) return;
 
-  const optionCounts = new Map();
-  categoryGroup.forEach((cards, value) => {
-    const count = cards.reduce((acc, card) =>
-      acc + filteredSet.has(card.name), 0);
+let filteredSet;
+  if (applyAndAcross) {
+    if (!cachedFilteredSet) {
+      const allFiltered = filterData(groupedData, selectedFilters);
+      cachedFilteredSet = filterPriceOnly(allFiltered, priceAttr);
+    }
+    filteredSet = cachedFilteredSet;
+  } else {
+    filteredSet = getFilteredSetExcluding(category, selectedFilters);
+  }
 
-    optionCounts.set(value, count);
-  });
+const filteredIds = new Set(filteredSet.map(c => c.index));
+
+
+
+const optionCounts = new Map();
+categoryGroup.forEach((cards, value) => {
+  const count = cards.reduce((acc, card) =>
+    acc + filteredIds.has(card.index), 0);
+
+  optionCounts.set(value, count);
+});
 
   const sortedEntries = Array.from(optionCounts.entries()).sort((a, b) => {
   const aVal = getOrderIndex(category, a[0]);
@@ -771,13 +820,12 @@ const t1 = performance.now();
             const [category, value] = key.split("|");
             if (!filters.has(category)) return;
 
-            const rawValue = value.toLowerCase();
-            const count = filters.get(category)?.get(rawValue) || 0;
+            const count = filters.get(category)?.get(value) || 0;
             const span = el.select("span");
             span.text(`${formatDisplayLabel(category, value)} (${count})`).attr("data-count", count);
 
             const selectedSet = selectedFilters[category] || new Set();
-            const isSelected = selectedSet.has(value.toLowerCase());
+             const isSelected = selectedSet.has(value);
 
             el.style("opacity", count === 0 && !isSelected ? 0.4 : 1);
             el.style("pointer-events", count === 0 && !isSelected ? "none" : "auto");

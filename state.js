@@ -25,8 +25,9 @@ const state = {
     originalSelectedFilters: null,
     previousFilteredData: null,
     lastFilterInputs: null,
-    lastFilteredData: null
-
+    lastFilteredData: null,
+    filterLogicMode: "AND-OR",
+    isHoverUpdate: false,
   };
   
   const globalListeners = new Set();      // .subscribe()
@@ -53,7 +54,9 @@ const state = {
       }
     }
   
+    if (!newPartialState.suppressGlobalNotify) {
     globalListeners.forEach(cb => cb(state));
+  }
   }
   
   export function getState() {

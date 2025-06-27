@@ -190,7 +190,10 @@ body {
   opacity: 0.1;
   pointer-events: none;
 }
-
+.selected-hover {
+  stroke: #9AA0BC;
+  stroke-width: 2.5;
+}
 .alluvial-visible {
   opacity: 1;
 }
