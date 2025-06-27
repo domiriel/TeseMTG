@@ -1,5 +1,9 @@
 let drawerContainer = null;
 let drawerButton = null; 
+let currentPage = 0;
+const pageSize = 25;
+
+
 import { updateState, getState } from "../state.js";
 export function createHiddenDrawer(containerSelector = "body") {
   const container = d3.select(containerSelector);
@@ -41,7 +45,10 @@ export function updateDrawer(cards = []) {
   const t1 = performance.now();
 
   // Data join
-  const cardSel = cardArea.selectAll(".card-wrapper").data(cards, d => d.name);
+  const totalPages = Math.ceil(cards.length / pageSize);
+const visibleCards = cards.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
+  const cardSel = cardArea.selectAll(".card-wrapper").data(visibleCards, d => d.name);
+
   cardSel.exit().remove();
   const cardEnter = cardSel.enter()
     .append("div")
@@ -51,7 +58,7 @@ export function updateDrawer(cards = []) {
 
   cardEnter.append("img")
     .attr("alt", d => d.name)
-    .style("width", "100%")
+    .style("width", "80%")
     .style("border-radius", "8px")
     .style("box-shadow", "0 2px 8px rgba(0, 0, 0, 0.2)");
 
@@ -163,6 +170,32 @@ export function updateDrawer(cards = []) {
       });
   });
 
+
+  const nav = drawerContainer.select("#pagination-nav");
+if (!nav.empty()) nav.remove();
+
+drawerContainer.insert("div", "#cardImages")
+  .attr("id", "pagination-nav")
+  .style("text-align", "center")
+  .style("margin-top", "10px")
+  .html(`
+    <button id="prevPage" ${currentPage === 0 ? "disabled" : ""}>Prev</button>
+    <span> Page ${currentPage + 1} of ${totalPages} </span>
+    <button id="nextPage" ${currentPage === totalPages - 1 ? "disabled" : ""}>Next</button>
+  `);
+
+drawerContainer.select("#prevPage").on("click", () => {
+  if (currentPage > 0) {
+    currentPage--;
+    updateDrawer(cardsInDrawer);
+  }
+});
+drawerContainer.select("#nextPage").on("click", () => {
+  if (currentPage < totalPages - 1) {
+    currentPage++;
+    updateDrawer(cardsInDrawer);
+  }
+});
   const t3 = performance.now();
 
   console.log(`[Perf] updateDrawer:

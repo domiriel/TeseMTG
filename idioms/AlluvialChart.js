@@ -26,7 +26,7 @@ if (percentage < 20) return "#fbecd0";
 function getSelectedColor(percentage){
 if (percentage < 20) return "#dcdfef";
   if (percentage < 40) return "#b9bfda";
-  if (percentage < 60) return "#998066";
+  if (percentage < 60) return "#9AA0BC";
   if (percentage < 80) return "#6a708a";
   return "#3a4059"; 
 }
@@ -381,7 +381,7 @@ sankeyGroup.selectAll(".link")
         updatedFilters["Rarity"].add(rarity);
       }
     
-      updateState({ selectedFilters: updatedFilters });
+      updateState({ selectedFilters: updatedFilters});
       updateFilterPanel(getState().originalData, updatedFilters); 
 
     }),
@@ -727,17 +727,18 @@ export function highlightAlluvialElements(hoveredCards) {
     }
   });
 
-  rects.each(function(d) {
-    const isRarity = d.x0 !== 0;
-    const isOriginality = d.x0 === 0;
-    const match =
-      (isRarity && hoveredRarities.has(d.name)) ||
-      (isOriginality && hoveredOriginalities.has(d.name));
+rects.each(function(d) {
+  const isRarity = d.x0 !== 0;
+  const isOriginality = d.x0 === 0;
+  const match =
+    (isRarity && hoveredRarities.has(d.name)) ||
+    (isOriginality && hoveredOriginalities.has(d.name));
 
-    d3.select(this)
-      .classed("selectedHovered", match)
-      .attr("fill", match ? d.selectedColor : d.baseColor);
-  });
+
+  d3.select(this)
+    .classed("selectedHovered", match)
+    .attr("fill", match ? d.selectedColor : d.baseColor);
+});
 }
 
 
