@@ -177,7 +177,7 @@ getState().onChange("hoveredCards", (hoveredCards) => {
   const freeTextSearch = stateSnapshot.freeTextSearch;
   let selectedFilters = sharedFilters || stateSnapshot.selectedFilters;
 
-  console.log("Effective price attr on load:", selectedPriceAttribute);
+
   const filtered = getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
  
 
@@ -230,6 +230,9 @@ selectedPriceCurrency: stateSnapshot.selectedPriceCurrency,
 
     const filteredData = getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
 
+
+      updateFilterPanel(originalData, filteredData, selectedFilters, ".FilterPanel");
+
     if (window._prevFilteredLength === filteredData.length &&
         window._prevPriceAttribute === selectedPriceAttribute &&
         context === "default") {
@@ -250,9 +253,7 @@ selectedPriceCurrency: stateSnapshot.selectedPriceCurrency,
     const processedData = prepareScatterData(filteredData, selectedPriceAttribute);
     updateScatterPlot(processedData, selectedPriceAttribute);
 
-    setTimeout(() => {
-      updateFilterPanel(originalData, filteredData, selectedFilters, ".FilterPanel");
-    }, 10);
+
 
      let { hoveredCards } = getState();
 
@@ -288,7 +289,7 @@ selectedPriceCurrency: stateSnapshot.selectedPriceCurrency,
 export function filterData(groupedData, selectedFilters, options = {}) {
   const { excludeCategory } = options;
   const mode = getState().filterLogicMode || "AND-OR";
-  const applyAndAcross = mode.startsWith("AND");
+
   const applyAndWithin = mode.endsWith("AND");
 
   let filteredSet = new Set();
@@ -307,12 +308,17 @@ export function filterData(groupedData, selectedFilters, options = {}) {
     let matched = new Set();
 
     if (applyAndWithin) {
-      const sets = Array.from(values)
-        .map(val => group.get(val))
-        .filter(set => set);
-      if (sets.length > 0) {
-        matched = sets.reduce((a, b) => intersectSets(new Set(a), new Set(b)));
-      }
+const sets = Array.from(values)
+    .map(val => group.get(val))
+    .filter(set => set);
+
+  if (sets.length === 1) {
+    matched = new Set(sets[0]);
+  } else if (sets.length > 1) {
+    matched = sets.reduce((a, b) => intersectSets(new Set(a), new Set(b)));
+  } else {
+    matched = new Set();
+  }
     } else {
       values.forEach(val => {
         const set = group.get(val);
@@ -323,11 +329,11 @@ export function filterData(groupedData, selectedFilters, options = {}) {
     perCategoryMatches.push(matched);
   }
 
-  if (applyAndAcross) {
-    filteredSet = perCategoryMatches.reduce((a, b) => intersectSets(a, b), new Set(getState().originalData || []));
-  } else {
-    filteredSet = new Set(perCategoryMatches.flatMap(set => [...set]));
-  }
+    filteredSet = perCategoryMatches.reduce(
+      (a, b) => intersectSets(a, b),
+      new Set(getState().originalData || [])
+    );
+
   // Apply free text search
   const textTerms = selectedFilters["FreeTextSearch"];
   if (textTerms?.size > 0) {
@@ -562,7 +568,6 @@ export function getFilteredData(originalData, selectedFilters, selectedPriceAttr
   const filtered = filterData(groupedData, selectedFilters);
 
   const cleaned = filterPriceOnly(filtered, selectedPriceAttribute);
-  console.log(cleaned)
   updateState({
     lastFilterInputs: { 
       selectedFilters: cloneFilters(selectedFilters),

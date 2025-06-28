@@ -5,7 +5,11 @@ import { showLoader, hideLoader } from "./LoadingAnimation.js";
 const optionMap = new Map();  
 const pillMap = new Map();
 const mtgColorOrder = { w: 0, u: 1, b: 2, r: 3, g: 4 };
-
+            function getNormalizedKey(category, value) {
+  return (category === "Color Identity" || category === "Nº of Colors")
+    ? value.toLowerCase()
+    : value;
+}
 const numColorsOrder = ["Colorless", "1 Color", "2 Colors", "3 Colors", "4 Colors", "+4 Colors"];
 const colorIdentityOrder = ["colorless", 
                             "w", "u", "b", "r", "g", 
@@ -534,8 +538,8 @@ searchInput.on("change", function () {
             .style("margin-right", "10px");
 
         option.each(function (d) {
-            const rawValue = d.value.toLowerCase(); // normalize for internal map
-            const key = `${category}|${rawValue}`;
+
+            const key = `${category}|${getNormalizedKey(category, d.value)}`;
             optionMap.set(key, d3.select(this));
         });
 
@@ -763,22 +767,24 @@ function getFilteredSetExcluding(categoryToIgnore, selectedFiltersArg) {
 
 const mode = getState().filterLogicMode || "AND-OR";
 const applyAndWithin = mode.endsWith("AND");
-const applyAndAcross = mode.startsWith("AND");
+
 let cachedFilteredSet = null;
 VISIBLE_FILTER_CATEGORIES.forEach(category => {
   const categoryGroup = groupedData[category];
   if (!categoryGroup) return;
 
 let filteredSet;
-  if (applyAndAcross) {
-    if (!cachedFilteredSet) {
-      const allFiltered = filterData(groupedData, selectedFilters);
-      cachedFilteredSet = filterPriceOnly(allFiltered, priceAttr);
-    }
-    filteredSet = cachedFilteredSet;
-  } else {
-    filteredSet = getFilteredSetExcluding(category, selectedFilters);
+if (!applyAndWithin) {
+  // AND-OR logic: exclude current category to keep values independent
+  filteredSet = getFilteredSetExcluding(category, selectedFilters);
+} else {
+  // AND-AND logic: include current category
+  if (!cachedFilteredSet) {
+    const allFiltered = filterData(groupedData, selectedFilters);
+    cachedFilteredSet = filterPriceOnly(allFiltered, priceAttr);
   }
+  filteredSet = cachedFilteredSet;
+}
 
 const filteredIds = new Set(filteredSet.map(c => c.index));
 
@@ -820,9 +826,10 @@ const t1 = performance.now();
             const [category, value] = key.split("|");
             if (!filters.has(category)) return;
 
-            const count = filters.get(category)?.get(value) || 0;
+            const normValue = getNormalizedKey(category, value);
+            const count = filters.get(category)?.get(normValue) || 0;
             const span = el.select("span");
-            span.text(`${formatDisplayLabel(category, value)} (${count})`).attr("data-count", count);
+            span.text(`${formatDisplayLabel(category, normValue)} (${count})`).attr("data-count", count);
 
             const selectedSet = selectedFilters[category] || new Set();
              const isSelected = selectedSet.has(value);
@@ -898,36 +905,6 @@ function extractCardValue(card, category) {
     }
 } 
 
-function computeFilterCounts(data, selectedFilters, categoriesToIgnore = []) {
-    const filterMaps = Object.fromEntries(
-        Object.keys(selectedFilters).map(cat => [cat, new Map()])
-    );
-
-    data.forEach(card => {
-        for (const category in selectedFilters) {
-            if (categoriesToIgnore.includes(category)) continue;
-
-            const rawValue = extractCardValue(card, category);
-            if (!rawValue) continue;
-
-            const isSplittable = ["Supertypes", "Types", "Subtypes", "Keywords"].includes(category);
-            const values = Array.isArray(rawValue)
-                ? rawValue.map(v => v.trim())
-                : (isSplittable
-                    ? rawValue.split(/[\s/]+/).map(v => v.trim())
-                    : [rawValue.trim()]);
-
-            values.forEach(v => addToMap(filterMaps[category], v));
-        }
-    });
-
-    return Object.fromEntries(
-        Object.entries(filterMaps).map(([cat, map]) => [
-            cat,
-            Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
-        ])
-    );
-}
 
 
 

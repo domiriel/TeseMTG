@@ -11,6 +11,7 @@ const lineChartTooltipText = `
 `;
 
 const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };
+let localSelectedYears = new Set();
 onHoverCard(card => {
   highlightLineChartHoverOnly(card);
 });
@@ -364,6 +365,25 @@ infoGroup.append("text")
             })
             .on("click", function(event, d) {
                 const selectedYear = d.year.getFullYear().toString();
+
+
+                if (localSelectedYears.has(selectedYear)) {
+                    localSelectedYears.delete(selectedYear);
+                } else {
+                    localSelectedYears.add(selectedYear);
+                }
+
+
+                d3.selectAll("circle.data-point")
+                    .attr("opacity", function() {
+                        const year = this.getAttribute("data-year");
+                        return localSelectedYears.size === 0 || localSelectedYears.has(year) ? 1 : 0.5;
+                    });
+
+            })
+            .on("contextmenu", function(event,d){
+                event.preventDefault();
+                const selectedYear = d.year.getFullYear().toString();
                 const updatedFilters = getClonedFilters();
 
                 if (updatedFilters["Year"].has(selectedYear)) {
@@ -372,17 +392,12 @@ infoGroup.append("text")
                     updatedFilters["Year"].add(selectedYear);
                 }
 
-                const selectedYears = updatedFilters["Year"];
-                d3.selectAll("circle.data-point")
-                    .attr("opacity", function() {
-                        const year = this.getAttribute("data-year");
-                        return selectedYears.size === 0 || selectedYears.has(year) ? 1 : 0.5;
-                    });
-
+                
                 updateState({
                     selectedFilters: updatedFilters,
                     updateContext: "TimelineFilter"
                 });
+
             });
 
         const brush = d3.brushX()

@@ -3,6 +3,8 @@ import { updateState, getState } from "../state.js";
 import { updateFilterPanel } from "./FilterPanel.js";
 import { onHoverCard, onClearHover, emitSetHover, emitClearHover, emitClearSetHover, onRectHover, onClearRectHover, onClearLineYearHover, onLineYearHover, onAlluvialHover, onClearAlluvialHover } from "./Events.js";
 
+let localSelectedYears = new Set();
+let localSelectedSetNames = new Set();
 
 onHoverCard(card => {
   highlightTimelineSetsHoverOnly(card);
@@ -52,7 +54,7 @@ const timelineTooltipText = `
 
 
 function updateYearTickStyles() {
-    const yearFilter = getState().selectedFilters["Year"] || new Set();
+    const yearFilter = localSelectedYears;
 
     d3.selectAll(".x-axis .tick text")
         .style("fill", function(d) {
@@ -68,7 +70,7 @@ function updateYearTickStyles() {
 
 
 function updateSetRectOpacity() {
-    const yearFilter = getState().selectedFilters["Year"] || new Set();
+    const yearFilter = localSelectedYears;
     const setRects = d3.selectAll(".set-rect");
 
     setRects
@@ -370,30 +372,42 @@ const relativeLeft = iconLeft - containerBounds.left;
             .style("cursor", "pointer")
             .on("click", function (event, d) {
                 const year = d.getFullYear().toString();
-                const updatedFilters = getClonedFilters();
 
 
-                if (!updatedFilters["Year"]) {
-                    updatedFilters["Year"] = new Set();
-                }
-
-                const isSelected = updatedFilters["Year"].has(year);
+                const isSelected = localSelectedYears.has(year);
 
                 if (isSelected) {
-                    updatedFilters["Year"].delete(year);
+                    localSelectedYears.delete(year);
                 } else {
-                    updatedFilters["Year"].add(year);
+                    localSelectedYears.add(year);
                 }
 
-                updateState({
-                    selectedFilters: updatedFilters,
-                    updateContext: "TimelineFilter"
-                });
-
-                updateFilterPanel(getState().originalData, updatedFilters);
                 updateYearTickStyles();
                 updateSetRectOpacity();  
             })
+            .on("contextmenu", function (event, d) {
+    event.preventDefault();
+    const year = d.getFullYear().toString();
+
+    const updatedFilters = getClonedFilters();
+    if (!updatedFilters["Year"]) {
+        updatedFilters["Year"] = new Set();
+    }
+
+    const isSelected = updatedFilters["Year"].has(year);
+    if (isSelected) {
+        updatedFilters["Year"].delete(year);
+        localSelectedYears.delete(year);
+    } else {
+        updatedFilters["Year"].add(year);
+        localSelectedYears.add(year);
+    }
+
+    updateState({
+        selectedFilters: updatedFilters,
+        updateContext: "TimelineFilter"
+    });
+    })
             .on("mouseover", function (event, d) {
 
     const year = d.getFullYear().toString();
@@ -545,28 +559,41 @@ chartGroup.append("g")
                 clearAllViewsHoverOnly(); // Clear highlights in all views
             })
              .on("click", function (event, d) {
-                const updatedFilters = getClonedFilters();
 
-            
-                if (!updatedFilters["Set Names"]) {
-                    updatedFilters["Set Names"] = new Set();
-                }
-            
-                const isSelected = updatedFilters["Set Names"].has(d.name);
+                const isSelected = localSelectedSetNames.has(d.name);
             
                 if (isSelected) {
-                    updatedFilters["Set Names"].delete(d.name);
+                    localSelectedSetNames.delete(d.name);
                     d3.select(this).attr("fill", "#998066"); 
                 } else {
-                    updatedFilters["Set Names"].add(d.name);
+                    localSelectedSetNames.add(d.name);
                     d3.select(this).attr("fill", "#007bff"); 
                 }
-            
-                updateState({
-                    selectedFilters: updatedFilters,
-                    updateContext: "TimelineFilter"
-                });
-            }),
+            })
+.on("contextmenu", function (event, d) {
+    event.preventDefault();
+
+    const updatedFilters = getClonedFilters();
+    if (!updatedFilters["Set Names"]) {
+        updatedFilters["Set Names"] = new Set();
+    }
+
+    const isSelected = updatedFilters["Set Names"].has(d.name);
+    if (isSelected) {
+        updatedFilters["Set Names"].delete(d.name);
+
+    } else {
+        updatedFilters["Set Names"].add(d.name);
+
+    }
+
+    updateState({
+        selectedFilters: updatedFilters,
+        updateContext: "TimelineFilter"
+    });
+
+
+}),
         update => update, // leave unchanged
         exit => exit.remove()
     )
@@ -575,7 +602,7 @@ chartGroup.append("g")
 
                 
         
-        const selectedSetNames = getState().selectedFilters["Set Names"] || new Set();
+        const selectedSetNames = localSelectedSetNames;
 
         squares.attr("fill", d =>
             selectedSetNames.has(d.name) ? "#007bff" : "#998066"

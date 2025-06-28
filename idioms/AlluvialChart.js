@@ -356,7 +356,8 @@ sankeyGroup.selectAll(".link")
 
   applyLocalLinkAndNodeFilter();
 })
-        .on("dblclick", function(event, d) {
+        .on("contextmenu", function(event, d) {
+        event.preventDefault(); // prevent the browser menu
       const currentState = getState();
       const updatedFilters = {};
     
@@ -510,7 +511,8 @@ const nodeGroups = sankeyGroup.selectAll(".node")
   applyLocalChartFilter(); 
 })
 
-          .on("dblclick", function(event, d) {
+          .on("contextmenu", function(event, d) {
+            event.preventDefault();
       const category = d.x0 === 0 ? "Originality" : "Rarity"; 
       const currentState = getState();
       const updatedFilters = {};

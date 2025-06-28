@@ -197,12 +197,6 @@ drawerContainer.select("#nextPage").on("click", () => {
   }
 });
   const t3 = performance.now();
-
-  console.log(`[Perf] updateDrawer:
-  Setup & DOM Select: ${(t1 - t0).toFixed(2)} ms
-  Data Join & Enter:  ${(t2 - t1).toFixed(2)} ms
-  Per-card Update:    ${(t3 - t2).toFixed(2)} ms
-  TOTAL:              ${(t3 - t0).toFixed(2)} ms`);
 }
 
 

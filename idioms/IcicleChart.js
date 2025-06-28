@@ -437,11 +437,8 @@ const levelHeight = chartHeight / depth;
                     clickTimer = null;
                 }, 250);
             })
-            .on("dblclick", function(event, d) {
-                if (clickTimer) {
-                    clearTimeout(clickTimer);
-                    clickTimer = null;
-                }
+            .on("contextmenu", function(event, d) {
+                event.preventDefault();
                 clickedFilter(event, d); // double-click
             })
             .on("mouseover", function(event, d) {
@@ -596,33 +593,51 @@ const levelHeight = chartHeight / depth;
     }
 
 function clickedFilter(event, d) {
-    const rect = d3.select(event.currentTarget);
-    const wasSelected = rect.classed("selected");
-    rect.classed("selected", !wasSelected);
+  event.preventDefault();
 
-    const currentFilters = getState().selectedFilters;
-    const newFilters = structuredClone(currentFilters);
+  const currentState = getState();
+  const currentFilters = currentState.selectedFilters;
 
-    const isGroup = d.depth === 1;
-    const isIdentity = d.depth === 2;
-    const val = d.data.name.toLowerCase();
+  // Clone filter sets deeply to avoid mutation
+  const newFilters = {};
+  for (const key in currentFilters) {
+    newFilters[key] = new Set(currentFilters[key]);
+  }
 
-    if (isGroup) {
-        if (!newFilters["Nº of Colors"]) newFilters["Nº of Colors"] = new Set();
-        wasSelected ? newFilters["Nº of Colors"].delete(val) : newFilters["Nº of Colors"].add(val);
-    } else if (isIdentity) {
-        if (!newFilters["Color Identity"]) newFilters["Color Identity"] = new Set();
-        wasSelected ? newFilters["Color Identity"].delete(val) : newFilters["Color Identity"].add(val);
-    }
+  const isGroup = d.depth === 1;
+  const isIdentity = d.depth === 2;
+  const val = d.data.name.toLowerCase();
 
-    if (!validateFilterCombination(newFilters)) {
-        rect.classed("selected", wasSelected);  // ❗ Revert visual toggle
-        showPopup("Invalid filter: selected color identity/identities do not match the selected color group(s).");
-        return;
-    }
+  let targetCategory = null;
 
-    updateState({ selectedFilters: newFilters, updateContext: "IcicleFilter" });
+  if (isGroup) {
+    targetCategory = "Nº of Colors";
+  } else if (isIdentity) {
+    targetCategory = "Color Identity";
+  }
+
+  if (!targetCategory) return;
+
+  if (!newFilters[targetCategory]) {
+    newFilters[targetCategory] = new Set();
+  }
+
+  const wasSelected = newFilters[targetCategory].has(val);
+
+  if (wasSelected) {
+    newFilters[targetCategory].delete(val);
+  } else {
+    newFilters[targetCategory].add(val);
+  }
+
+  if (!validateFilterCombination(newFilters)) {
+    showPopup("Invalid filter: selected color identity/identities do not match the selected color group(s).");
+    return;
+  }
+
+  updateState({ selectedFilters: newFilters, updateContext: "IcicleFilter" });
 }
+
 
 
 

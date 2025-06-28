@@ -119,7 +119,59 @@ function getColorIdentityBackground(colorIdentity) {
     return `linear-gradient(to right, ${stops.join(", ")})`;
   }
 }
+function getXValue(d) {
+  return xMetric === "avg_price"
+    ? d.avg_price
+    : new Date(d.release_date);
+}
 
+function updateXMetricScale() {
+    const svg = d3.select(".Scatterplot svg");
+    const meta = svg.node().__scatterMeta__;
+    const {
+        xScale,
+        yScale, 
+        xAxisG,
+        updateAxes,
+        originalXScale
+    } = svg.node().__scales__;
+
+    const data = actualFIlteredData;
+    if (!meta || !data) return;
+
+    const { chartWidth } = meta;
+
+    if (xMetric === "avg_price") {
+        const newMin = Math.max(0.001, d3.min(data, d => d.avg_price));
+        const newMax = d3.max(data, d => d.avg_price);
+        originalXScale.domain([newMin, newMax]);
+        xScale.domain([newMin, newMax]);
+} else {
+    const validDates = data
+      .map(d => new Date(d.release_date))
+      .filter(d => d instanceof Date && !isNaN(d));
+
+    if (validDates.length > 0) {
+        const timeScale = d3.scaleTime()
+            .domain(d3.extent(validDates))
+            .range([10, chartWidth]);
+
+        // 🟡 Overwrite both the xScale and the originalXScale with time scale
+        originalXScale.domain(timeScale.domain());
+        originalXScale.range(timeScale.range());
+
+        xScale.domain(timeScale.domain());
+        xScale.range(timeScale.range());
+    }
+}
+
+  data.forEach(d => delete d.isZoomKey);
+  tagZoomKeyPoints(data, xScale, yScale);
+    svg.select(".x-axis-label").text(getXLabelText());
+
+    updateAxes(getSymbolFromAttribute(lastPriceAttribute));
+    updatePointPositions(xScale, yScale);
+}
 
 
 
@@ -136,8 +188,15 @@ let zoom = null;
 let brush = null;
 let shiftPressed = false;
 let lastPriceAttribute = null;
+let xMetric = "avg_price";
 
 
+function getXLabelText() {
+    if (xMetric === "release_date") return "Release Date";
+    if (lastPriceAttribute?.includes("eur")) return "Avg Price (€)";
+    if (lastPriceAttribute?.includes("thx")) return "Avg Price";
+    return "Avg Price ($)";
+}
 function styleAndBindDots(selection) {
   return selection
     .attr("r", 2.5)
@@ -154,25 +213,12 @@ function styleAndBindDots(selection) {
 
 
 
-function downsamplePoints(data, xScale, yScale, cellSize = 6) {
-  const grid = new Map();
 
-  for (const d of data) {
-    const cx = Math.floor(xScale(d.avg_price) / cellSize);
-    const cy = Math.floor(yScale(d.complexity) / cellSize);
-    const key = `${cx},${cy}`;
-    if (!grid.has(key)) {
-      grid.set(key, d);  // Only one card per grid cell
-    }
-  }
-
-  return Array.from(grid.values());
-}
 function tagZoomKeyPoints(data, xScale, yScale, cellSize = 6) {
   const grid = new Map();
 
   for (const d of data) {
-    const cx = Math.floor(xScale(d.avg_price) / cellSize);
+    const cx = Math.floor(xScale(getXValue(d)) / cellSize);
     const cy = Math.floor(yScale(d.complexity) / cellSize);
     const key = `${cx},${cy}`;
     
@@ -203,6 +249,7 @@ function mouseoverFn(event, d) {
         <img src="${d.tooltip_image}" alt="${d.name}" width="200" style="border-radius: 4px; box-shadow: 0 0 4px rgba(0,0,0,0.5);" />
         <div>
           <strong>${d.name}</strong><br>
+          Release Date: ${d.release_date}<br>
           Complexity: ${d.complexity}<br>
           EDH Rank: ${d.edhrec_rank || "N/A"}<br>
           Supertypes: ${d.supertype}<br>
@@ -268,10 +315,10 @@ function updatePointPositions(xScale, yScale) {
   const { chartWidth, chartHeight } = meta;
 
   globalDots
-    .attr("cx", d => xScale(d.avg_price))
+    .attr("cx", d => xScale(getXValue(d)))
     .attr("cy", d => yScale(d.complexity))
      .style("display", function(d) {
-      const cx = xScale(d.avg_price);
+      const cx = xScale(getXValue(d));
       const cy = yScale(d.complexity);
       const inBounds = cx >= 0 && cx <= chartWidth && cy >= 0 && cy <= chartHeight;
       const hoveredCards = getState().hoveredCards || [];
@@ -541,7 +588,11 @@ function updateAxes(symbol) {
 
 const formatPrice = d => `${symbol}${d.toFixed(3)}`;
 
+if (xMetric === "avg_price") {
     xAxisG.call(d3.axisBottom(xScale).tickValues(ticks).tickFormat(formatPrice));
+} else {
+    xAxisG.call(d3.axisBottom(xScale).ticks(12).tickFormat(d3.timeFormat("%b %Y")));
+}
     yAxisG.call(d3.axisLeft(yScale).ticks(numTicks));
 }
 
@@ -557,11 +608,8 @@ const formatPrice = d => `${symbol}${d.toFixed(3)}`;
         .attr("text-anchor", "middle")
         .style("font-size", "14px")
         .style("font-weight", "bold")
-        .text(() => {
-            if (selectedPriceAttribute.includes("eur")) return "Avg Price (€)";
-            if (selectedPriceAttribute.includes("thx")) return "Avg Price";
-            return "Avg Price ($)";
-        })
+        .style("cursor", "pointer")
+        .text(getXLabelText())
         .on("mouseover", (event) => {
         d3.select("#tooltip")
             .style("display", "block")
@@ -571,24 +619,29 @@ const formatPrice = d => `${symbol}${d.toFixed(3)}`;
                 if (selectedPriceAttribute.includes("thx")) return "Price data is sourced from <b>Scryfall</b>.";
                 return "Price data source unknown.";
             });
-    })
-    .on("mousemove", (event) => {
-        const tooltip = d3.select("#tooltip");
-        const tooltipWidth = tooltip.node().offsetWidth;
-        const padding = 10;
-        let left = event.pageX + padding;
-        if (left + tooltipWidth > window.innerWidth) {
-            left = event.pageX - tooltipWidth - padding;
-        }
+        })
+        .on("mousemove", (event) => {
+            const tooltip = d3.select("#tooltip");
+            const tooltipWidth = tooltip.node().offsetWidth;
+            const padding = 10;
+            let left = event.pageX + padding;
+            if (left + tooltipWidth > window.innerWidth) {
+                left = event.pageX - tooltipWidth - padding;
+            }
 
-        tooltip
-            .style("left", `${left}px`)
-            .style("top", `${event.pageY + padding}px`);
-    })
-    .on("mouseout", () => {
-        d3.select("#tooltip").style("display", "none");
-    });
-        ;
+            tooltip
+                .style("left", `${left}px`)
+                .style("top", `${event.pageY + padding}px`);
+        })
+        .on("mouseout", () => {
+            d3.select("#tooltip").style("display", "none");
+        })
+        .on("click", () => {
+          xMetric = (xMetric === "avg_price") ? "release_date" : "avg_price";
+          updateXMetricScale();
+      });
+
+        
         
 
         svg.append("text")
@@ -659,7 +712,7 @@ const brush = d3.brush()
   // Collect brushed cards by name
   const brushedNames = new Set();
   for (const d of filteredData) {
-    const cx = xScale(d.avg_price);
+    const cx = xScale(getXValue(d));
     const cy = yScale(d.complexity);
     if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) {
       brushedNames.add(d.name);
@@ -720,7 +773,7 @@ const visibleData = filteredData
     const dots = gClip.selectAll("circle")
     .data(visibleData, d => d.name)
   .join("circle")
-  .attr("cx", d => xScale(d.avg_price))
+  .attr("cx", d => xScale(getXValue(d)))
   .attr("cy", d => yScale(d.complexity))
   .attr("class", d => `dots ci-${d.color_identity.join("")}`)
   .attr("r", 2.5)
@@ -850,38 +903,44 @@ noRankEntry.append("text")
 
 
 
-  function applyZoomTransform(transform) {
-  
+function applyZoomTransform(transform) {
   currentZoomLevel = transform.k;
 
-  const newX = transform.rescaleX(originalXScale);
+  const { xScale, yScale, updateAxes, originalXScale, originalYScale } = d3.select(".Scatterplot svg").node().__scales__;
+
+  // 🔁 Dynamically create correct scale for zooming
+  let baseXScale;
+  if (xMetric === "avg_price") {
+    baseXScale = d3.scaleLog()
+      .domain(originalXScale.domain())
+      .range(originalXScale.range());
+  } else {
+    baseXScale = d3.scaleTime()
+      .domain(originalXScale.domain())
+      .range(originalXScale.range());
+  }
+
+  const newX = transform.rescaleX(baseXScale);
   const newY = transform.rescaleY(originalYScale);
 
   xScale.domain(newX.domain());
   yScale.domain(newY.domain());
 
-  updateAxes(symbol);
+  updateAxes(getSymbolFromAttribute(lastPriceAttribute));
 
-  const nowZoomedOut = transform.k < ZOOM_THRESHOLD;
-  if (nowZoomedOut !== lastZoomedOut) {
-    const newVisible = actualFIlteredData;
+  const shouldShowDot = d => (currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey || getState().hoveredCards?.some(c => c.name === d.name));
 
-    gClip.selectAll("circle")
-      .data(newVisible, d => d.name)
-      .join(
-        enter => styleAndBindDots(enter.append("circle")),
-        update => styleAndBindDots(update),
-        exit => exit.remove()
-      )
-      .attr("cx", d => xScale(d.avg_price))
-      .attr("cy", d => yScale(d.complexity));
+  const gClip = d3.select(".clip-group");
 
-    lastZoomedOut = nowZoomedOut;
-  }
+  gClip.selectAll("circle")
+    .attr("cx", d => xScale(getXValue(d)))
+    .attr("cy", d => yScale(d.complexity))
+    .style("display", d => shouldShowDot(d) ? null : "none");
 
   globalDots = gClip.selectAll("circle");
-  updatePointPositions(xScale, yScale);
 }
+
+
 
         svg.call(zoom);
 
@@ -940,24 +999,31 @@ const hoveredSet = new Set(hoveredCards.map(c => c.name));
 
 
 
-    const newMaxPrice = d3.max(filteredData, d => d.avg_price);
-
-if (selectedPriceAttribute !== lastPriceAttribute) {
-  // Recalculate full domain (min + max) if price attribute changed
-  const newMinPrice = Math.max(0.001, d3.min(filteredData, d => d.avg_price));
-  originalXScale.domain([newMinPrice, newMaxPrice]);
-  lastPriceAttribute = selectedPriceAttribute;
+let baseXScale;
+if (xMetric === "avg_price") {
+  const newMin = Math.max(0.001, d3.min(filteredData, d => d.avg_price));
+  const newMax = d3.max(filteredData, d => d.avg_price);
+  originalXScale.domain([newMin, newMax]);
+  baseXScale = d3.scaleLog()
+    .domain(originalXScale.domain())
+    .range(originalXScale.range());
 } else {
-  // Otherwise, keep old min and only update max
-  const currentMin = originalXScale.domain()[0];
-  originalXScale.domain([currentMin, newMaxPrice]);
+  const validDates = filteredData
+    .map(d => new Date(d.release_date))
+    .filter(d => d instanceof Date && !isNaN(d));
+
+  const [minDate, maxDate] = d3.extent(validDates);
+  originalXScale.domain([minDate, maxDate]);
+  baseXScale = d3.scaleTime()
+    .domain(originalXScale.domain())
+    .range(originalXScale.range());
 }
 
 
 
-    const transform = d3.zoomTransform(svg.node());
-    const newX = transform.rescaleX(originalXScale);
-    xScale.domain(newX.domain());
+
+ const transform = d3.zoomTransform(svg.node());
+xScale.domain(transform.rescaleX(baseXScale).domain());
 
 
     const symbol = getSymbolFromAttribute(selectedPriceAttribute);
@@ -993,7 +1059,7 @@ const dots = gClip.selectAll("circle")
   .attr("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
   .attr("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
   .style("display", d => (currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey || hoveredSet.has(d.name)) ? null : "none")
-  .attr("cx", d => xScale(d.avg_price))
+  .attr("cx", d => xScale(getXValue(d)))
   .attr("cy", d => yScale(d.complexity))
   .on("mouseover", mouseoverFn)
   .on("mousemove", mousemoveFn)
