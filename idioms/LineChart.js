@@ -1,13 +1,16 @@
 
 import { updateState, getState } from "../state.js";
-import { onHoverCard, onClearHover, onSetHover, onClearSetHover, onRectHover, onClearRectHover, emitLineYearHover, emitClearLineYearHover,onAlluvialHover, onClearAlluvialHover   } from "./Events.js";
+import { emitLineYearHover, emitClearLineYearHover, emitLineChartClick, 
+         onHoverCard, onClearHover, onSetHover, onClearSetHover, onRectHover, onClearRectHover, onAlluvialHover, 
+         onClearAlluvialHover   } from "./Events.js";
 const lineChartTooltipText = `
 <strong>Timeline Interactions:</strong><br>
-• <strong>Hover</strong> a circle: view year and metrics.<br>
-• <strong>Click</strong> a circle: toggle year filter.<br>
-• <strong>Brush</strong> across timeline: multi-select years.<br>
-• <strong>Hover</strong> a line: inspect metric value at that year.<br>
-• <strong>Zoom</strong>: scroll to focus a time range.<br>
+• <strong>Hover</strong> a circle: View year and metrics and highlights the other visuzalizations.<br>
+• <strong>Click</strong> a circle: Selects the dots in the scatterplot that have a print released in that year.<br>
+• <strong>Right-Click</strong> a circle: Filters by the selected year.<br>
+• <strong>Brush</strong> across timeline: Filters by the selected years.<br>
+• <strong>Hover</strong> a line: Inspect metric value at that year and highlights the other visuzalizations.<br>
+• <strong>Scroll</strong>: Zoom to focus on a time range.<br>
 `;
 
 const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };
@@ -180,7 +183,7 @@ infoGroup.append("text")
   .attr("font-size", `${infoTextSize}px`)
   .attr("font-weight", "bold")
   .attr("fill","#fff")
-  .text("ℹ")
+  .text("?")
   .attr("pointer-events", "none");
 
 
@@ -379,6 +382,7 @@ infoGroup.append("text")
                         const year = this.getAttribute("data-year");
                         return localSelectedYears.size === 0 || localSelectedYears.has(year) ? 1 : 0.5;
                     });
+        emitLineChartClick({ year: selectedYear });
 
             })
             .on("contextmenu", function(event,d){

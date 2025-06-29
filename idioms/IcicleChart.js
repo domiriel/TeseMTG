@@ -2,7 +2,9 @@
 import { updateState, getState } from "../state.js";
 // @ts-ignore
 import { showLoader, hideLoader, showPopup } from "./LoadingAnimation.js";
-import { onHoverCard, onClearHover, onSetHover, onClearSetHover, emitIcicleRectHover, emitClearRectHover, onClearLineYearHover, onLineYearHover, onAlluvialHover, onClearAlluvialHover } from "./Events.js";
+import {emitIcicleRectHover, emitClearRectHover,emitIcicleClick ,
+        onHoverCard, onClearHover, onSetHover, onClearSetHover,  onClearLineYearHover, onLineYearHover, 
+        onAlluvialHover, onClearAlluvialHover } from "./Events.js";
 let globalRects = null;  
 let clickTimer = null;
 
@@ -53,8 +55,10 @@ onClearAlluvialHover(() => {
 const infoTooltipText = `
 <strong>Icicle Chart Interactions:</strong><br>
 • <strong>Click</strong> on a rectangle: zoom into that section.<br>
-• <strong>Double-click</strong> on a rectangle: apply a global filter to the dataset.<br>
+• <strong>Ctrl + Click</strong> on a rectangle(color identities only): selects all the dots in the scatterplot that match the color identity.<br>
+• <strong>Right-Click</strong> on a rectangle: apply a global filter to the dataset.<br>
 • <strong>Hover</strong> on a rectangle: see details.<br>
+• <strong>Hover</strong> on a rectangle(color identities only): highlights the other visualizations.<br>
 `;
 const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };
 
@@ -345,7 +349,7 @@ infoGroup.append("text")
   .attr("font-size", `${infoTextSize}px`)
   .attr("font-weight", "bold")
   .attr("fill","#fff")
-  .text("ℹ")
+  .text("?")
   .attr("pointer-events", "none");
 
 
@@ -428,14 +432,14 @@ const levelHeight = chartHeight / depth;
             .attr("fill", d => d.data.color)
             .style("cursor", "pointer")
             .on("click", function(event, d) {
-                if (clickTimer) {
-                    clearTimeout(clickTimer);
-                    clickTimer = null;
-                }
-                clickTimer = setTimeout(() => {
+                    if (event.ctrlKey || event.metaKey) {
+                        if (d.depth === 2) {
+                            emitIcicleClick({ colorIdentity: d.data.name.toLowerCase() });
+                        }
+
+                    } else {
                     clicked(event, d, false); // single-click
-                    clickTimer = null;
-                }, 250);
+                    }
             })
             .on("contextmenu", function(event, d) {
                 event.preventDefault();

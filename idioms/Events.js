@@ -36,6 +36,34 @@ export function onClearSetHover(callback) {
   emitter.addEventListener("set-hover-clear", callback);
 }
 
+let yearClickHandlers = [];
+export function onYearClick(handler) {
+  yearClickHandlers.push(handler);
+}
+export function emitYearClick(payload) {
+  yearClickHandlers.forEach(fn => fn(payload));
+}
+
+
+let setClickHandlers = [];
+export function onTimelineSetClick(handler) {
+  setClickHandlers.push(handler);
+}
+export function emitTimelineSetClick(payload) {
+  setClickHandlers.forEach(fn => fn(payload));
+}
+
+
+let icicleClickHandlers = [];
+
+export function onIcicleClick(handler) {
+  icicleClickHandlers.push(handler);
+}
+
+export function emitIcicleClick(payload) {
+  icicleClickHandlers.forEach(fn => fn(payload));
+}
+
 //Icicle Events
 
 export function emitIcicleRectHover(rectInfo){
@@ -69,6 +97,16 @@ export function onClearLineYearHover(callback) {
   emitter.addEventListener("line-year-hover-clear", callback);
 }
 
+let lineChartClickHandlers = [];
+
+export function onLineChartClick(handler) {
+  lineChartClickHandlers.push(handler);
+}
+
+export function emitLineChartClick(payload) {
+  lineChartClickHandlers.forEach(fn => fn(payload));
+}
+
 // Alluvial Events
 
 export function emitAlluvialHover(category, value) {
@@ -87,4 +125,20 @@ export function emitClearAlluvialHover() {
 
 export function onClearAlluvialHover(callback) {
   emitter.addEventListener("alluvial-hover-clear", callback);
+}
+
+let alluvialClickHandlers = [];
+export function onAlluvialClick(handler) {
+  alluvialClickHandlers.push(handler);
+}
+export function emitAlluvialClick(payload) {
+  alluvialClickHandlers.forEach(fn => fn(payload));
+}
+
+let alluvialLinkClickHandlers = [];
+export function onAlluvialLinkClick(handler) {
+  alluvialLinkClickHandlers.push(handler);
+}
+export function emitAlluvialLinkClick(payload) {
+  alluvialLinkClickHandlers.forEach(fn => fn(payload));
 }

@@ -1,7 +1,8 @@
 
 import { updateState, getState } from "../state.js";
 import { updateFilterPanel } from "./FilterPanel.js";
-import { onHoverCard, onClearHover, emitSetHover, emitClearHover, emitClearSetHover, onRectHover, onClearRectHover, onClearLineYearHover, onLineYearHover, onAlluvialHover, onClearAlluvialHover } from "./Events.js";
+import { emitSetHover, emitClearHover, onHoverCard, onClearHover, emitClearSetHover,emitTimelineSetClick, emitYearClick, onRectHover, 
+        onClearRectHover, onClearLineYearHover, onLineYearHover, onAlluvialHover, onClearAlluvialHover } from "./Events.js";
 
 let localSelectedYears = new Set();
 let localSelectedSetNames = new Set();
@@ -43,13 +44,13 @@ let uniqueSets = null;
 const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };
 const timelineTooltipText = `
 <strong>Timeline Interactions:</strong><br>
-• <strong>Click</strong> a year: toggle filter by year.<br>
+• <strong>Click</strong> a year: Selects the dots in the scatterplot that have a print released in that year.<br>
 • <strong>Hover</strong> a year: see number of sets and types.<br>
-• <strong>Click</strong> a set square: filter by set.<br>
-• <strong>Click</strong> a set type label: filter by type.<br>
+• <strong>Click</strong> a set square: Selects the dots in the scatterplot that have a print released in that set.<br>
+• <strong>Right-Click</strong> an element: Filter by the selected element.<br>
 • <strong>Search</strong> for a set name using the bar above.<br>
-• <strong>Brush</strong> to select multiple sets.<br>
-• <strong>Scroll</strong> to focus a time range.
+• <strong>Brush</strong>: Filters by the selected sets.<br>
+• <strong>Scroll</strong>: Focus on a time range.
 `;
 
 
@@ -227,7 +228,7 @@ const relativeLeft = iconLeft - containerBounds.left;
   .style("cursor", "help")
   .style("z-index", "10000")
   .style("color", "#fff")
-  .text("ℹ")
+  .text("?")
   .on("mouseover", function (event) {
     d3.select("#tooltip")
       .style("display", "block")
@@ -384,6 +385,7 @@ const relativeLeft = iconLeft - containerBounds.left;
 
                 updateYearTickStyles();
                 updateSetRectOpacity();  
+                emitYearClick({year});
             })
             .on("contextmenu", function (event, d) {
     event.preventDefault();
@@ -569,6 +571,15 @@ chartGroup.append("g")
                     localSelectedSetNames.add(d.name);
                     d3.select(this).attr("fill", "#007bff"); 
                 }
+                emitTimelineSetClick({
+            name: d.name,
+            releaseDate: d.releaseDate,
+            setType: d.setType,
+            cardCount: d.cardCount,
+            originalities: new Set(d.originalities),
+            rarities: new Set(d.rarities),
+            colorIdentities: new Set(d.colorIdentities)
+        });
             })
 .on("contextmenu", function (event, d) {
     event.preventDefault();

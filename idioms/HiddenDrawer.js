@@ -17,12 +17,32 @@ export function createHiddenDrawer(containerSelector = "body") {
   // Then button separately
   drawerButton = container.append("button")
     .attr("id", "toggleDrawerButton")
+    .style("background", "#8A9CE4")
+    .style("color", "white")
     .on("click", () => {
       const isVisible = drawerContainer.classed("visible");
       drawerContainer.classed("visible", !isVisible);
       updateButtonLabel(cardsInDrawer.length);
     });
 
+    drawerContainer.insert("button", "#cardImages")
+  .attr("id", "clearAllButton")
+  .text("Clear All")
+  .style("margin", "10px")
+  .style("padding", "6px 12px")
+  .style("background", "#dc3545")
+  .style("color", "white")
+  .style("border", "none")
+  .style("border-radius", "4px")
+  .style("cursor", "pointer")
+  .on("click", () => {
+    updateState({ hoveredCards: [], isHoverUpdate: true });
+
+    // Optional: also unhighlight all dots
+    d3.selectAll(".dots circle").classed("selected-hover", false);
+  });
+
+  drawerContainer.insert("button", "#cardImages")
   updateButtonLabel(0);
 }
 
@@ -209,4 +229,134 @@ function updateButtonLabel(count) {
     drawerButton.html(`${arrow} (${count})`);
   }
 }
+
+export function createIllegalDrawer(cards, containerSelector = "body") {
+  const container = d3.select(containerSelector);
+
+const illegalDrawer = container.append("div")
+  .attr("id", "illegalDrawer")
+  .attr("class", "drawer")
+  .html(`
+  <div class="drawer-title">Illegal Cards</div>
+  <div id="illegalCardImages"></div>
+`);
+
+
+// Append button after the drawer
+const illegalButton = container.append("button")
+  .attr("id", "toggleIllegalDrawerButton")
+  .style("background", "#D9534F")
+  .style("color", "white")
+  .text(`← (${cards.length})`)
+  .on("click", () => {
+    const isVisible = illegalDrawer.classed("visible");
+    illegalDrawer.classed("visible", !isVisible);
+    const arrow = isVisible ? "→" : "←";
+    illegalButton.text(`${arrow} (${cards.length})`);
+  });
+
+  updateIllegalDrawer(cards);
+}
+
+export function updateIllegalDrawer(cards) {
+  const cardArea = d3.select("#illegalCardImages");
+  const pageSize = 25;
+  const totalPages = Math.ceil(cards.length / pageSize);
+  let currentPage = 0;
+
+  const renderPage = () => {
+    const visibleCards = cards.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
+    const cardSel = cardArea.selectAll(".card-wrapper").data(visibleCards, d => d.name);
+
+    cardSel.exit().remove();
+
+    const cardEnter = cardSel.enter()
+      .append("div")
+      .attr("class", "card-wrapper")
+      .style("margin-bottom", "12px");
+
+    cardEnter.append("img")
+      .style("width", "80%")
+      .style("border-radius", "8px")
+      .style("box-shadow", "0 2px 8px rgba(0, 0, 0, 0.2)");
+
+    const cardMerge = cardEnter.merge(cardSel);
+
+    cardMerge.each((card, i, nodes) => {
+      const wrapper = d3.select(nodes[i]);
+      if (typeof card.selectedPrintIndex !== "number") card.selectedPrintIndex = 0;
+      const idx = card.selectedPrintIndex;
+      card.image_normal = card.all_print_images[idx];
+      wrapper.select("img").attr("src", card.image_normal);
+
+// Add navigation buttons
+let navWrapper = wrapper.select(".nav-wrapper");
+if (navWrapper.empty()) {
+  navWrapper = wrapper.append("div")
+    .attr("class", "nav-wrapper")
+    .style("margin-top", "4px")
+    .style("display", "flex")
+    .style("gap", "6px")
+    .style("justify-content", "center");
+} else {
+  navWrapper.html("");
+}
+
+navWrapper.append("button")
+  .text("◀")
+  .attr("title", "Previous print")
+  .style("padding", "2px 6px")
+  .on("click", () => {
+    const newIdx = (card.selectedPrintIndex - 1 + card.all_print_images.length) % card.all_print_images.length;
+    card.selectedPrintIndex = newIdx;
+    card.image_normal = card.all_print_images[newIdx];
+    wrapper.select("img").attr("src", card.image_normal);
+  });
+
+navWrapper.append("button")
+  .text("▶")
+  .attr("title", "Next print")
+  .style("padding", "2px 6px")
+  .on("click", () => {
+    const newIdx = (card.selectedPrintIndex + 1) % card.all_print_images.length;
+    card.selectedPrintIndex = newIdx;
+    card.image_normal = card.all_print_images[newIdx];
+    wrapper.select("img").attr("src", card.image_normal);
+  });
+
+
+
+    });
+
+    // Pagination
+    const nav = d3.select("#illegalDrawer #pagination-nav");
+    if (!nav.empty()) nav.remove();
+
+    d3.select("#illegalDrawer").insert("div", "#illegalCardImages")
+      .attr("id", "pagination-nav")
+      .style("text-align", "center")
+      .style("margin-top", "10px")
+      .html(`
+        <button id="prevPage" ${currentPage === 0 ? "disabled" : ""}>Prev</button>
+        <span> Page ${currentPage + 1} of ${totalPages} </span>
+        <button id="nextPage" ${currentPage === totalPages - 1 ? "disabled" : ""}>Next</button>
+      `);
+
+    d3.select("#prevPage").on("click", () => {
+      if (currentPage > 0) {
+        currentPage--;
+        renderPage();
+      }
+    });
+    d3.select("#nextPage").on("click", () => {
+      if (currentPage < totalPages - 1) {
+        currentPage++;
+        renderPage();
+      }
+    });
+  };
+
+  renderPage();
+}
+
 

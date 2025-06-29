@@ -5,7 +5,7 @@ import { createTimelineView, highlightTimelineSets } from "./idioms/TimelineView
 import { createScatterPlot, updateScatterPlot, prepareScatterData } from "./idioms/Scatterplot.js";
 import { createStackedLineChart, highlightLineChart } from "./idioms/LineChart.js";
 import { createFilterPanel, updateFilterPanel } from "./idioms/FilterPanel.js";
-import { createHiddenDrawer, updateDrawer } from "./idioms/HiddenDrawer.js";
+import { createHiddenDrawer, updateDrawer, createIllegalDrawer} from "./idioms/HiddenDrawer.js";
 import { showLoader, hideLoader } from "./idioms/LoadingAnimation.js";
 
 const filterApplicationOrder = [
@@ -185,6 +185,10 @@ getState().onChange("hoveredCards", (hoveredCards) => {
   createFilterPanel(originalData, filtered, ".FilterPanel", selectedFilters);
   updateFilterPanel(originalData, filtered, selectedFilters);
   createAlluvialChart(filtered, ".AlluvialChart", false, selectedPriceAttribute);
+  cardsInIllegalDrawer = computeIllegalCards(originalData);
+  const processedIllegalData = prepareScatterData(cardsInIllegalDrawer, selectedPriceAttribute);
+  console.log(cardsInIllegalDrawer.length)
+createIllegalDrawer(processedIllegalData, ".IllegalDrawerArea");
   createHiddenDrawer(".HiddenDrawerArea");
   createTimelineView(filtered, ".TimelineView");
   const processedScatterData = prepareScatterData(filtered, selectedPriceAttribute);
@@ -622,6 +626,31 @@ function cloneFilters(filters) {
   }
   return cloned;
 }
-  
+
+
+function isCardPriceless(card) {
+  return (
+    typeof card.price_usd !== "number" ||
+    typeof card.price_usd_foil !== "number" ||
+    typeof card.price_usd_etched !== "number" ||
+    typeof card.price_eur !== "number" ||
+    typeof card.price_eur_foil !== "number" ||
+    typeof card.price_tix !== "number"
+  ) || (
+    card.price_usd <= 0 &&
+    card.price_usd_foil <= 0 &&
+    card.price_usd_etched <= 0 &&
+    card.price_eur <= 0 &&
+    card.price_eur_foil <= 0 &&
+    card.price_tix <= 0
+  );
+}
+
+let cardsInIllegalDrawer = [];
+
+function computeIllegalCards(data) {
+  return data.filter(isCardPriceless);
+}
+
     init().catch(console.error);
     

@@ -1,7 +1,9 @@
 
 import { updateState, getState } from "../state.js";
 import { updateFilterPanel } from "./FilterPanel.js"; 
-import {emitAlluvialHover, emitClearAlluvialHover, onHoverCard, onClearHover, onSetHover, onClearSetHover,  onRectHover, onClearRectHover, onLineYearHover, onClearLineYearHover  } from "./Events.js";
+import {emitAlluvialHover, emitClearAlluvialHover, emitAlluvialClick, emitAlluvialLinkClick,
+        onHoverCard, onClearHover, onSetHover, onClearSetHover,  onRectHover, onClearRectHover, 
+        onLineYearHover, onClearLineYearHover  } from "./Events.js";
 
   const customOrder = [
     "original", "reprint", "functional reprint",
@@ -99,8 +101,9 @@ function formatPriceLabel(priceAttr) {
 const infoTooltipText = `
 <strong>Chart Interactions:</strong><br>
 • <strong>Click</strong> on a node or link: temporarily filter the chart.<br>
-• <strong>Double-click</strong> on a node or link: apply a global filter to the dataset.<br>
-• <strong>Hover</strong> on nodes or links: see details.<br>
+• <strong>Ctrl + Click</strong> on a node or link: Highlights the dots in the scatterplot that matches the category.<br>
+• <strong>Right-Click</strong> on a node or link: apply a global filter to the dataset.<br>
+• <strong>Hover</strong> on nodes or links: see details and highlights the other visualizations.<br>
 `;
 
 
@@ -240,7 +243,7 @@ infoGroup.append("text")
   .attr("font-size", `${infoTextSize}px`)
   .attr("font-weight", "bold")
   .attr("fill","#fff")
-  .text("ℹ")
+  .text("?")
   .attr("pointer-events", "none");
 
 
@@ -346,15 +349,24 @@ sankeyGroup.selectAll(".link")
     .attr("stroke-width", 1);
 })
         .on("click", function(event, d) {
-  const key = `${d.source.name}|${d.target.name}`;
 
-  if (localLinkFilters.has(key)) {
-    localLinkFilters.delete(key);
-  } else {
-    localLinkFilters.add(key);
-  }
+         if (event.ctrlKey || event.metaKey) {
+              emitAlluvialLinkClick({
+                originality: d.source.name.toLowerCase(),
+                rarity: d.target.name.toLowerCase()
+              });
+          } else {
+            const key = `${d.source.name}|${d.target.name}`;
 
-  applyLocalLinkAndNodeFilter();
+            if (localLinkFilters.has(key)) {
+              localLinkFilters.delete(key);
+            } else {
+              localLinkFilters.add(key);
+            }
+
+            applyLocalLinkAndNodeFilter();
+          }
+ 
 })
         .on("contextmenu", function(event, d) {
         event.preventDefault(); // prevent the browser menu
@@ -498,17 +510,22 @@ const nodeGroups = sankeyGroup.selectAll(".node")
       emitClearAlluvialHover(); 
     })
           .on("click", function(event, d) {
-  const category = d.x0 === 0 ? "Originality" : "Rarity";
+ const category = d.x0 === 0 ? "Originality" : "Rarity";
   const name = d.name;
 
-
-  if (localChartFilters[category].has(name)) {
-    localChartFilters[category].delete(name);
+  if (event.ctrlKey || event.metaKey) {
+    // 👇 Ctrl-click → send signal only
+    emitAlluvialClick({ category, value: name.toLowerCase() });
   } else {
-    localChartFilters[category].add(name);
-  }
+    // 👇 Regular click → toggle local chart filter
+    if (localChartFilters[category].has(name)) {
+      localChartFilters[category].delete(name);
+    } else {
+      localChartFilters[category].add(name);
+    }
 
-  applyLocalChartFilter(); 
+    applyLocalChartFilter();
+  }
 })
 
           .on("contextmenu", function(event, d) {
