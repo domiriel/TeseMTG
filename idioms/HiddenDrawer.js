@@ -42,6 +42,10 @@ export function createHiddenDrawer(containerSelector = "body") {
     d3.selectAll(".dots circle").classed("selected-hover", false);
   });
 
+  drawerContainer.select("#cardImages")
+  .style("display", "flex")
+  .style("flex-direction", "column")
+  .style("align-items", "center");
   drawerContainer.insert("button", "#cardImages")
   updateButtonLabel(0);
 }
@@ -74,18 +78,25 @@ const visibleCards = cards.slice(currentPage * pageSize, (currentPage + 1) * pag
     .append("div")
     .attr("class", "card-wrapper")
     .style("position", "relative")
+    .style("display", "flex")
+.style("flex-direction", "column")
+.style("align-items", "center")
+    .style("justify-content", "center")
     .style("margin-bottom", "12px");
 
   cardEnter.append("img")
     .attr("alt", d => d.name)
+    .attr("display", "flex")
     .style("width", "80%")
+    
+    .style("justify-content", "center")
     .style("border-radius", "8px")
     .style("box-shadow", "0 2px 8px rgba(0, 0, 0, 0.2)");
 
   cardEnter.append("div")
     .attr("class", "nav-wrapper")
     .style("margin-top", "4px")
-    .style("display", "flex")
+
     .style("gap", "6px")
     .style("justify-content", "center");
 
@@ -162,6 +173,11 @@ const visibleCards = cards.slice(currentPage * pageSize, (currentPage + 1) * pag
           .filter(d => d.name === card.name)
           .classed("selected-hover", false);
       });
+
+      wrapper.select("img")
+  .on("mouseover", (event) => showCompactTooltip(card, event))
+  .on("mousemove", (event) => positionTooltip(event))
+  .on("mouseout", () => d3.select("#tooltip").style("display", "none"));
 
     wrapper.select(".show-sets-btn")
       .text(`Show Sets (${card.all_sets?.length || 0})`)
@@ -255,6 +271,11 @@ const illegalButton = container.append("button")
     illegalButton.text(`${arrow} (${cards.length})`);
   });
 
+
+  d3.select("#illegalCardImages")
+  .style("display", "flex")
+  .style("flex-direction", "column")
+  .style("align-items", "center");
   updateIllegalDrawer(cards);
 }
 
@@ -273,7 +294,12 @@ export function updateIllegalDrawer(cards) {
     const cardEnter = cardSel.enter()
       .append("div")
       .attr("class", "card-wrapper")
-      .style("margin-bottom", "12px");
+      .style("margin-bottom", "12px")
+      
+      .style("display", "flex")
+  .style("flex-direction", "column")
+  .style("align-items", "center")
+  .style("justify-content", "center");
 
     cardEnter.append("img")
       .style("width", "80%")
@@ -325,6 +351,11 @@ navWrapper.append("button")
   });
 
 
+        wrapper.select("img")
+  .on("mouseover", (event) => showCompactTooltip(card, event))
+  .on("mousemove", (event) => positionTooltip(event))
+  .on("mouseout", () => d3.select("#tooltip").style("display", "none"));
+
 
     });
 
@@ -359,4 +390,73 @@ navWrapper.append("button")
   renderPage();
 }
 
+function showCompactTooltip(card, event = null) {
+  const tooltip = d3.select("#tooltip");
+  const colorBg = getColorIdentityBackground(card.color_identity);
+  tooltip
+    .style("display", "block")
+    .style("background", colorBg)
+    .style("color", "black")
+    .html(`
+      <div>
+        <strong>${card.name}</strong><br>
+        Release Date: ${card.release_date}<br>
+        Complexity: ${card.complexity}<br>
+        EDH Rank: ${card.edhrec_rank || "N/A"}<br>
+        Supertypes: ${card.supertype}<br>
+        Type: ${card.type}<br>
+        Subtype: ${card.subtype}<br>
+        Colors: ${card.color_identity?.join("") || "None"}<br>
+        All Sets: ${card.all_sets?.map(set => `${set.name} (${set.type})`).join("<br>") || "—"}<br>
+        Number of Prints: ${card.all_print_images?.length || 0}
+      </div>
+    `);
 
+  if (event) positionTooltip(event, tooltip);
+}
+
+function positionTooltip(event, tooltip = d3.select("#tooltip")) {
+  const tooltipWidth = tooltip.node().offsetWidth;
+  const tooltipHeight = tooltip.node().offsetHeight;
+  const padding = 10;
+  let x = event.pageX + padding;
+  let y = event.pageY + padding;
+
+  if (x + tooltipWidth > window.innerWidth) {
+    x = event.pageX - tooltipWidth - padding;
+  }
+  if (y + tooltipHeight > window.innerHeight) {
+    y = event.pageY - tooltipHeight - padding;
+  }
+
+  tooltip
+    .style("left", `${x}px`)
+    .style("top", `${y}px`);
+}
+
+
+function getColorIdentityBackground(colorIdentity) {
+  if (!Array.isArray(colorIdentity) || colorIdentity.length === 0) return "#888";
+
+  const colorMap = {
+    W: "#f6f1d5",
+    U: "#b3d9ff",
+    R: "#f8b3a0",
+    B: "#c8b4c0",
+    G: "#b6d7b3",
+  };
+
+  const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };
+
+  // Sort identity based on defined order
+  const sorted = [...colorIdentity].sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b]);
+  const colors = sorted.map(c => colorMap[c]).filter(Boolean);
+
+  if (colors.length === 1) {
+    return colors[0];
+  } else {
+    const step = 100 / (colors.length - 1);
+    const stops = colors.map((color, i) => `${color} ${i * step}%`);
+    return `linear-gradient(to right, ${stops.join(", ")})`;
+  }
+}

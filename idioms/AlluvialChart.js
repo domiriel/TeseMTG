@@ -128,7 +128,6 @@ const container = d3.select(containerId);
 const { width, height } = container.node().getBoundingClientRect();
 const svgWidth = width;
 const svgHeight = height;
-
   
 const chartWidth = svgWidth * 0.85
 const chartHeight = svgHeight * 0.75

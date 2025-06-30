@@ -7,6 +7,36 @@ import { emitSetHover, emitClearHover, onHoverCard, onClearHover, emitClearSetHo
 let localSelectedYears = new Set();
 let localSelectedSetNames = new Set();
 
+
+function getDiscreteColor(percentage) {
+  if (percentage < 20) return "#ceb397";
+  if (percentage < 40) return "#b8997a";
+  if (percentage < 60) return "#998066";
+  if (percentage < 80) return "#736659";
+  return "#594a3a"; 
+}
+
+function getHighlightedColor(percentage){
+if (percentage < 20) return "#fbecd0";
+  if (percentage < 40) return "#f8dfb0";
+  if (percentage < 60) return "#f2c46e";
+  if (percentage < 80) return "#d89313";
+  return "#9b690d"; 
+}
+
+function getSelectedColor(percentage){
+if (percentage < 20) return "#dcdfef";
+  if (percentage < 40) return "#b9bfda";
+  if (percentage < 60) return "#9AA0BC";
+  if (percentage < 80) return "#6a708a";
+  return "#3a4059"; 
+}
+
+function getColorByCardCount(count, min, max, func) {
+  const percent = ((count - min) / (max - min)) * 100;
+  return func(percent);
+}
+
 onHoverCard(card => {
   highlightTimelineSetsHoverOnly(card);
 });
@@ -42,16 +72,9 @@ onClearAlluvialHover(() => {
 
 let uniqueSets = null;
 const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };
-const timelineTooltipText = `
-<strong>Timeline Interactions:</strong><br>
-• <strong>Click</strong> a year: Selects the dots in the scatterplot that have a print released in that year.<br>
-• <strong>Hover</strong> a year: see number of sets and types.<br>
-• <strong>Click</strong> a set square: Selects the dots in the scatterplot that have a print released in that set.<br>
-• <strong>Right-Click</strong> an element: Filter by the selected element.<br>
-• <strong>Search</strong> for a set name using the bar above.<br>
-• <strong>Brush</strong>: Filters by the selected sets.<br>
-• <strong>Scroll</strong>: Focus on a time range.
-`;
+let dynamicLegendHTML = null
+
+
 
 
 function updateYearTickStyles() {
@@ -141,10 +164,63 @@ export function createTimelineView(data, containerId, isUpdate = false) {
 
  
     uniqueSets = Array.from(setMap.values()).sort((a, b) => a.releaseDate - b.releaseDate);
+
+    const allCardCounts = uniqueSets.map(set => set.cardCount);
+const countRange = {
+  min: d3.min(allCardCounts),
+  max: d3.max(allCardCounts)
+};
+
+    const numBins = 5;
+const countStep = (countRange.max - countRange.min) / numBins;
+const dynamicLegendData = Array.from({ length: numBins }, (_, i) => {
+  const min = countRange.min + i * countStep;
+  const max = countRange.min + (i + 1) * countStep;
+  return {
+    min,
+    max,
+    color: getDiscreteColor(i * (100 / numBins)),
+    label: `${Math.round(min)}–${Math.round(max-1)}`
+  };
+}).reverse();
+
+dynamicLegendHTML = dynamicLegendData.map(entry => `
+  <div style="display: flex; align-items: center">
+    <div style="
+      width: 14px;
+      height: 14px;
+      background-color: ${entry.color};
+      border: 1px solid #000;
+      margin-right: 6px;
+      flex-shrink: 0;
+    "></div>
+    <span style="font-size: 12px;">${entry.label}</span>
+  </div>
+`).join("");
+
+    const timelineTooltipText = `
+<strong>Timeline Interactions:</strong><br>
+• <strong>Click</strong> a year: Selects the dots in the scatterplot that have a print released in that year.<br>
+• <strong>Hover</strong> a year: see number of sets and types.<br>
+• <strong>Click</strong> a set square: Selects the dots in the scatterplot that have a print released in that set.<br>
+• <strong>Right-Click</strong> an element: Filter by the selected element.<br>
+• <strong>Search</strong> for a set name using the bar above.<br>
+• <strong>Brush</strong>: Filters by the selected sets.<br>
+• <strong>Scroll</strong>: Focus on a time range.<br><br>
+<strong>Color Legend (Card Count):</strong><br>
+${dynamicLegendHTML}
+`;
     const yearTypeCounts = new Map();
     const typeCounts = new Map();
 
+
+
     uniqueSets.forEach(set => {
+        const percent = ((set.cardCount - countRange.min) / (countRange.max - countRange.min)) * 100;
+        set.baseColor = getDiscreteColor(percent)
+        set.highlightColor = getHighlightedColor(percent);
+  set.selectedColor = getSelectedColor(percent);
+
         const year = set.releaseDate.getFullYear().toString();
         const type = set.setType;
 
@@ -168,7 +244,7 @@ export function createTimelineView(data, containerId, isUpdate = false) {
     const container = d3.select(containerId);
     const containerBounds = container.node().getBoundingClientRect();
 
-    const containerWidth = containerBounds.width * 0.89;
+    const containerWidth = containerBounds.width * 0.98;
    
     const searchContainerwidth = containerBounds.width * 0.07;
     const containerHeight = containerBounds.height;
@@ -186,45 +262,35 @@ export function createTimelineView(data, containerId, isUpdate = false) {
     if (isUpdate) {
         d3.select(containerId).select(".chart-wrapper").remove();
     }
-    container.insert("input", ":first-child")
-        .attr("type", "text")
-        .attr("placeholder", "Search set...")
-        .attr("class", "timeline-search-bar")
-        .style("position", "absolute")
-        .style("top", "0px")
-        .style("left", "-4px")
-        .style("margin", "10px")
-        .style("white-space", "nowrap")
-        .style("z-index", "9999")
-        .style("padding", "5px")
-        .style("overflow", "visible")
-        .style("font-size", "14px")
-        .style("width", "9.5%");
 
 
-    const searchInput = container.select(".timeline-search-bar");
-const searchBounds = searchInput.node().getBoundingClientRect();
+console.log(containerBounds.width)
 
 
-const iconRadius = containerBounds.width*0.43 * 0.015;
+
+
+const iconRadius = containerBounds.width*0.485 * 0.015;
+console.log("Icon Radius", iconRadius)
 const iconSize = iconRadius * 2;
-const infoTextSize = Math.min(containerBounds.width * 0.0187, 15);
-const iconLeft = searchBounds.left + searchBounds.width + 8; // 8px spacing
-const relativeLeft = iconLeft - containerBounds.left;
-    const infoGroup = container.append("div")
+const infoTextSize = Math.min(containerBounds.width * 0.485 * 0.0187, 15);
+
+
+//
+const infoGroup = container.append("div")
   .attr("class", "timeline-info-icon")
   .style("position", "absolute")
-  .style("top", "16px")
-  .style("left", `${relativeLeft}px`)
+  .style("top", "12px")
+  .style("left", "12px")
   .style("width", `${iconSize}px`)
-.style("height", `${iconSize}px`)
+  .style("height", `${iconSize}px`)
   .style("background", "#8A9CE4")
   .style("stroke", "#fff")
   .style("border", "1px solid #fff")
   .style("border-radius", "50%")
   .style("text-align", "center")
-.style("font-size", `${infoTextSize}px`)
-.style("line-height", `${iconSize}px`)
+  .style("font-size", `${infoTextSize}px`)
+    .style("font-weight", "bold")   
+  .style("line-height", `${iconSize}px`)
   .style("cursor", "help")
   .style("z-index", "10000")
   .style("color", "#fff")
@@ -259,79 +325,7 @@ const relativeLeft = iconLeft - containerBounds.left;
   });
 
 
-    container.insert("div", ":nth-child(2)")
-        .attr("class", "search-dropdown")
-        .style("position", "absolute")
-        .style("top", "54px")
-        .style("left", "10px")
-        .style("width", "200px")
-        .style("max-height", "100px")
-        .style("overflow-y", "auto")
-        .style("background", "white")
-        .style("border", "1px solid #ccc")
-        .style("display", "none")
-        .style("z-index", "9999");
-    container.select(".timeline-search-bar").on("input", function () {
-        const query = this.value.toLowerCase().trim();
-        const dropdown = container.select(".search-dropdown");
 
-        if (!query) {
-            dropdown.style("display", "none");
-            return;
-        }
-
-        const matches = uniqueSets.filter(d => d.name.toLowerCase().includes(query));
-
-        dropdown.selectAll("div").remove();
-
-        if (matches.length === 0) {
-            dropdown.style("display", "none");
-            return;
-        }
-
-        dropdown.style("display", "block");
-
-
-
-    
-        dropdown.selectAll("div")
-        .data(matches, d => d.name)
-        .join(
-            enter => enter.append("div")
-                .text(d => d.name)
-                .style("padding", "5px")
-                .style("cursor", "pointer")
-                .style("border-bottom", "1px solid #eee")
-                .on("mouseover", function () {
-                    d3.select(this).style("background", "#f0f0f0");
-                })
-                .on("mouseout", function () {
-                    d3.select(this).style("background", "white");
-                })
-                .on("click", function (event, d) {             container.select(".timeline-search-bar").property("value", d.name);
-                dropdown.style("display", "none");
-
-                d3.selectAll(".set-rect").classed("search-match", false);
-
-                d3.selectAll(".set-rect")
-                    .filter(s => s.name === d.name)
-                    .classed("search-match", true);
-
-                setTimeout(() => {
-                    d3.selectAll(".set-rect")
-                        .filter(s => s.name === d.name)
-                        .classed("search-match", false);
-                }, 1000);
-
-                const y = yScale(d.setType);
-                scrollContainer.node().scrollTo({
-                    top: y - 50,
-                    behavior: "smooth"
-                });}),
-            update => update,
-            exit => exit.remove()
-        );
-    });
 
 
 
@@ -454,6 +448,7 @@ tooltip.style("left", `${left}px`)
         
 
 
+
     const scrollContainer = wrapper.append("div")
         .attr("class", "chart-container")
         .style("width", `${containerWidth}px`)
@@ -517,7 +512,7 @@ chartGroup.append("g")
             .attr("width", 8)
             .attr("height", 8)
             .attr("stroke", "black")
-            .attr("fill", "#998066")
+            .attr("fill", d => d.baseColor)
             .on("mouseover", function (event, d) {
 
                 // Set content first so dimensions are accurate
@@ -566,10 +561,10 @@ chartGroup.append("g")
             
                 if (isSelected) {
                     localSelectedSetNames.delete(d.name);
-                    d3.select(this).attr("fill", "#998066"); 
+                    d3.select(this).attr("fill", d.baseColor);
                 } else {
                     localSelectedSetNames.add(d.name);
-                    d3.select(this).attr("fill", "#007bff"); 
+                    d3.select(this).attr("fill", d.selectedColor);
                 }
                 emitTimelineSetClick({
             name: d.name,
@@ -616,7 +611,7 @@ chartGroup.append("g")
         const selectedSetNames = localSelectedSetNames;
 
         squares.attr("fill", d =>
-            selectedSetNames.has(d.name) ? "#007bff" : "#998066"
+            selectedSetNames.has(d.name) ? d.selectedColor : d.baseColor
         );
         
     
@@ -778,12 +773,7 @@ function brushed(event) {
             updateContext: "TimelineFilter"
         });
 
-        updateSetRectOpacity();
-
-        d3.selectAll(".set-rect")
-            .attr("fill", d =>
-                updatedFilters["Set Names"].has(d.name) ? "#007bff" : "#998066"
-            );
+        
     }
 
     d3.select(chartGroup.select(".brush").node()).call(brush.move, null); // Clear brush
@@ -818,11 +808,11 @@ export function highlightTimelineSetsHoverOnly(card) {
 
     d3.selectAll(".set-rect")
       .filter(d => hoveredSetNames.has(d.name.toLowerCase()))
-      .classed("hover-temp", true);
+      .attr("fill",d => d.highlightColor);
 }
 
 export function clearTimelineHoverOnly() {
-    d3.selectAll(".set-rect").classed("hover-temp", false);
+    d3.selectAll(".set-rect").attr("fill",d => d.baseColor);
 }
 
 
@@ -837,7 +827,7 @@ function highlightTimelineSetsFromIcicle(rectInfo) {
       const ids = d.colorIdentities || new Set();
       return ids.has(actualIdentity);
     })
-    .classed("hover-temp", true);
+    .attr("fill",d => d.highlightColor);
 }
 
 
@@ -870,7 +860,7 @@ export function highlightTimelineSetsFromYearInfo(yearInfo) {
 
   d3.selectAll(".set-rect")
     .filter(d => d.releaseDate.getFullYear() === targetYear)
-    .classed("hover-temp", true);
+    .attr("fill",d => d.highlightColor);
 }
 
 
@@ -888,5 +878,5 @@ function highlightTimelineSetsFromAlluvialCategory(category, value) {
       }
       return false;
     })
-    .classed("hover-temp", true);
+    .attr("fill",d => d.highlightColor);
 }

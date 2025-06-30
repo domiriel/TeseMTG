@@ -478,10 +478,19 @@ export function prepareScatterData(data, selectedPriceAttribute) {
 
 
 
-     if (card.release_date) {
-    const year = new Date(card.release_date).getFullYear();
-    if (!isNaN(year)) entry.all_years.add(year);
+if (card.release_date) {
+  const releaseDate = new Date(card.release_date);
+  const year = releaseDate.getFullYear();
+
+  if (!isNaN(year)) {
+    entry.all_years.add(year);
+
+    // Track the earliest release date across all prints
+    if (!entry.earliest_release_date || releaseDate < new Date(entry.earliest_release_date)) {
+      entry.earliest_release_date = releaseDate; // Store as YYYY-MM-DD string
+    }
   }
+}
     if (card.originality) {
   entry.all_originalities.add(card.originality.toLowerCase());
 }
@@ -520,7 +529,7 @@ export function prepareScatterData(data, selectedPriceAttribute) {
 
     const sum = card.prices.reduce((a, b) => a + b, 0);
     card.avg_price = card.prices.length > 0 ? sum / card.prices.length : 0;
-
+    card.release_date = card.earliest_release_date || card.release_date;
     result.push(card);
   }
 
@@ -655,7 +664,7 @@ const originalXScale = d3.scaleLog()
         
         const originalYScale = d3.scaleLinear()
             .domain([minComplexity - yPadding, maxComplexity + yPadding])
-            .range([chartHeight, 0]);
+            .range([chartHeight, 5]);
         
 
 
@@ -714,13 +723,16 @@ if (xMetric === "avg_price") {
         .style("cursor", "pointer")
         .text(getXLabelText())
         .on("mouseover", (event) => {
-        d3.select("#tooltip")
+          d3.select("#tooltip")
             .style("display", "block")
             .html(() => {
-                if (selectedPriceAttribute.includes("eur")) return "Price data is sourced from <b>Cardmarket</b> (EUR).";
-                if (selectedPriceAttribute.includes("usd")) return "Price data is sourced from <b>TCGplayer</b> (USD).";
-                if (selectedPriceAttribute.includes("thx")) return "Price data is sourced from <b>Scryfall</b>.";
-                return "Price data source unknown.";
+              if (xMetric === "release_date") {
+                return "Cards are positioned along the X-axis by their <b>release date</b>.";
+              }
+              if (selectedPriceAttribute.includes("eur")) return "Cards are positioned by <b>average price</b> (EUR, from Cardmarket).";
+              if (selectedPriceAttribute.includes("usd")) return "Cards are positioned by <b>average price</b> (USD, from TCGplayer).";
+              if (selectedPriceAttribute.includes("thx")) return "Cards are positioned by <b>average price</b> (from Scryfall).";
+              return "Cards are positioned by <b>average price</b>.";
             });
         })
         .on("mousemove", (event) => {
@@ -745,12 +757,62 @@ if (xMetric === "avg_price") {
       });
 
         
-        
+        svg.append("foreignObject")
+  .attr("x", 3 ) // Adjust as needed
+  .attr("y", 0)
+  .attr("width", 120)
+  .attr("height", 30)
+  .append("xhtml:div")
+  .html(`
+    <select id="xMetricDropdown" style="font-size:12px; padding:2px;">
+      <option value="avg_price">Average Price</option>
+      <option value="release_date">Release Date</option>
+    </select>
+  `);
+
+  const dropdown = document.getElementById("xMetricDropdown");
+if (dropdown) {
+  dropdown.value = xMetric; // Reflect current state
+  dropdown.addEventListener("change", function () {
+    xMetric = this.value;
+    updateXMetricScale(); // Already updates domain, axis, and point positions
+  });
+   dropdown.addEventListener("mouseover", (event) => {
+    d3.select("#tooltip")
+      .style("display", "block")
+      .html("Change X-axis value");
+  });
+
+  dropdown.addEventListener("mousemove", (event) => {
+    const tooltip = d3.select("#tooltip");
+    const tooltipWidth = tooltip.node().offsetWidth;
+    const tooltipHeight = tooltip.node().offsetHeight;
+    const padding = 10;
+
+    let x = event.pageX + padding;
+    let y = event.pageY + padding;
+
+    if (x + tooltipWidth > window.innerWidth) {
+      x = event.pageX - tooltipWidth - padding;
+    }
+    if (y + tooltipHeight > window.innerHeight) {
+      y = event.pageY - tooltipHeight - padding;
+    }
+
+    tooltip
+      .style("left", `${x}px`)
+      .style("top", `${y}px`);
+  });
+
+  dropdown.addEventListener("mouseout", () => {
+    d3.select("#tooltip").style("display", "none");
+  });
+}
 
         svg.append("text")
     .attr("class", "y-axis-label")
     .attr("x", margin.left-15)
-    .attr("y", margin.top - 5)
+    .attr("y", margin.top )
     .attr("text-anchor", "middle")
     .style("font-size", "14px")
     .style("font-weight", "bold")
@@ -1235,8 +1297,14 @@ function highlightScatterDotsFromAlluvial(category, value) {
   // const { xScale, yScale } = svg.node().__scales__ || {};
   // if (xScale && yScale) updatePointPositions(xScale, yScale);
 }
-
 export function clearScatterHoverOnly() {
   d3.selectAll(".dots circle").classed("hover-temp", false);
+
+  const svg = d3.select(".Scatterplot svg");
+  const { xScale, yScale } = svg.node().__scales__ || {};
+  if (xScale && yScale) {
+    updatePointPositions(xScale, yScale);
+  }
 }
+
 

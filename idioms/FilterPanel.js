@@ -295,6 +295,53 @@ terms.forEach(rawTerm => {
   }
 });
 
+wrapper.append("input")
+  .attr("type", "text")
+  .attr("placeholder", "Search set name...")
+  .style("width", "85%")
+  .style("margin-bottom", "12px")
+  .style("padding", "6px")
+  .style("font-size", "16px")
+  .on("keydown", function (event) {
+    if (event.key === "Enter") {
+      const query = this.value.trim().toLowerCase();
+      if (!query) return;
+
+      const matchedSet = getState().groupedData["Set Names"];
+      if (!matchedSet) return;
+
+      // Try exact match
+      const matched = Array.from(matchedSet.keys()).find(name =>
+        name.toLowerCase() === query
+      );
+      if (!matched) return;
+
+      // Scroll to matching set in timeline (must be visible)
+      const setRects = d3.selectAll(".set-rect");
+      const target = setRects.filter(d => d.name.toLowerCase() === matched.toLowerCase()).node();
+
+      if (target) {
+        const container = d3.select(".chart-container");  // must match your scroll container class
+        const bbox = target.getBoundingClientRect();
+        const containerBox = container.node().getBoundingClientRect();
+
+        const offsetTop = bbox.top - containerBox.top + container.node().scrollTop;
+        container.node().scrollTo({
+          top: offsetTop - 40,
+          behavior: "smooth"
+        });
+
+        // Optional: flash match
+        d3.select(target)
+          .classed("search-match", true);
+        setTimeout(() => d3.select(target).classed("search-match", false), 1000);
+      }
+
+      this.value = "";
+    }
+  });
+
+
 const freeTextPillContainer = wrapper.append("div")
   .attr("class", "pill-container free-text-pills")
   .style("display", "flex")
