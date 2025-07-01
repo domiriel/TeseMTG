@@ -132,7 +132,7 @@ const svgHeight = height;
 const chartWidth = svgWidth * 0.85
 const chartHeight = svgHeight * 0.75
 
-const margin = { top: height * 0.17, right: 18, bottom: 40, left: width *0.015 };
+const margin = { top: height * 0.17, right: 26, bottom: 40, left: width *0.015 };
 
 const originalitySet = new Set();
 const raritySet = new Set();
@@ -349,22 +349,11 @@ sankeyGroup.selectAll(".link")
 })
         .on("click", function(event, d) {
 
-         if (event.ctrlKey || event.metaKey) {
               emitAlluvialLinkClick({
                 originality: d.source.name.toLowerCase(),
                 rarity: d.target.name.toLowerCase()
               });
-          } else {
-            const key = `${d.source.name}|${d.target.name}`;
 
-            if (localLinkFilters.has(key)) {
-              localLinkFilters.delete(key);
-            } else {
-              localLinkFilters.add(key);
-            }
-
-            applyLocalLinkAndNodeFilter();
-          }
  
 })
         .on("contextmenu", function(event, d) {
@@ -512,19 +501,9 @@ const nodeGroups = sankeyGroup.selectAll(".node")
  const category = d.x0 === 0 ? "Originality" : "Rarity";
   const name = d.name;
 
-  if (event.ctrlKey || event.metaKey) {
-    // 👇 Ctrl-click → send signal only
-    emitAlluvialClick({ category, value: name.toLowerCase() });
-  } else {
-    // 👇 Regular click → toggle local chart filter
-    if (localChartFilters[category].has(name)) {
-      localChartFilters[category].delete(name);
-    } else {
-      localChartFilters[category].add(name);
-    }
 
-    applyLocalChartFilter();
-  }
+    emitAlluvialClick({ category, value: name.toLowerCase() });
+
 })
 
           .on("contextmenu", function(event, d) {

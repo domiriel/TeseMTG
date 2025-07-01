@@ -314,7 +314,7 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
     const yOffset = -(containerHeight - chartHeight)/2 + 5; 
 
 
-    const margin = { top: (containerHeight - chartHeight)/2 + 1 , right: 18, bottom: 20, left: containerWidth * 0.015 }; 
+    const margin = { top: (containerHeight - chartHeight)/2 + 1 , right: 26, bottom: 20, left: containerWidth * 0.015 }; 
 
 if (isUpdate) {
     d3.select(containerId).select("svg").remove(); 

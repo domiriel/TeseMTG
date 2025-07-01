@@ -67,18 +67,7 @@ body {
 .set-rect.hover-temp:not(.highlighted) {
   fill: #f2c46e
 }
-  .Title { grid-area: 1 / 2 / 2 / 4; }
-  .ISTLogo { grid-area: 1 / 1 / 2 / 2; 
-    background-image: url('images/IST logo.jpg');
-    
-    background-size: 90%; 
-  
-    background-repeat: no-repeat; 
-    background-position: center;
-    width: 100%; 
-    height: 100%; 
-  
-  }
+  .Title { grid-area: 1 / 1 / 2 / 2; }
   .IcicleChart { 
     grid-area: 4 / 2 / 6 / 4; 
     width: 100%; 
@@ -101,7 +90,7 @@ body {
   }
   
   .AlluvialChart { 
-    grid-area: 2 / 2 / 4 / 4; 
+    grid-area: 1 / 2 / 4 / 4; 
     width: 100%;
     height: 100%;
     display: flex;
@@ -173,17 +162,15 @@ body {
   fill: #f2c46e
 }
 
-.Scatterplot circle.hover-temp:not(.selected) {
-  stroke: #f2c46e !important;
-  stroke-width: 1.5px !important;
+.Scatterplot circle.hover-temp:not(.selected-hover) {
+  stroke: #d89313 !important;
+  stroke-width: 2px !important;
 }
 
 
   .node rect.highlighted {
     stroke: orange;
     stroke-width: 3px;
-
-    
   }
   
 
@@ -201,8 +188,8 @@ body {
   pointer-events: none;
 }
 .selected-hover {
-  stroke: #9AA0BC;
-  stroke-width: 1.5;
+  stroke: #6a708a;
+  stroke-width: 2px;
 }
 .alluvial-visible {
   opacity: 1;
@@ -298,16 +285,30 @@ body {
 
 .Title {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
+  gap: 8px;
   font-size: 24px;
   font-weight: bold;
   padding: 10px;
+  width: 90.5%;
 }
 #inlineLoader {
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 8px;
+  height: 24px; /* or slightly more depending on spinner + text size */
+  visibility: hidden; /* reserve space, but keep hidden initially */
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.dashboard-title {
+  margin-bottom: 4px;
+  position: relative;
+  top: -5px; /* move title slightly upward */
 }
 
 .spinner {

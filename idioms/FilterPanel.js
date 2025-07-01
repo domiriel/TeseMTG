@@ -769,6 +769,17 @@ wrapper.append("input")
     });
   });
 
+
+  wrapper.append("div")
+  .attr("class", "ist-logo-wrapper")
+  .style("margin-top", "20px")
+  .style("display", "flex")
+  .style("justify-content", "center")
+  .append("img")
+  .attr("src", "images/IST logo.jpg")
+  .style("max-width", "90%")
+  .style("height", "auto");
+
 }
 
 export function updateFilterPanel(originalData, filteredCards, selectedFilters, containerId = ".FilterPanel") {

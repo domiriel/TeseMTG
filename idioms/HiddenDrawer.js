@@ -393,6 +393,9 @@ navWrapper.append("button")
 function showCompactTooltip(card, event = null) {
   const tooltip = d3.select("#tooltip");
   const colorBg = getColorIdentityBackground(card.color_identity);
+  const formatDate = d3.timeFormat("%d %b %Y");
+  const formattedDate = card.release_date ? formatDate(new Date(card.release_date)) : "Unknown";
+
   tooltip
     .style("display", "block")
     .style("background", colorBg)
@@ -400,7 +403,7 @@ function showCompactTooltip(card, event = null) {
     .html(`
       <div>
         <strong>${card.name}</strong><br>
-        Release Date: ${card.release_date}<br>
+        Release Date: ${formattedDate}<br>
         Complexity: ${card.complexity}<br>
         EDH Rank: ${card.edhrec_rank || "N/A"}<br>
         Supertypes: ${card.supertype}<br>

@@ -259,7 +259,7 @@ function updateXMetricScale() {
             .domain(d3.extent(validDates))
             .range([10, chartWidth]);
 
-        // 🟡 Overwrite both the xScale and the originalXScale with time scale
+
         originalXScale.domain(timeScale.domain());
         originalXScale.range(timeScale.range());
 
@@ -344,6 +344,9 @@ let globalDots = null;
 
 function mouseoverFn(event, d) {
   const symbol = getSymbolFromAttribute(getEffectivePriceAttribute(getState()));
+  const formatDate = d3.timeFormat("%d %b %Y");
+  const formattedDate = d.release_date ? formatDate(new Date(d.release_date)) : "Unknown";
+
   d3.select("#tooltip").style("display", "block")
     .style("background", getColorIdentityBackground(d.color_identity))
     .style("color", "black")
@@ -352,7 +355,7 @@ function mouseoverFn(event, d) {
         <img src="${d.tooltip_image}" alt="${d.name}" width="200" style="border-radius: 4px; box-shadow: 0 0 4px rgba(0,0,0,0.5);" />
         <div>
           <strong>${d.name}</strong><br>
-          Release Date: ${d.release_date}<br>
+          Release Date: ${formattedDate}<br>
           Complexity: ${d.complexity}<br>
           EDH Rank: ${d.edhrec_rank || "N/A"}<br>
           Supertypes: ${d.supertype}<br>
@@ -1297,14 +1300,14 @@ function highlightScatterDotsFromAlluvial(category, value) {
   // const { xScale, yScale } = svg.node().__scales__ || {};
   // if (xScale && yScale) updatePointPositions(xScale, yScale);
 }
-export function clearScatterHoverOnly() {
+export function clearScatterHoverOnly(Updateflag = "false") {
   d3.selectAll(".dots circle").classed("hover-temp", false);
 
-  const svg = d3.select(".Scatterplot svg");
-  const { xScale, yScale } = svg.node().__scales__ || {};
-  if (xScale && yScale) {
-    updatePointPositions(xScale, yScale);
-  }
+  // const svg = d3.select(".Scatterplot svg");
+  // const { xScale, yScale } = svg.node().__scales__ || {};
+  // if (xScale && yScale) {
+  //   updatePointPositions(xScale, yScale);
+  // }
 }
 
 

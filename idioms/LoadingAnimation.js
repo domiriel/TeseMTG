@@ -1,7 +1,6 @@
 export function showLoader() {
-
   const loader = d3.select("#inlineLoader");
-  loader.style("display", "flex");
+  loader.style("visibility", "visible").style("opacity", 1);
 
   if (loader.select(".loader-text").empty()) {
     loader.append("span")
@@ -11,12 +10,13 @@ export function showLoader() {
 }
 
 export function hideLoader(delay = 50) {
+  const loader = d3.select("#inlineLoader");
+  const hide = () => loader.style("visibility", "hidden").style("opacity", 0);
+
   if (delay > 0) {
-    setTimeout(() => {
-      d3.select("#inlineLoader").style("display", "none");
-    }, delay);
+    setTimeout(hide, delay);
   } else {
-    d3.select("#inlineLoader").style("display", "none");
+    hide();
   }
 }
 
