@@ -1,6 +1,6 @@
 
 import { updateState, getState } from "../state.js";
-import { emitLineYearHover, emitClearLineYearHover, emitLineChartClick, 
+import { emitLineYearHover, emitClearLineYearHover, emitLineChartClick, onNumColorsHover, onClearNumColorsHover,
          onHoverCard, onClearHover, onSetHover, onClearSetHover, onRectHover, onClearRectHover, onAlluvialHover, 
          onClearAlluvialHover   } from "./Events.js";
 const lineChartTooltipText = `
@@ -40,6 +40,16 @@ onClearRectHover(() => {
   clearLineChartHoverOnly()
 })
 
+onNumColorsHover(({ numColors, originalities, rarities }) => {
+ highlightLineChartFromNumColors(numColors);
+
+});
+
+onClearNumColorsHover(() => {
+  clearLineChartHoverOnly();
+})
+
+
 onAlluvialHover(({ category, value }) => {
   highlightLineChartFromAlluvialCategory(category, value);
 });
@@ -75,18 +85,23 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
             const originalities = new Set();
             const rarities = new Set();
             const colorIdentities = new Set();
+            const numColorsPresent = new Set();
 
             cards.forEach(card => {
       if (card.originality) originalities.add(card.originality.toLowerCase());
       if (card.rarity) rarities.add(card.rarity.toLowerCase());
 
       let identity;
+      let numColors;
       if (!card.color_identity || card.color_identity.length === 0) {
         identity = "Colorless";
+        numColors = 0
       } else {
         identity = card.color_identity.slice().sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b]).join("");
+        numColors = identity.length
       }
       colorIdentities.add(identity);
+      numColorsPresent.add(numColors)
     });
             if (cards[0] && new Date(cards[0].release_date).getFullYear() === 2004) {
                 cards.forEach(c => {
@@ -109,6 +124,7 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
                 originalities,
                 rarities,
                 colorIdentities,
+                numColorsPresent
             };
         },
         d => new Date(d.release_date).getFullYear()
@@ -310,6 +326,8 @@ infoGroup.append("text")
             .style("cursor", "pointer")
             .attr("class", "data-point") 
             .on("mouseover", (event, d) => {
+                console.log(d.colorIdentities)
+                console.log(d.numColorsPresent)
                 const year = d.year.getFullYear();
 
                 const allMetrics = metrics.map(m => {
@@ -331,7 +349,7 @@ infoGroup.append("text")
 
             
                 d3.selectAll(`circle.data-point[data-year='${d.year.getFullYear()}']`)
-                    
+                    .classed("hover-temp", true)
                     .attr("stroke", "#000")
                     .attr("stroke-width", 1.5);
                 highlightAllViewsForYear(d);
@@ -362,6 +380,7 @@ infoGroup.append("text")
 
             
                 d3.selectAll("circle.data-point")
+                    .classed("hover-temp", false)
                     .attr("r", 4)
                     .attr("stroke", "none");
                 emitClearLineYearHover();
@@ -723,5 +742,16 @@ function highlightLineChartFromAlluvialCategory(category, value) {
         return d.rarities?.has(lowerValue);
       }
       return false;
+    });
+}
+
+function highlightLineChartFromNumColors(numColors) {
+  if (numColors === undefined || numColors === null) return;
+
+  d3.select(".LineChart")
+    .selectAll("circle.data-point")
+    .classed("hover-temp", function () {
+      const d = d3.select(this).datum();
+      return d?.numColorsPresent?.has(numColors);
     });
 }

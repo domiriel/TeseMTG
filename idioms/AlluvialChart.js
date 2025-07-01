@@ -1,7 +1,7 @@
 
 import { updateState, getState } from "../state.js";
 import { updateFilterPanel } from "./FilterPanel.js"; 
-import {emitAlluvialHover, emitClearAlluvialHover, emitAlluvialClick, emitAlluvialLinkClick,
+import {emitAlluvialHover, emitClearAlluvialHover, emitAlluvialClick, emitAlluvialLinkClick, onNumColorsHover, onClearNumColorsHover,
         onHoverCard, onClearHover, onSetHover, onClearSetHover,  onRectHover, onClearRectHover, 
         onLineYearHover, onClearLineYearHover  } from "./Events.js";
 
@@ -60,6 +60,15 @@ onLineYearHover(yearInfo => {
 })
 
 onClearLineYearHover(() => {
+  clearAlluvialHoverOnly();
+})
+
+onNumColorsHover(({ numColors, originalities, rarities }) => {
+ highlightAlluvialElementsFromNumColors(originalities,rarities);
+
+});
+
+onClearNumColorsHover(() => {
   clearAlluvialHoverOnly();
 })
 
@@ -471,6 +480,11 @@ const nodeGroups = sankeyGroup.selectAll(".node")
 })
           .on("mouseover", function(event, d) {
 
+              const rect = d3.select(this);
+            rect
+    .attr("fill", d.highlightColor)
+    .classed("hover-temp", true);
+
       tooltip.style("display", "block")
              .html(`Category: ${d.name}<br>Total cards: ${d.value}<br>Avg Price: $${d.avgPrice.toFixed(2)}`);
              highlightAllViewsForAlluvial(d);
@@ -493,7 +507,14 @@ const nodeGroups = sankeyGroup.selectAll(".node")
     .style("left", `${x}px`)
     .style("top", `${y}px`);
 })
-          .on("mouseout", function() {
+          .on("mouseout", function(event, d) {
+
+            const rect = d3.select(this);
+            rect.classed("hover-temp", false);
+
+            const isSelectedHovered = rect.classed("selectedHovered");
+  rect.attr("fill", isSelectedHovered ? d.selectedColor : d.baseColor);
+
       tooltip.style("display", "none");
       emitClearAlluvialHover(); 
     })
@@ -786,7 +807,22 @@ export function highlightAlluvialElementsFromIcicle(rectInfo) {
     });
 }
 
+export function highlightAlluvialElementsFromNumColors(originalities, rarities) {
+  if (!originalities && !rarities) return;
 
+  d3.selectAll("g.node rect")
+    .filter(d =>
+      (d.x0 === 0 && originalities?.has(d.name)) ||
+      (d.x0 !== 0 && rarities?.has(d.name))
+    )
+    .each(function(d) {
+      const rect = d3.select(this);
+      rect
+        .attr("fill", d.highlightColor)
+        .classed("hover-temp", true);
+      rect.classed("hover-temp", true);
+    });
+}
 
 export function clearAlluvialHoverOnly() {
   d3.selectAll("g.node rect").each(function(d) {

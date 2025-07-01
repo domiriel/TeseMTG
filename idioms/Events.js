@@ -82,6 +82,22 @@ export function onClearRectHover(callback){
      emitter.addEventListener("rect-hover-clear", callback);
 }
 
+
+// Icicle Number of Colors Hover Events
+export function emitNumColorsHover(payload) {
+  emitter.dispatchEvent(new CustomEvent("num-colors-hover", { detail: payload }));
+}
+export function onNumColorsHover(callback) {
+  emitter.addEventListener("num-colors-hover", e => callback(e.detail));
+}
+export function emitClearNumColorsHover() {
+  emitter.dispatchEvent(new Event("num-colors-hover-clear"));
+}
+export function onClearNumColorsHover(callback) {
+  emitter.addEventListener("num-colors-hover-clear", callback);
+}
+
+
 //Line Events
 
 export function emitLineYearHover(yearInfo) {

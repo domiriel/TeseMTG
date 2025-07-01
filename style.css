@@ -64,9 +64,6 @@ body {
 }
 
 
-.set-rect.hover-temp:not(.highlighted) {
-  fill: #f2c46e
-}
   .Title { grid-area: 1 / 1 / 2 / 2; }
   .IcicleChart { 
     grid-area: 4 / 2 / 6 / 4; 

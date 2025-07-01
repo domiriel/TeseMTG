@@ -1,8 +1,10 @@
 
 import { updateState, getState } from "../state.js";
 import { updateFilterPanel } from "./FilterPanel.js";
-import { emitSetHover, emitClearHover, onHoverCard, onClearHover, emitClearSetHover,emitTimelineSetClick, emitYearClick, onRectHover, 
-        onClearRectHover, onClearLineYearHover, onLineYearHover, onAlluvialHover, onClearAlluvialHover } from "./Events.js";
+import { emitSetHover, emitClearHover, onNumColorsHover, onClearNumColorsHover,
+        onHoverCard, onClearHover, emitClearSetHover,emitTimelineSetClick, 
+        emitYearClick, onRectHover, onClearRectHover, onClearLineYearHover, 
+        onLineYearHover, onAlluvialHover, onClearAlluvialHover } from "./Events.js";
 
 let localSelectedYears = new Set();
 let localSelectedSetNames = new Set();
@@ -53,6 +55,16 @@ onRectHover(rectInfo => {
 onClearRectHover(() => {
   clearTimelineHoverOnly();
 })
+
+onNumColorsHover(({ numColors, originalities, rarities }) => {
+ highlightTimelineSetsFromNumColors(numColors);
+
+});
+
+onClearNumColorsHover(() => {
+  clearTimelineHoverOnly();
+})
+
 
 onLineYearHover(yearInfo => {
   highlightTimelineSetsFromYearInfo(yearInfo)
@@ -140,6 +152,7 @@ export function createTimelineView(data, containerId, isUpdate = false) {
                 originalities: new Set(),
                 rarities: new Set(),
                 colorIdentities: new Set(),
+                numColorsPresent: new Set()
             });
         }
         setMap.get(setName).cardCount += 1;
@@ -156,8 +169,10 @@ export function createTimelineView(data, containerId, isUpdate = false) {
         let identity;
         if (!card.color_identity || card.color_identity.length === 0) {
         identity = "Colorless";
+        setEntry.numColorsPresent.add(0);
         } else {
         identity = card.color_identity.slice().sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b]).join("");
+        setEntry.numColorsPresent.add(identity.length);
         }
         setEntry.colorIdentities.add(identity);
     });
@@ -514,7 +529,11 @@ chartGroup.append("g")
             .attr("stroke", "black")
             .attr("fill", d => d.baseColor)
             .on("mouseover", function (event, d) {
+                const rect = d3.select(this);
 
+                rect
+                    .attr("fill", d.highlightColor)
+                    .classed("hover-temp", true);
                 // Set content first so dimensions are accurate
                 tooltip
                     .style("display", "block")
@@ -549,9 +568,15 @@ chartGroup.append("g")
                 tooltip
                     .style("left", `${left}px`)
                     .style("top", `${top}px`);
+                
                 highlightAllViewsForSet(d.name); // Highlight all views for this set
             })
-            .on("mouseout", function () {
+                .on("mouseout", function (event, d) {
+                const rect = d3.select(this);
+                rect.classed("hover-temp", false);
+
+                const isSelectedHovered = rect.classed("selectedHovered");
+                rect.attr("fill", isSelectedHovered ? d.selectedColor : d.baseColor);
                 d3.select("#tooltip").style("display", "none");
                 clearAllViewsHoverOnly(); // Clear highlights in all views
             })
@@ -786,18 +811,32 @@ function brushed(event) {
 }
 
 export function highlightTimelineSets(hoveredCards) {
-    const hoveredSets = new Set();
+  const rects = d3.selectAll(".set-rect");
 
-    (hoveredCards || []).forEach(card => {
-        (card.all_sets || []).forEach(set => {
-            hoveredSets.add(set.name.toLowerCase());
-        });
+  if (!hoveredCards || hoveredCards.length === 0) {
+    rects
+      .classed("selectedHovered", false)
+      .attr("fill", d => d.baseColor);
+    return;
+  }
+
+  const hoveredSetNames = new Set();
+  hoveredCards.forEach(card => {
+    (card.all_sets || []).forEach(set => {
+      hoveredSetNames.add(set.name.toLowerCase());
     });
+  });
 
-    d3.selectAll(".set-rect").classed("highlighted", d =>
-        hoveredSets.has(d.name.toLowerCase())
-    );
+  rects.each(function(d) {
+    const rect = d3.select(this);
+    const isHovered = hoveredSetNames.has(d.name.toLowerCase());
+
+    rect
+      .classed("selectedHovered", isHovered)
+      .attr("fill", isHovered ? d.selectedColor : d.baseColor);
+  });
 }
+
 
 export function highlightTimelineSetsHoverOnly(card) {
     if (!card?.all_sets) return;
@@ -812,7 +851,13 @@ export function highlightTimelineSetsHoverOnly(card) {
 }
 
 export function clearTimelineHoverOnly() {
-    d3.selectAll(".set-rect").attr("fill",d => d.baseColor);
+  d3.selectAll(".set-rect").each(function(d) {
+    const rect = d3.select(this);
+    rect.classed("hover-temp", false);
+
+    const isSelectedHovered = rect.classed("selectedHovered");
+    rect.attr("fill", isSelectedHovered ? d.selectedColor : d.baseColor);
+  });
 }
 
 
@@ -831,6 +876,13 @@ function highlightTimelineSetsFromIcicle(rectInfo) {
 }
 
 
+function highlightTimelineSetsFromNumColors(numColors) {
+  if (numColors === undefined) return;
+
+  d3.selectAll(".set-rect")
+    .filter(d => d.numColorsPresent?.has(numColors))
+    .attr("fill", d => d.highlightColor);
+}
 
 
 function highlightAllViewsForSet(setName) {

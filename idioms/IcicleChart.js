@@ -2,7 +2,7 @@
 import { updateState, getState } from "../state.js";
 // @ts-ignore
 import { showLoader, hideLoader, showPopup } from "./LoadingAnimation.js";
-import {emitIcicleRectHover, emitClearRectHover,emitIcicleClick ,
+import {emitIcicleRectHover, emitClearRectHover,emitIcicleClick, emitClearNumColorsHover, emitNumColorsHover,
         onHoverCard, onClearHover, onSetHover, onClearSetHover,  onClearLineYearHover, onLineYearHover, 
         onAlluvialHover, onClearAlluvialHover } from "./Events.js";
 let globalRects = null;  
@@ -233,7 +233,7 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
         group.originalCount = group.children.reduce((sum, c) => sum + (c.originalCount || 0), 0);
         group.reprintCount = group.children.reduce((sum, c) => sum + (c.reprintCount || 0), 0);
         group.functionalReprintCount = group.children.reduce((sum, c) => sum + (c.functionalReprintCount || 0), 0);
-
+      
         
         group.children.forEach(c => {
             let originalPercentage = (c.originalCount / c.value) * 100 || 0;
@@ -243,23 +243,41 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
         });
 
         if (group.children.length > 0) {
-            let avgRGB = group.children.reduce((acc, c) => {
-                let rgb = hexToRgb(c.color);
-                acc.r += rgb.r;
-                acc.g += rgb.g;
-                acc.b += rgb.b;
-                return acc;
-            }, { r: 0, g: 0, b: 0 });
+            let avgRGBBase = { r: 0, g: 0, b: 0 };
+            let avgRGBHighlight = { r: 0, g: 0, b: 0 };
+            let avgRGBSelected = { r: 0, g: 0, b: 0 };
 
-            let numChildren = group.children.length;
+            group.children.forEach(c => {
+                let base = hexToRgb(c.color);
+                let highlight = hexToRgb(c.highlightColor);
+                let selected = hexToRgb(c.selectedColor);
+                avgRGBBase.r += base.r; avgRGBBase.g += base.g; avgRGBBase.b += base.b;
+                avgRGBHighlight.r += highlight.r; avgRGBHighlight.g += highlight.g; avgRGBHighlight.b += highlight.b;
+                avgRGBSelected.r += selected.r; avgRGBSelected.g += selected.g; avgRGBSelected.b += selected.b;
+            });
+
+            let n = group.children.length;
             group.color = rgbToHex(
-                Math.round(avgRGB.r / numChildren),
-                Math.round(avgRGB.g / numChildren),
-                Math.round(avgRGB.b / numChildren)
+                Math.round(avgRGBBase.r / n),
+                Math.round(avgRGBBase.g / n),
+                Math.round(avgRGBBase.b / n)
+            );
+            group.highlightColor = rgbToHex(
+                Math.round(avgRGBHighlight.r / n),
+                Math.round(avgRGBHighlight.g / n),
+                Math.round(avgRGBHighlight.b / n)
+            );
+            group.selectedColor = rgbToHex(
+                Math.round(avgRGBSelected.r / n),
+                Math.round(avgRGBSelected.g / n),
+                Math.round(avgRGBSelected.b / n)
             );
         } else {
-            group.color = "#efefef"; 
+            group.color = "#efefef";
+            group.highlightColor = "#f0f0f0";
+            group.selectedColor = "#d0d0d0";
         }
+
     });
 
     
@@ -432,14 +450,19 @@ const levelHeight = chartHeight / depth;
             .attr("fill", d => d.data.color)
             .style("cursor", "pointer")
             .on("click", function(event, d) {
-                    if (event.ctrlKey || event.metaKey) {
-                        if (d.depth === 2) {
-                            emitIcicleClick({ colorIdentity: d.data.name.toLowerCase() });
-                        }
+              if (clickTimer) return;  // prevent multiple click timers
 
-                    } else {
-                    clicked(event, d, false); // single-click
-                    }
+              clickTimer = setTimeout(() => {
+                emitIcicleClick({ colorIdentity: d.data.name.toLowerCase() });
+                clickTimer = null;
+              }, 170); // adjust delay if needed
+            })
+            .on("dblclick", function(event, d){
+              if (clickTimer) {
+                clearTimeout(clickTimer);
+                clickTimer = null;
+              }
+              clicked(event, d, false); // double-click logic
             })
             .on("contextmenu", function(event, d) {
                 event.preventDefault();
@@ -456,6 +479,9 @@ const levelHeight = chartHeight / depth;
                         Reprint: ${d.data.reprintCount || 0} cards<br>
                         Functional Reprint: ${d.data.functionalReprintCount || 0} cards
                     `);
+                const rect = d3.select(this);
+                rect.attr("fill", d.data.highlightColor);
+                rect.classed("hover-temp", true);
                 highlightAllViewsForRect(d.data.name);
             })
             .on("mousemove", function(event) {
@@ -480,8 +506,15 @@ const levelHeight = chartHeight / depth;
                     .style("top", `${Math.max(y, 0)}px`);
             })
             .on("mouseout", function() {
-                d3.select("#tooltip").style("display", "none");
-                clearAllViewsHoverOnly();
+const rect = d3.select(this);
+    rect.classed("hover-temp", false)
+         .attr("fill", d => {
+            if (rect.classed("selectedHovered") || rect.classed("selected")) return d.data.selectedColor;
+            return d.data.color;
+         });
+
+    d3.select("#tooltip").style("display", "none");
+    clearAllViewsHoverOnly();
             }),
 
         update => update
@@ -802,19 +835,35 @@ function highlightAllViewsForRect(rectName) {
   if (!globalRects) return;
 
   const rectDatum = globalRects.data().find(d => d.data?.name === rectName);
-  if (!rectDatum || (rectDatum.depth !== 2 && rectDatum.data.name !== "Colorless")) return;
-  emitIcicleRectHover({
-    name: rectDatum.data.name,
-    isGroup: false,
-    colorIdentities: new Set([
-  rectDatum.data.name === "Colorless" ? "" : rectDatum.data.name
-]),
-    numColors: undefined,
-    originalities: new Set(rectDatum.data.originalities || []),
-    rarities: new Set(rectDatum.data.rarities || []),
-    years: new Set(rectDatum.data.years || [])
-  });
+  if (!rectDatum) return;
+
+  if (rectDatum.depth === 2 || rectDatum.data.name === "Colorless") {
+    // Identity-level
+    emitIcicleRectHover({
+      name: rectDatum.data.name,
+      isGroup: false,
+      colorIdentities: new Set([
+        rectDatum.data.name === "Colorless" ? "" : rectDatum.data.name
+      ]),
+      numColors: undefined,
+      originalities: new Set(rectDatum.data.originalities || []),
+      rarities: new Set(rectDatum.data.rarities || []),
+      years: new Set(rectDatum.data.years || [])
+    });
+  } else if (rectDatum.depth === 1) {
+    // Group-level
+    emitNumColorsHover({
+      numColors: rectDatum.data.numColors,
+      originalities: new Set(rectDatum.data.originalities || []),
+      rarities: new Set(rectDatum.data.rarities || []),
+      years: new Set(rectDatum.data.years || [])
+    });
+  }
 }
+
+
+
+
 
 function highlightIcicleRectHoverOnlyFromAlluvial(category, value) {
   const lowerValue = value.toLowerCase();
@@ -838,4 +887,5 @@ function highlightIcicleRectHoverOnlyFromAlluvial(category, value) {
 
 function clearAllViewsHoverOnly() {
   emitClearRectHover();
+  emitClearNumColorsHover();
 }

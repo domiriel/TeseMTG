@@ -1,7 +1,7 @@
 
 import { updateState, getState } from "../state.js";
 import { emitHoverCard, emitClearHover,
-          onSetHover, onClearSetHover, onRectHover, onClearRectHover,onClearLineYearHover, onLineYearHover, 
+          onSetHover, onClearSetHover, onRectHover, onClearRectHover,onClearLineYearHover, onLineYearHover, onNumColorsHover, onClearNumColorsHover,
           onAlluvialHover, onClearAlluvialHover, onAlluvialClick, onAlluvialLinkClick, onIcicleClick, onLineChartClick,
           onTimelineSetClick, onYearClick} from "./Events.js";
 import { getEffectivePriceAttribute } from "../script.js"; 
@@ -72,7 +72,6 @@ onAlluvialClick(({ category, value }) => {
 });
 onYearClick(({ year }) => {
 
-  console.log(year)
   const hoveredMap = new Map((getState().hoveredCards || []).map(c => [c.name, c]));
 
   d3.selectAll(".dots circle").each(function(card) {
@@ -176,6 +175,14 @@ onRectHover(rectInfo => {
 onClearRectHover(() => {
   clearScatterHoverOnly();
 })
+
+onNumColorsHover(({ numColors }) => {
+  highlightScatterDotsFromNumColors(numColors);
+});
+
+onClearNumColorsHover(() => {
+  clearScatterHoverOnly();
+});
 
 onAlluvialHover(({ category, value }) => {
   highlightScatterDotsFromAlluvial(category, value);
@@ -943,7 +950,13 @@ const visibleData = filteredData
   .join("circle")
   .attr("cx", d => xScale(getXValue(d)))
   .attr("cy", d => yScale(d.complexity))
-  .attr("class", d => `dots ci-${d.color_identity.join("")}`)
+  .attr("class", d => {
+  const numColors = d.color_identity?.length || 0;
+  const identityKey = d.color_identity?.length
+    ? d.color_identity.slice().sort().join("")
+    : "colorless";
+  return `dots ci-${identityKey} nc-${numColors}`;
+})
   .attr("r", 2.5)
   .style("cursor", "pointer")
   .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
@@ -1050,10 +1063,10 @@ noRankEntry.append("text")
     let zoomTimeout = null;
     const ZOOM_DELAY =0; 
 
-
+  const buffer = 100;
   zoom = d3.zoom()
   .scaleExtent([1, 24])
-  .translateExtent([[0, 0], [chartWidth, chartHeight]])
+  .translateExtent([[0, 0], [chartWidth + buffer, chartHeight + buffer]])
   .extent([[0, 0], [chartWidth, chartHeight]])
   .filter(event => {
     
@@ -1096,14 +1109,14 @@ function applyZoomTransform(transform) {
 
   updateAxes(getSymbolFromAttribute(lastPriceAttribute));
 
-  const shouldShowDot = d => (currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey || getState().hoveredCards?.some(c => c.name === d.name));
 
+  const hoveredSet = new Set(getState().hoveredCards?.map(c => c.name));
   const gClip = d3.select(".clip-group");
 
   gClip.selectAll("circle")
     .attr("cx", d => xScale(getXValue(d)))
     .attr("cy", d => yScale(d.complexity))
-    .style("display", d => shouldShowDot(d) ? null : "none");
+     .style("display", (currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey || hoveredSet.has(d.name)) ? null : "none");
 
   globalDots = gClip.selectAll("circle");
 }
@@ -1209,7 +1222,7 @@ xScale.domain(transform.rescaleX(baseXScale).domain());
 
     
     tagZoomKeyPoints(filteredData, xScale, yScale);
-actualFIlteredData = filteredData; // Update the actual filtered data
+    actualFIlteredData = filteredData; // Update the actual filtered data
 
 
   gClip.selectAll("circle").remove();
@@ -1219,7 +1232,13 @@ const dots = gClip.selectAll("circle")
   .data(filteredData, d => d.name)
   .enter()
   .append("circle")
-  .attr("class", d => `dots ci-${d.color_identity.join("")}`)
+  .attr("class", d => {
+  const numColors = d.color_identity?.length || 0;
+  const identityKey = d.color_identity?.length
+    ? d.color_identity.slice().sort().join("")
+    : "colorless";
+  return `dots ci-${identityKey} nc-${numColors}`;
+})
   .attr("r", 2.5)
   .style("cursor", "pointer")
   .attr("opacity", 0.8)
@@ -1252,9 +1271,9 @@ export function highlightScatterDotsFromSet(setName) {
     d3.select(this).classed("hover-temp", true);
   }
 });
-const svg = d3.select(".Scatterplot svg");
-const { xScale, yScale } = svg.node().__scales__;
-updatePointPositions(xScale, yScale);
+// const svg = d3.select(".Scatterplot svg");
+// const { xScale, yScale } = svg.node().__scales__;
+// updatePointPositions(xScale, yScale);
 }
 
 function highlightScatterDotsFromIcicle(rectInfo) {
@@ -1267,6 +1286,18 @@ const [targetIdentity] = [...rectInfo.colorIdentities];
   // const { xScale, yScale } = svg.node().__scales__ || {};
   // if (xScale && yScale) updatePointPositions(xScale, yScale);
 }
+
+function highlightScatterDotsFromNumColors(numColors) {
+  if (numColors === undefined || numColors === null) return;
+
+  d3.select(".Scatterplot").selectAll(`.dots.nc-${numColors}`)
+    .classed("hover-temp", true);
+
+  // const svg = d3.select(".Scatterplot svg");
+  // const { xScale, yScale } = svg.node().__scales__;
+  // if (xScale && yScale) updatePointPositions(xScale, yScale);
+}
+
 
 
 export function highlightScatterDotsFromYear(year) {
