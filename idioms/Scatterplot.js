@@ -2,7 +2,7 @@
 import { updateState, getState } from "../state.js";
 import { emitHoverCard, emitClearHover,
           onSetHover, onClearSetHover, onRectHover, onClearRectHover,onClearLineYearHover, onLineYearHover, onNumColorsHover, onClearNumColorsHover,
-          onAlluvialHover, onClearAlluvialHover, onAlluvialClick, onAlluvialLinkClick, onIcicleClick, onLineChartClick,
+          onAlluvialHover, onClearAlluvialHover, onAlluvialClick, onAlluvialLinkClick, onIcicleClick, onLineChartClick, onIcicleNumClick,
           onTimelineSetClick, onYearClick} from "./Events.js";
 import { getEffectivePriceAttribute } from "../script.js"; 
 const colorGroups = [
@@ -120,14 +120,22 @@ onIcicleClick(({ colorIdentity }) => {
   const hovered = getState().hoveredCards || [];
   const hoveredMap = new Map(hovered.map(c => [c.name, c]));
 
-  d3.selectAll(".dots circle").each(function(d) {
-    const identityKey = d.color_identity?.length
-      ? d.color_identity.slice().sort().join("")
-      : "colorless";
-    
-    if (identityKey.toLowerCase() === colorIdentity) {
-      hoveredMap.set(d.name, d);
-    }
+  d3.selectAll(`.dots.ci-${colorIdentity}`).each(function(d) {
+    hoveredMap.set(d.name, d);
+  });
+
+  const newHoveredCards = Array.from(hoveredMap.values());
+  updateState({ hoveredCards: newHoveredCards, isHoverUpdate: true });
+  updateSelectedHoverClass();
+});
+
+
+onIcicleNumClick(({ numColors }) => {
+  const hovered = getState().hoveredCards || [];
+  const hoveredMap = new Map(hovered.map(c => [c.name, c]));
+  console.log(numColors)
+  d3.selectAll(`.dots.nc-${numColors}`).each(function(d) {
+    hoveredMap.set(d.name, d);
   });
 
   const newHoveredCards = Array.from(hoveredMap.values());
@@ -437,7 +445,7 @@ function updatePointPositions(xScale, yScale) {
       const hoveredCards = getState().hoveredCards || [];
       const hoveredSet = new Set(hoveredCards.map(c => c.name));
       const el = d3.select(this);
-      const showDot =  el.classed("hover-temp") || currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey || hoveredSet.has(d.name);
+      const showDot =  el.classed("hover-temp") || currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey;
       return (inBounds && showDot) ? null : "none";
     });
 }
@@ -873,13 +881,15 @@ if (dropdown) {
     .attr("clip-path", "url(#chart-clip)");
 
 const brush = d3.brush()
-    .extent([[0, 0], [chartWidth, chartHeight]])
+    .extent([[0, 0], [chartWidth + 10, chartHeight + 10]])
     .on("start", () => svg.on(".zoom", null))
 .on("end", function(event) {
   const t0 = performance.now();
 
   svg.call(zoom); // Re-enable zoom
-  if (!event.selection) return;
+if (!event.selection) {
+    return;
+  }
 
   const [[x0, y0], [x1, y1]] = event.selection;
 
@@ -894,6 +904,12 @@ const brush = d3.brush()
     }
   }
 
+    if (brushedNames.size === 0) {
+    updateState({ hoveredCards: [], isHoverUpdate: true });
+    d3.selectAll(".dots circle").classed("selected-hover", false);
+    brushOverlay.call(brush.move, null);
+    return;
+  }
   const t2 = performance.now();
   const hoveredCards = getState().hoveredCards || [];
   const hoveredNames = new Set(hoveredCards.map(c => c.name));
@@ -953,7 +969,7 @@ const visibleData = filteredData
   .attr("class", d => {
   const numColors = d.color_identity?.length || 0;
   const identityKey = d.color_identity?.length
-    ? d.color_identity.slice().sort().join("")
+    ? d.color_identity.slice().join("")
     : "colorless";
   return `dots ci-${identityKey} nc-${numColors}`;
 })
@@ -963,7 +979,7 @@ const visibleData = filteredData
   .attr("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
   .attr("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
   .attr("opacity", 0.8)
-  .style("display", d =>(currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey || hoveredSet.has(d.name)) ? null : "none");
+  .style("display", d =>(currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey ) ? null : "none");
 
     filteredData.forEach((d, i) => {
         if (isNaN(d.avg_price) || d.avg_price <= 0 || typeof d.avg_price !== 'number') {
@@ -1116,7 +1132,7 @@ function applyZoomTransform(transform) {
   gClip.selectAll("circle")
     .attr("cx", d => xScale(getXValue(d)))
     .attr("cy", d => yScale(d.complexity))
-     .style("display", (currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey || hoveredSet.has(d.name)) ? null : "none");
+     .style("display", d => (currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey ) ? null : "none");
 
   globalDots = gClip.selectAll("circle");
 }
@@ -1245,7 +1261,7 @@ const dots = gClip.selectAll("circle")
   .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
   .attr("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
   .attr("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
-  .style("display", d => (currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey || hoveredSet.has(d.name)) ? null : "none")
+  .style("display", d => (currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey ) ? null : "none")
   .attr("cx", d => xScale(getXValue(d)))
   .attr("cy", d => yScale(d.complexity))
   .on("mouseover", mouseoverFn)

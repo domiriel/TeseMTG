@@ -107,13 +107,31 @@ body {
   }
 
 
-  .FilterPanel,.TimelineView, .Title, .ISTLogo {
+  .FilterPanel,.Title {
     border: 1px solid black; 
   }
-  
-  /*.FilterPanel {
-    border: 1px solid black; 
-  }*/
+  .TimelineView {
+    position: relative; 
+  border: 1px solid black;
+  border-left: none;
+}
+
+.TimelineView::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  background: hsl(44, 65%, 97%);           /* Match page background to simulate a missing pixel */
+}
+
+.Title {
+  border: 1px solid black;
+  border-bottom: none;
+}
+
+
 .IcicleChart rect {
   stroke: #fff;
   stroke-width: 1px;
@@ -289,7 +307,7 @@ body {
   font-size: 24px;
   font-weight: bold;
   padding: 10px;
-  width: 90.5%;
+  width:88%;
 }
 #inlineLoader {
   display: flex;

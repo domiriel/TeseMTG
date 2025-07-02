@@ -97,7 +97,15 @@ export function onClearNumColorsHover(callback) {
   emitter.addEventListener("num-colors-hover-clear", callback);
 }
 
+let icicleNumClickHandlers = [];
 
+export function onIcicleNumClick(handler) {
+  icicleNumClickHandlers.push(handler);
+}
+
+export function emitIcicleNumClick(payload) {
+  icicleNumClickHandlers.forEach(fn => fn(payload));
+}
 //Line Events
 
 export function emitLineYearHover(yearInfo) {

@@ -2,9 +2,9 @@
 import { updateState, getState } from "../state.js";
 // @ts-ignore
 import { showLoader, hideLoader, showPopup } from "./LoadingAnimation.js";
-import {emitIcicleRectHover, emitClearRectHover,emitIcicleClick, emitClearNumColorsHover, emitNumColorsHover,
-        onHoverCard, onClearHover, onSetHover, onClearSetHover,  onClearLineYearHover, onLineYearHover, 
-        onAlluvialHover, onClearAlluvialHover } from "./Events.js";
+import {emitIcicleRectHover, emitClearRectHover,emitIcicleClick, emitClearNumColorsHover, emitNumColorsHover, emitIcicleNumClick, 
+        onHoverCard, onClearHover, onSetHover, onClearSetHover,  onClearLineYearHover, 
+        onLineYearHover, onAlluvialHover, onClearAlluvialHover } from "./Events.js";
 let globalRects = null;  
 let clickTimer = null;
 
@@ -69,7 +69,7 @@ const colorScale = [
     { range: [61, 80], color: "#736659" },
     { range: [81, 100], color: "#594a3a" }
 ];
-
+const darkTextColors = new Set(["#736659", "#594a3a"]);
 const colorScaleHighlight = [
     { range: [0, 20], color:  "#fbecd0"},
     { range: [21, 40], color: "#f8dfb0" },
@@ -450,13 +450,23 @@ const levelHeight = chartHeight / depth;
             .attr("fill", d => d.data.color)
             .style("cursor", "pointer")
             .on("click", function(event, d) {
-              if (clickTimer) return;  // prevent multiple click timers
+              if (clickTimer) return;
 
               clickTimer = setTimeout(() => {
-                emitIcicleClick({ colorIdentity: d.data.name.toLowerCase() });
+                if (d.depth === 1) {
+                  // Group-level click (e.g., "1 Color", "2 Colors", etc.)
+                  emitIcicleNumClick({
+                    numColors: d.data.numColors
+                  });
+                } else if (d.depth === 2) {
+                  // Identity-level click (e.g., "W", "UB", "Colorless", etc.)
+                  emitIcicleClick({ colorIdentity: d.data.name });
+                }
+
                 clickTimer = null;
-              }, 170); // adjust delay if needed
+              }, 170); // match your existing debounce delay
             })
+
             .on("dblclick", function(event, d){
               if (clickTimer) {
                 clearTimeout(clickTimer);
@@ -546,7 +556,8 @@ const rect = d3.select(this);
             .attr("y", d => yScale(d.depth))
             .attr("dy", "0.35em")
             .attr("text-anchor", "middle")
-            .attr("fill", "#000")
+            .attr("fill", d => darkTextColors.has(d.data.color.toLowerCase()) ? "#fff" : "#000")
+
             .attr("pointer-events", "none")
             .attr("transform", d => {
                 if (d.depth === 2) {
@@ -577,7 +588,8 @@ const rect = d3.select(this);
         update => update
             .attr("x", d => (xScale(d.x0) + xScale(d.x1)) / 2)
             .attr("y", d => yScale(d.depth))
-            .text(d => d.data.name.replaceAll("-", "")),
+            .text(d => d.data.name.replaceAll("-", ""))
+            .attr("fill", d => darkTextColors.has(d.data.color.toLowerCase()) ? "#fff" : "#000"),
 
         exit => exit.remove()
     );
