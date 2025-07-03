@@ -150,7 +150,7 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
     const containerWidth = containerBounds.width;
     const containerHeight = containerBounds.height;
 
-    const margin = { top: 20, right: 21, bottom: 30, left: 60 };
+    const margin = { top: 20, right: 21, bottom: 30, left: 50 };
     const width = containerWidth - margin.left - margin.right;
     const chartHeight = containerHeight*0.9 / 4; 
     const chartSpacing = 15;
@@ -240,16 +240,20 @@ infoGroup.append("text")
     
     const xPadding = (xExtent[1] - xExtent[0]) / 50;
     
-    const xScale = d3.scaleTime()
-        .domain([new Date(xExtent[0].getTime()), new Date(xExtent[1].getTime())])
-        .range([10, width]);
+    const firstYear = xExtent[0].getFullYear();
+    const lastYear = xExtent[1].getFullYear();
+const xScale = d3.scaleTime()
+    .domain([
+        new Date(firstYear, 0, 1),       // January 1st of first year
+        new Date(lastYear, 11, 31)       // December 31st of last year
+    ])
+    .range([10, width]);
     
     window._lineChartXScale = xScale;
 
 
 
     const allYears = groupedData.map(d => d.year);
-
     const xAxis = d3.axisBottom(xScale)
             .tickValues(allYears)
             .tickFormat(d3.timeFormat("%Y"));
@@ -326,8 +330,6 @@ infoGroup.append("text")
             .style("cursor", "pointer")
             .attr("class", "data-point") 
             .on("mouseover", (event, d) => {
-                console.log(d.colorIdentities)
-                console.log(d.numColorsPresent)
                 const year = d.year.getFullYear();
 
                 const allMetrics = metrics.map(m => {

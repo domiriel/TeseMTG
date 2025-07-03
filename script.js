@@ -1,4 +1,5 @@
 import { getState, subscribe, updateState, loadFiltersFromURL } from "./state.js";
+// @ts-ignore
 import { createIcicleChart, highlightIcicleRect } from "./idioms/IcicleChart.js";
 import { createAlluvialChart, highlightAlluvialElements } from "./idioms/AlluvialChart.js";
 import { createTimelineView, highlightTimelineSets } from "./idioms/TimelineView.js";
@@ -187,7 +188,6 @@ getState().onChange("hoveredCards", (hoveredCards) => {
   createAlluvialChart(filtered, ".AlluvialChart", false, selectedPriceAttribute);
   cardsInIllegalDrawer = computeIllegalCards(originalData);
   const processedIllegalData = prepareScatterData(cardsInIllegalDrawer, selectedPriceAttribute);
-  console.log(cardsInIllegalDrawer.length)
 createIllegalDrawer(processedIllegalData, ".IllegalDrawerArea");
   createHiddenDrawer(".HiddenDrawerArea");
   createTimelineView(filtered, ".TimelineView");

@@ -279,13 +279,13 @@ ${dynamicLegendHTML}
     }
 
 
-console.log(containerBounds.width)
+
 
 
 
 
 const iconRadius = containerBounds.width*0.485 * 0.015;
-console.log("Icon Radius", iconRadius)
+
 const iconSize = iconRadius * 2;
 const infoTextSize = Math.min(containerBounds.width * 0.485 * 0.0187, 15);
 
@@ -357,10 +357,20 @@ const infoGroup = container.append("div")
         .style("top", "0px")
         .style("background", "hsl(44, 65%, 97%)")
         .style("z-index", "10");
+    console.log(d3.min(uniqueSets, d => d.releaseDate), d3.max(uniqueSets, d => d.releaseDate))
+const minDateRaw = d3.min(uniqueSets, d => d.releaseDate);
+const maxDateRaw = d3.max(uniqueSets, d => d.releaseDate);
 
-    const xScale = d3.scaleTime()
-        .domain([d3.min(uniqueSets, d => d.releaseDate), d3.max(uniqueSets, d => d.releaseDate)])
-        .range([0, chartWidth]);
+// Snap to full year bounds:
+const startYear = minDateRaw.getFullYear();
+const endYear = maxDateRaw.getFullYear();
+
+const minDate = new Date(startYear, 0, 1);      // January 1st
+const maxDate = new Date(endYear, 11, 31, 23, 59, 59); // December 31st, end of day
+
+const xScale = d3.scaleTime()
+  .domain([minDate, maxDate])
+  .range([0, chartWidth]);
 
     const xAxis = d3.axisTop(xScale)
         .ticks(d3.timeYear.every(1))

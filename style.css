@@ -107,7 +107,7 @@ body {
   }
 
 
-  .FilterPanel,.Title {
+  .FilterPanel{
     border: 1px solid black; 
   }
   .TimelineView {
@@ -231,7 +231,7 @@ body {
 
 #toggleDrawerButton {
   position: fixed;
-  top: 200px;
+  top: 180px;
   right: 0px; /* Adjust to align with hidden drawer */
   z-index: 9999;
   background-color: #e0e0e0;
@@ -279,7 +279,7 @@ body {
 }
 #toggleIllegalDrawerButton {
   position: fixed;
-  top: 250px;         /* Appears below the first one */
+  top: 220px;         /* Appears below the first one */
   right: 0px;
   z-index: 9999;
   background-color: #dc3545;
