@@ -1,8 +1,9 @@
 let drawerContainer = null;
 let drawerButton = null; 
 let currentPage = 0;
+let illegalCurrentPage = 0;
 const pageSize = 25;
-
+let illegalCardsInDrawer = [];
 
 import { updateState, getState } from "../state.js";
 export function createHiddenDrawer(containerSelector = "body") {
@@ -253,7 +254,10 @@ const illegalDrawer = container.append("div")
   .attr("id", "illegalDrawer")
   .attr("class", "drawer")
   .html(`
-  <div class="drawer-title">Illegal Cards</div>
+  <div class="drawer-title" title="These cards are not shown in the visualizations because they have no price data in EUR, USD, or TIX.">
+  Unpriced Cards
+</div>
+
   <div id="illegalCardImages"></div>
 `);
 
@@ -279,116 +283,112 @@ const illegalButton = container.append("button")
   updateIllegalDrawer(cards);
 }
 
-export function updateIllegalDrawer(cards) {
+export function updateIllegalDrawer(cards = []) {
+  illegalCardsInDrawer = cards;
+const alchemyIllegalCount =cards.filter(card =>
+  card.all_sets?.some(set => set.type?.toLowerCase() === "alchemy")
+).length;
+
+console.log(`Illegal Alchemy cards: ${alchemyIllegalCount}`);
   const cardArea = d3.select("#illegalCardImages");
-  const pageSize = 25;
-  const totalPages = Math.ceil(cards.length / pageSize);
-  let currentPage = 0;
+  const totalPages = Math.ceil(illegalCardsInDrawer.length / pageSize);
+  const visibleCards = illegalCardsInDrawer.slice(illegalCurrentPage * pageSize, (illegalCurrentPage + 1) * pageSize);
 
-  const renderPage = () => {
-    const visibleCards = cards.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
-    const cardSel = cardArea.selectAll(".card-wrapper").data(visibleCards, d => d.name);
+  const cardSel = cardArea.selectAll(".card-wrapper").data(visibleCards, d => d.name);
+  cardSel.exit().remove();
 
-    cardSel.exit().remove();
-
-    const cardEnter = cardSel.enter()
-      .append("div")
-      .attr("class", "card-wrapper")
-      .style("margin-bottom", "12px")
-      
-      .style("display", "flex")
-  .style("flex-direction", "column")
-  .style("align-items", "center")
-  .style("justify-content", "center");
-
-    cardEnter.append("img")
-      .style("width", "80%")
-      .style("border-radius", "8px")
-      .style("box-shadow", "0 2px 8px rgba(0, 0, 0, 0.2)");
-
-    const cardMerge = cardEnter.merge(cardSel);
-
-    cardMerge.each((card, i, nodes) => {
-      const wrapper = d3.select(nodes[i]);
-      if (typeof card.selectedPrintIndex !== "number") card.selectedPrintIndex = 0;
-      const idx = card.selectedPrintIndex;
-      card.image_normal = card.all_print_images[idx];
-      wrapper.select("img").attr("src", card.image_normal);
-
-// Add navigation buttons
-let navWrapper = wrapper.select(".nav-wrapper");
-if (navWrapper.empty()) {
-  navWrapper = wrapper.append("div")
-    .attr("class", "nav-wrapper")
-    .style("margin-top", "4px")
+  const cardEnter = cardSel.enter()
+    .append("div")
+    .attr("class", "card-wrapper")
+    .style("margin-bottom", "12px")
     .style("display", "flex")
-    .style("gap", "6px")
+    .style("flex-direction", "column")
+    .style("align-items", "center")
     .style("justify-content", "center");
-} else {
-  navWrapper.html("");
-}
 
-navWrapper.append("button")
-  .text("◀")
-  .attr("title", "Previous print")
-  .style("padding", "2px 6px")
-  .on("click", () => {
-    const newIdx = (card.selectedPrintIndex - 1 + card.all_print_images.length) % card.all_print_images.length;
-    card.selectedPrintIndex = newIdx;
-    card.image_normal = card.all_print_images[newIdx];
+  cardEnter.append("img")
+    .style("width", "80%")
+    .style("border-radius", "8px")
+    .style("box-shadow", "0 2px 8px rgba(0, 0, 0, 0.2)");
+
+  const cardMerge = cardEnter.merge(cardSel);
+
+  cardMerge.each((card, i, nodes) => {
+    const wrapper = d3.select(nodes[i]);
+    if (typeof card.selectedPrintIndex !== "number") card.selectedPrintIndex = 0;
+    const idx = card.selectedPrintIndex;
+    card.image_normal = card.all_print_images[idx];
     wrapper.select("img").attr("src", card.image_normal);
+
+    let navWrapper = wrapper.select(".nav-wrapper");
+    if (navWrapper.empty()) {
+      navWrapper = wrapper.append("div")
+        .attr("class", "nav-wrapper")
+        .style("margin-top", "4px")
+        .style("display", "flex")
+        .style("gap", "6px")
+        .style("justify-content", "center");
+    } else {
+      navWrapper.html("");
+    }
+
+    navWrapper.append("button")
+      .text("◀")
+      .attr("title", "Previous print")
+      .style("padding", "2px 6px")
+      .on("click", () => {
+        const newIdx = (card.selectedPrintIndex - 1 + card.all_print_images.length) % card.all_print_images.length;
+        card.selectedPrintIndex = newIdx;
+        card.image_normal = card.all_print_images[newIdx];
+        wrapper.select("img").attr("src", card.image_normal);
+      });
+
+    navWrapper.append("button")
+      .text("▶")
+      .attr("title", "Next print")
+      .style("padding", "2px 6px")
+      .on("click", () => {
+        const newIdx = (card.selectedPrintIndex + 1) % card.all_print_images.length;
+        card.selectedPrintIndex = newIdx;
+        card.image_normal = card.all_print_images[newIdx];
+        wrapper.select("img").attr("src", card.image_normal);
+      });
+
+    wrapper.select("img")
+      .on("mouseover", (event) => showCompactTooltip(card, event))
+      .on("mousemove", (event) => positionTooltip(event))
+      .on("mouseout", () => d3.select("#tooltip").style("display", "none"));
   });
 
-navWrapper.append("button")
-  .text("▶")
-  .attr("title", "Next print")
-  .style("padding", "2px 6px")
-  .on("click", () => {
-    const newIdx = (card.selectedPrintIndex + 1) % card.all_print_images.length;
-    card.selectedPrintIndex = newIdx;
-    card.image_normal = card.all_print_images[newIdx];
-    wrapper.select("img").attr("src", card.image_normal);
+  // Pagination controls
+  const nav = d3.select("#illegalDrawer #pagination-nav");
+  if (!nav.empty()) nav.remove();
+
+  d3.select("#illegalDrawer").insert("div", "#illegalCardImages")
+    .attr("id", "pagination-nav")
+    .style("text-align", "center")
+    .style("margin-top", "10px")
+    .html(`
+      <button id="illegalPrevPage" ${illegalCurrentPage === 0 ? "disabled" : ""}>Prev</button>
+      <span> Page ${illegalCurrentPage + 1} of ${totalPages} </span>
+      <button id="illegalNextPage" ${illegalCurrentPage === totalPages - 1 ? "disabled" : ""}>Next</button>
+    `);
+
+  d3.select("#illegalPrevPage").on("click", () => {
+    if (illegalCurrentPage > 0) {
+      illegalCurrentPage--;
+      updateIllegalDrawer(illegalCardsInDrawer);
+    }
   });
 
-
-        wrapper.select("img")
-  .on("mouseover", (event) => showCompactTooltip(card, event))
-  .on("mousemove", (event) => positionTooltip(event))
-  .on("mouseout", () => d3.select("#tooltip").style("display", "none"));
-
-
-    });
-
-    // Pagination
-    const nav = d3.select("#illegalDrawer #pagination-nav");
-    if (!nav.empty()) nav.remove();
-
-    d3.select("#illegalDrawer").insert("div", "#illegalCardImages")
-      .attr("id", "pagination-nav")
-      .style("text-align", "center")
-      .style("margin-top", "10px")
-      .html(`
-        <button id="prevPage" ${currentPage === 0 ? "disabled" : ""}>Prev</button>
-        <span> Page ${currentPage + 1} of ${totalPages} </span>
-        <button id="nextPage" ${currentPage === totalPages - 1 ? "disabled" : ""}>Next</button>
-      `);
-
-    d3.select("#prevPage").on("click", () => {
-      if (currentPage > 0) {
-        currentPage--;
-        renderPage();
-      }
-    });
-    d3.select("#nextPage").on("click", () => {
-      if (currentPage < totalPages - 1) {
-        currentPage++;
-        renderPage();
-      }
-    });
-  };
-
-  renderPage();
+  d3.select("#illegalNextPage").on("click", () => {
+    if (illegalCurrentPage < totalPages - 1) {
+      illegalCurrentPage++;
+      updateIllegalDrawer(illegalCardsInDrawer);
+    }
+  });
 }
+
 
 function showCompactTooltip(card, event = null) {
   const tooltip = d3.select("#tooltip");

@@ -199,21 +199,9 @@ const dynamicLegendData = Array.from({ length: numBins }, (_, i) => {
   };
 }).reverse();
 
-dynamicLegendHTML = dynamicLegendData.map(entry => `
-  <div style="display: flex; align-items: center">
-    <div style="
-      width: 14px;
-      height: 14px;
-      background-color: ${entry.color};
-      border: 1px solid #000;
-      margin-right: 6px;
-      flex-shrink: 0;
-    "></div>
-    <span style="font-size: 12px;">${entry.label}</span>
-  </div>
-`).join("");
 
-    const timelineTooltipText = `
+
+const timelineTooltipText = `
 <strong>Timeline Interactions:</strong><br>
 • <strong>Click</strong> a year: Selects the dots in the scatterplot that have a print released in that year.<br>
 • <strong>Hover</strong> a year: see number of sets and types.<br>
@@ -221,9 +209,7 @@ dynamicLegendHTML = dynamicLegendData.map(entry => `
 • <strong>Right-Click</strong> an element: Filter by the selected element.<br>
 • <strong>Search</strong> for a set name using the bar above.<br>
 • <strong>Brush</strong>: Filters by the selected sets.<br>
-• <strong>Scroll</strong>: Focus on a time range.<br><br>
-<strong>Color Legend (Card Count):</strong><br>
-${dynamicLegendHTML}
+• <strong>Scroll</strong>: Focus on a time range.<br>
 `;
     const yearTypeCounts = new Map();
     const typeCounts = new Map();
@@ -263,14 +249,14 @@ ${dynamicLegendHTML}
    
     const searchContainerwidth = containerBounds.width * 0.07;
     const containerHeight = containerBounds.height;
-    const chartWidth = containerWidth * 0.927;
+    const chartWidth = containerWidth * 0.873;
     const chartHeight = containerHeight;
 
     const margin = { 
         top: 50, 
         right: 50, 
         bottom: 10, 
-        left: containerWidth * 0.06 
+        left: containerWidth * 0.11
     };
 
 
@@ -357,7 +343,6 @@ const infoGroup = container.append("div")
         .style("top", "0px")
         .style("background", "hsl(44, 65%, 97%)")
         .style("z-index", "10");
-    console.log(d3.min(uniqueSets, d => d.releaseDate), d3.max(uniqueSets, d => d.releaseDate))
 const minDateRaw = d3.min(uniqueSets, d => d.releaseDate);
 const maxDateRaw = d3.max(uniqueSets, d => d.releaseDate);
 
@@ -470,7 +455,7 @@ tooltip.style("left", `${left}px`)
 
 
 
-        
+
 
 
 
@@ -488,6 +473,7 @@ tooltip.style("left", `${left}px`)
 
     const svg = scrollContainer.append("svg")
         .attr("width", containerWidth)
+         .style("overflow", "visible")
         .attr("height", adjustedChartHeight + 20);
     
 
@@ -508,6 +494,57 @@ tooltip.style("left", `${left}px`)
             .domain(selectedSetTypes)
             .range([0, selectedSetTypes.length * lineSpacingFactor * 30]); 
         
+const legendX = 3;  // Adjust spacing from chart
+const legendY = 6;
+const rectDimensions = Math.min(chartHeight*0.15, 15);
+const extraSpacing = 0;
+const svgWidth = containerWidth;  // you already use this for sizing
+const legendFontSize = Math.min(0.1*chartHeight, 12);
+
+const legend = svg.append("g")
+    .attr("class", "timeline-color-legend")
+    .style("overflow", "visible")
+    .attr("transform", `translate(${legendX}, ${legendY})`);
+
+dynamicLegendData.forEach((interval, i) => {
+  const group = legend.append("g")
+    .attr("transform", `translate(0, ${i * (rectDimensions + extraSpacing)})`);
+
+  group.append("rect")
+    .attr("width", rectDimensions)
+    .attr("height", rectDimensions)
+    .attr("fill", interval.color)
+    .attr("stroke", "#000")
+    .style("shape-rendering", "crispEdges");
+
+  group.append("text")
+    .attr("x", rectDimensions + 6)
+    .attr("y",rectDimensions * 0.25 -1) 
+    .style("overflow", "visible")
+    .text(Math.round(interval.max))
+    .attr("fill", "#000")
+    .style("dominant-baseline", "alphabetic")
+    .style("font-size", `${legendFontSize}px`)
+    .style("shape-rendering", "crispEdges");
+});
+
+const lastRectY = (dynamicLegendData.length - 1) * (rectDimensions + extraSpacing);
+legend.append("text")
+    .attr("x", rectDimensions + 6)
+    .attr("y", lastRectY + rectDimensions + 2) // baseline aligned with bottom
+    .text("1")
+    .attr("fill", "#000")
+    .style("font-size", `${legendFontSize}px`)
+    .style("shape-rendering", "crispEdges");
+
+legend.append("text")
+    .attr("x", 0)
+    .attr("y", rectDimensions*6)
+    .text("Card Count")
+    .attr("fill", "#000")
+    .style("font-size", `${legendFontSize}px`)
+    .style("font-weight", "bold")
+    .style("shape-rendering", "crispEdges");
 
     selectedSetTypes.forEach(setType => {
         chartGroup.append("line")

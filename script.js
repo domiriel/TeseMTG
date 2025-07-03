@@ -23,7 +23,7 @@ const filterApplicationOrder = [
   "Types",
   "Subtypes"
 ];
-const GROUPED_DATA_VERSION = "v4";
+const GROUPED_DATA_VERSION = "v5";
 export function getEffectivePriceAttribute(state) {
   const { selectedPriceCurrency, selectedPriceSuffix } = state;
   return selectedPriceCurrency === "tix"
@@ -181,13 +181,15 @@ getState().onChange("hoveredCards", (hoveredCards) => {
 
   const filtered = getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
  
-
+  console.log(filtered.length)
   createIcicleChart(filtered, ".IcicleChart");
   createFilterPanel(originalData, filtered, ".FilterPanel", selectedFilters);
   updateFilterPanel(originalData, filtered, selectedFilters);
   createAlluvialChart(filtered, ".AlluvialChart", false, selectedPriceAttribute);
   cardsInIllegalDrawer = computeIllegalCards(originalData);
+
   const processedIllegalData = prepareScatterData(cardsInIllegalDrawer, selectedPriceAttribute);
+
 createIllegalDrawer(processedIllegalData, ".IllegalDrawerArea");
   createHiddenDrawer(".HiddenDrawerArea");
   createTimelineView(filtered, ".TimelineView");

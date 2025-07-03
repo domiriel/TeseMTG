@@ -180,10 +180,10 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
         .call(zoom);
 
 
- const iconX = containerWidth * 0.03;
+ const iconX = containerWidth * 0.015;
 const iconY = containerHeight * 0.07;
-const iconRadius = containerWidth*0.93 * 0.015;
-const infoTextSize = Math.min(containerWidth * 0.0187, 15);
+const iconRadius = containerWidth*0.93 * 0.014;
+const infoTextSize = Math.min(containerWidth * 0.0187, 14);
 const infoGroup = svg.append("g")
   .attr("class", "info-icon")
   .attr("transform", `translate(${iconX}, ${iconY})`);

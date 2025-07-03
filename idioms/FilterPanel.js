@@ -2,6 +2,7 @@
 import { updateState, getState, saveFilterSettings, loadFilterSettings, generateFilterShareURL, resetState} from "../state.js";
 import { filterData, filterPriceOnly, getEffectivePriceAttribute } from "../script.js"; 
 import { showLoader, hideLoader } from "./LoadingAnimation.js";
+const EXCLUDED_SET_TYPES = new Set(["alchemy", "minigame"]);
 const optionMap = new Map();  
 const pillMap = new Map();
 const mtgColorOrder = { w: 0, u: 1, b: 2, r: 3, g: 4 };
@@ -182,18 +183,26 @@ suffixSelect.on("change", function () {
 const allFilters = Object.fromEntries(
   Object.entries(groupedData)
     .filter(([category]) => VISIBLE_FILTER_CATEGORIES.includes(category))
-    .map(([category, map]) => [
-      category,
-      Array.from(map.entries()).sort((a, b) => {
-        if (category === "Nº of Colors") {
-          return numColorsOrder.indexOf(a[0]) - numColorsOrder.indexOf(b[0]);
-        }
-        if (category === "Color Identity") {
-          return colorIdentityOrder.indexOf(a[0]) - colorIdentityOrder.indexOf(b[0]);
-        }
-        return a[0].localeCompare(b[0]);
-      })
-    ])
+.map(([category, map]) => {
+  let entries = Array.from(map.entries());
+
+  if (category === "Set Types") {
+    const excluded = new Set(["alchemy", "minigame"]);
+    entries = entries.filter(([value]) => !excluded.has(value.toLowerCase()));
+  }
+
+  entries = entries.sort((a, b) => {
+    if (category === "Nº of Colors") {
+      return numColorsOrder.indexOf(a[0]) - numColorsOrder.indexOf(b[0]);
+    }
+    if (category === "Color Identity") {
+      return colorIdentityOrder.indexOf(a[0]) - colorIdentityOrder.indexOf(b[0]);
+    }
+    return a[0].localeCompare(b[0]);
+  });
+
+  return [category, entries];
+})
 );
 
     const filters = Object.fromEntries(Object.entries(allFilters).filter(([category]) =>
@@ -213,6 +222,7 @@ const allFilters = Object.fromEntries(
         .attr("type", "text")
         .attr("list", inputId)
         .attr("placeholder", "Select a card...")
+         .attr("title", "Type to select a card from the dataset")
         .style("width", "85%")
         .style("margin-bottom", "12px")
         .style("padding", "6px")
@@ -228,8 +238,9 @@ wrapper.append("datalist")
 
 wrapper.append("input")
   .attr("type", "text")
-  .attr("placeholder", "Search by card name, keywords, or subtype...")
+  .attr("placeholder", "Filter by card name, keywords, or subtype...")
   .style("width", "85%")
+  .attr("title", "Search by card name, keywords, or subtype (use e.g., t:Goblin or kw:Flying)")
   .style("margin-bottom", "12px")
   .style("padding", "6px")
   .style("font-size", "16px")
@@ -298,6 +309,7 @@ terms.forEach(rawTerm => {
 wrapper.append("input")
   .attr("type", "text")
   .attr("placeholder", "Search set name...")
+  .attr("title", "Type the name of a set and press Enter to scroll to it")
   .style("width", "85%")
   .style("margin-bottom", "12px")
   .style("padding", "6px")

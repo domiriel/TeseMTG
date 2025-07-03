@@ -264,7 +264,9 @@ body {
 }
 
 
-
+.timeline-color-legend {
+  overflow: visible !important;
+}
 #illegalDrawer.visible {
   transform: translateX(0);
 }

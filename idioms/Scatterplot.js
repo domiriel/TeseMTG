@@ -722,7 +722,7 @@ function updateAxes(symbol) {
 
     if (ticks.length > 0 && ticks[0] < 0.001) ticks[0] = 0.001;
 
-    console.log(getScaleType(xScale))
+
     xAxisG.call(
       d3.axisBottom(logXScale)
         .tickValues(ticks)
@@ -995,12 +995,12 @@ const visibleData = filteredData
         
         
 const baseLegendSize = chartHeight * 0.05; // similar to your alluvial `0.097`
-console.log(baseLegendSize)
+
 const legendItemDimensions = Math.min(baseLegendSize, 20);
 const legendX = margin.left+ 30;
 const legendY = -10;
 const legendFontSize = baseLegendSize > 18? 13: 10
-console.log(legendFontSize)
+
 const legend = svg.append("g")
   .attr("class", "edhrec-legend")
   
@@ -1154,7 +1154,7 @@ svg.node().__scatterMeta__ = {
 }
 
 export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_eur") {
-  console.log("Hello")
+
   lastPriceAttribute = selectedPriceAttribute; // Store the last used price attribute
   const hoveredCards = getState().hoveredCards || [];
 const hoveredSet = new Set(hoveredCards.map(c => c.name));

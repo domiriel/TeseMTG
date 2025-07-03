@@ -10,7 +10,8 @@ MTG_CARD_TYPES = {
 }
 
 functional_reprint_names = set()
-
+def prettify_set_type(set_type):
+    return set_type.replace('_', ' ') if isinstance(set_type, str) else 'Unknown'
 def parse_type_line(type_line):
     # Handle double-faced/split/meld cards — we only parse the front face
     front_type_line = type_line.split("//")[0].strip()
@@ -220,7 +221,7 @@ with open(output_file, 'w') as outfile:
             "price_eur_foil": float(card.get('prices', {}).get('eur_foil', 0) or 0),
             "price_tix": float(card.get('prices', {}).get('tix', 0) or 0),
             "set_name": card.get('set_name', 'Unknown'),
-            "set_type": card.get('set_type', 'Unknown'),
+            "set_type": prettify_set_type(card.get('set_type')),
             "image_normal": image_uris.get('normal', ''),
             "faces": faces_data,
             "index": written_index,
