@@ -114,7 +114,7 @@ const raw = await d3.json("./data/dataset_card_details.json");
 originalData = JSON.parse(JSON.stringify(raw));
 
 let groupedData = await readGroupedDataFromOPFS(originalData);
-console.log(groupedData)
+//console.log(groupedData)
  if (!groupedData) {
     const raw = await d3.json("./data/dataset_card_details.json");
     originalData = JSON.parse(JSON.stringify(raw));
@@ -131,44 +131,43 @@ console.log(groupedData)
   updateState({ originalData, groupedData });
   const t1 = performance.now();
 
-  let hoverTimeout = null;
 getState().onChange("hoveredCards", (hoveredCards) => {
-  if (hoverTimeout) clearTimeout(hoverTimeout);
-  hoverTimeout = setTimeout(() => {
-    const t0 = performance.now();
-    showLoader();
+  showLoader();
+  const t0 = performance.now();
 
-    const t1 = performance.now();
-    highlightAlluvialElements(hoveredCards);
-    const t2 = performance.now();
+  const t1 = performance.now();
+  highlightAlluvialElements(hoveredCards);
+  const t2 = performance.now();
 
-    highlightIcicleRect(hoveredCards);
-    const t3 = performance.now();
+  highlightIcicleRect(hoveredCards);
+  const t3 = performance.now();
 
-    highlightTimelineSets(hoveredCards);
-    const t4 = performance.now();
+  highlightTimelineSets(hoveredCards);
+  const t4 = performance.now();
 
-    highlightLineChart(hoveredCards);
-    const t5 = performance.now();
+  highlightLineChart(hoveredCards);
+  const t5 = performance.now();
 
-    updateDrawer(hoveredCards);
+  updateDrawer(hoveredCards);
+  const t6 = performance.now();
 
-    const t6 = performance.now();
+  // Optional debug logging
+  // console.log(`Hover update timings:
+  // Alluvial: ${(t2 - t1).toFixed(2)}ms
+  // Icicle: ${(t3 - t2).toFixed(2)}ms
+  // Timeline: ${(t4 - t3).toFixed(2)}ms
+  // Line chart: ${(t5 - t4).toFixed(2)}ms
+  // Drawer: ${(t6 - t5).toFixed(2)}ms
+  // Total: ${(t6 - t0).toFixed(2)}ms`);
 
-    // console.log(`Hover update timings:
-    // Alluvial: ${(t2 - t1).toFixed(2)}ms
-    // Icicle: ${(t3 - t2).toFixed(2)}ms
-    // Timeline: ${(t4 - t3).toFixed(2)}ms
-    // Line chart: ${(t5 - t4).toFixed(2)}ms
-    // Drawer: ${(t6 - t5).toFixed(2)}ms
-    // Total: ${(t6 - t0).toFixed(2)}ms`);
-    updateState({
-  isHoverUpdate: false,
-  suppressGlobalNotify: true
+  updateState({
+    isHoverUpdate: false,
+    suppressGlobalNotify: true
+  });
+
+  hideLoader(); // Keep this if you want the loader to fade out slightly delayed
 });
-    setTimeout(hideLoader, 150);
-  }, 0);
-});
+
 
 
   const stateSnapshot = getState();
@@ -181,7 +180,6 @@ getState().onChange("hoveredCards", (hoveredCards) => {
 
   const filtered = getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
  
-  console.log(filtered.length)
   createIcicleChart(filtered, ".IcicleChart");
   createFilterPanel(originalData, filtered, ".FilterPanel", selectedFilters);
   updateFilterPanel(originalData, filtered, selectedFilters);
@@ -220,16 +218,15 @@ selectedPriceCurrency: stateSnapshot.selectedPriceCurrency,
   console.log("All charts created in", (TFinal - t1).toFixed(2), "ms");
   console.log("Total initialization time:", (TFinal - t0).toFixed(2), "ms");
 
-  hideLoader();
+  hideLoader(150);
 
   subscribe((state) => {
-
+    showLoader();
     if (isUpdatingFilteredData) return;
     const context = state.updateContext || "default";
 
     if (state.isHoverUpdate) return;
 
-    console.log("Hi")
     const { selectedFilters, freeTextSearch } = state;
 
     const selectedPriceAttribute = getEffectivePriceAttribute(state)
@@ -268,6 +265,7 @@ selectedPriceCurrency: stateSnapshot.selectedPriceCurrency,
     highlightTimelineSets(hoveredCards);
     highlightLineChart(hoveredCards);
     updateDrawer(hoveredCards);
+    hideLoader(100);
   });
 
   window.addEventListener("resize", () => {
@@ -287,6 +285,7 @@ selectedPriceCurrency: stateSnapshot.selectedPriceCurrency,
     highlightTimelineSets(hoveredCards);
     highlightLineChart(hoveredCards);
     updateDrawer(hoveredCards);
+    
   });
 }
   

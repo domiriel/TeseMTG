@@ -423,36 +423,13 @@ searchInput.on("change", function () {
         .style("border-radius", "4px")
         .style("cursor", "pointer")
         .on("click", () => {
-            showLoader();
             const clearedFilters = {};
             for (const key in selectedFilters) clearedFilters[key] = new Set();
-            d3.selectAll(".set-square").attr("fill", "#998066").style("opacity", 1);
-            d3.selectAll(".year-tick-timeline").style("fill", "black").style("font-weight", "normal");
-            d3.selectAll(".data-point").attr("fill", "#998066").style("opacity", 1)
-            .style("font-weight", "normal");
-            d3.selectAll(".chart-group rect").classed("selected", false);
             updateState({ selectedFilters: clearedFilters });
-            createFilterPanel(data,data, containerId, clearedFilters, true);
-            hideLoader();
         });
 
 
-    resetWrapper.append("button")
-    .text("Reset State")
-    .style("padding", "6px 12px")
-    .style("font-size", "14px")
-    .style("background-color", "#6c757d")
-    .style("color", "#fff")
-    .style("border", "none")
-    .style("border-radius", "4px")
-    .style("cursor", "pointer")
-    .style("margin-top", "8px")
-    .on("click", () => {
-        showLoader();
-        resetState();  // calls the new reset function in state.js
-        createFilterPanel(data,data, containerId, getState().selectedFilters, true);
-        hideLoader();
-    });
+
 
     Object.entries(filters).forEach(([category, values]) => {
         const section = wrapper.append("div")
@@ -542,7 +519,6 @@ searchInput.on("change", function () {
                 .style("cursor", "pointer")
                 .text("\u2715")
                 .on("click", function (event, value) {
-                    showLoader();
                     selectedSet.delete(value);
                     const updatedFilters = cloneFilters(selectedFilters);
                     updateState({ 
@@ -558,7 +534,6 @@ searchInput.on("change", function () {
 
                     updatePills();
                     updateFilterStyles();
-                    hideLoader();
                 });
 
             pills.exit().remove();
@@ -580,7 +555,6 @@ searchInput.on("change", function () {
             .attr("data-category", category)
             .attr("data-value", d => d.value)
             .on("click", function (event, d) {
-                showLoader();
                 const isSelected = selectedSet.has(d.value);
                 isSelected ? selectedSet.delete(d.value) : selectedSet.add(d.value);
                 const updatedFilters = structuredClone(selectedFilters);
@@ -588,7 +562,6 @@ searchInput.on("change", function () {
                 updatePills();
                 updateFilterStyles();
                 clearTimeout(window._filterPanelTimeout);
-                hideLoader();
             });
 
         option.append("span")

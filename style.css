@@ -116,6 +116,13 @@ body {
   border-left: none;
 }
 
+.filter-panel-wrapper {
+  scrollbar-color: #636262 hsl(44, 65%, 97%);
+}
+
+.chart-container {
+  scrollbar-color: #636262 hsl(44, 65%, 97%);
+}
 .TimelineView::after {
   content: "";
   position: absolute;

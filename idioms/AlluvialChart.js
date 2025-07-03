@@ -392,7 +392,6 @@ sankeyGroup.selectAll(".link")
       }
     
       updateState({ selectedFilters: updatedFilters});
-      updateFilterPanel(getState().originalData, updatedFilters); 
 
     }),
       update => update
@@ -545,7 +544,6 @@ const nodeGroups = sankeyGroup.selectAll(".node")
       }
       
       updateState({ selectedFilters: updatedFilters });
-      updateFilterPanel(getState().originalData, updatedFilters); 
 
     });
 

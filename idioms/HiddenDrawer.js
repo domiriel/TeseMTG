@@ -289,7 +289,7 @@ const alchemyIllegalCount =cards.filter(card =>
   card.all_sets?.some(set => set.type?.toLowerCase() === "alchemy")
 ).length;
 
-console.log(`Illegal Alchemy cards: ${alchemyIllegalCount}`);
+
   const cardArea = d3.select("#illegalCardImages");
   const totalPages = Math.ceil(illegalCardsInDrawer.length / pageSize);
   const visibleCards = illegalCardsInDrawer.slice(illegalCurrentPage * pageSize, (illegalCurrentPage + 1) * pageSize);
