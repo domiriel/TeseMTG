@@ -5,6 +5,15 @@ let illegalCurrentPage = 0;
 const pageSize = 25;
 let illegalCardsInDrawer = [];
 
+function getClonedFilters() {
+    const currentState = getState();
+    const cloned = {};
+    for (const key in currentState.selectedFilters) {
+        cloned[key] = new Set(currentState.selectedFilters[key]);
+    }
+    return cloned;
+}
+
 import { updateState, getState } from "../state.js";
 export function createHiddenDrawer(containerSelector = "body") {
   const container = d3.select(containerSelector);
@@ -47,7 +56,8 @@ export function createHiddenDrawer(containerSelector = "body") {
   .style("display", "flex")
   .style("flex-direction", "column")
   .style("align-items", "center");
-  drawerContainer.insert("button", "#cardImages")
+
+  
   updateButtonLabel(0);
 }
 
@@ -58,6 +68,8 @@ export function createHiddenDrawer(containerSelector = "body") {
 let cardsInDrawer = []; // store current list
 
 export function updateDrawer(cards = []) {
+  const filters = getState().selectedFilters
+  console.log(filters)
   if (!drawerContainer) return;
 
   const t0 = performance.now();
@@ -192,18 +204,28 @@ const visibleCards = cards.slice(currentPage * pageSize, (currentPage + 1) * pag
       .style("cursor", "pointer")
       .on("click", () => {
         if (!Array.isArray(card.all_sets)) return;
-        const curr = getState();
-        const newFilter = new Set(curr.selectedFilters["Set Names"] || []);
-        card.all_sets.forEach(set => newFilter.add(set.name));
+        const updatedFilters = getClonedFilters();
+        console.log("1",updatedFilters)
+        if (!updatedFilters["Set Names"]) {
+        updatedFilters["Set Names"] = new Set();
+    }
+
+
+        card.all_sets.forEach(set =>updatedFilters["Set Names"].add(set.name));
+
+        console.log("2",updatedFilters)
+
+        const newSelectedFilters = {};
+for (const key in updatedFilters) {
+  newSelectedFilters[key] = new Set(updatedFilters[key]); // fully detached
+}
         updateState({
-          selectedFilters: {
-            ...curr.selectedFilters,
-            "Set Names": newFilter
-          },
-          updateContext: "TimelineFilter"
-        });
-        d3.selectAll(".set-rect")
-          .attr("fill", d => newFilter.has(d.name) ? "#007bff" : "#C3C3C3");
+  selectedFilters: newSelectedFilters,
+  updateContext: "TimelineFilter"
+});
+        console.log("CURRENT state Set Names:", getState().selectedFilters["Set Names"]);
+console.log("NEW state Set Names:", updatedFilters["Set Names"]);
+
       });
   });
 

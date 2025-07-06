@@ -63,8 +63,8 @@ function getScaleType(scale) {
 const scatterTooltipText = `
 <strong>Scatterplot Interactions:</strong><br>
 • <strong>Hover on dots</strong>: view card details and highlight related data across views.<br>
-• <strong>Click</strong>: toggle persistent highlight.<br>
-• <strong>Brush</strong>: multi-select/deselect cards.<br>
+• <strong>Click</strong> on a card: toggle persistent highlight of a card.<br>
+• <strong>Brush</strong>: Toggle on/off persistent highlights of multiple cards.<br>
 • <strong>Hover on labels</strong>: view tooltip explanation.<br>
 • <strong>Scroll</strong>: Zoom in/out.<br>
 • <strong>Moving mouse while holding right-click</strong>: Panning<br>
@@ -82,56 +82,91 @@ onAlluvialClick(({ category, value }) => {
         : d.rarity?.toLowerCase() === value;
 
     if (matches) {
-      hoveredMap.set(d.name, d);
+      if (hoveredMap.has(d.name)) {
+        hoveredMap.delete(d.name); // 💨 Toggle off
+      } else {
+        hoveredMap.set(d.name, d); // 💡 Toggle on
+      }
     }
   });
 
   updateState({ hoveredCards: Array.from(hoveredMap.values()), isHoverUpdate: true });
+  d3.selectAll(".dots circle").classed("selected-hover", false);
   updateSelectedHoverClass();
 });
+
 onYearClick(({ year }) => {
+  const hoveredCards = getState().hoveredCards || [];
+  const hoveredMap = new Map(hoveredCards.map(c => [c.name, c]));
 
-  const hoveredMap = new Map((getState().hoveredCards || []).map(c => [c.name, c]));
-
+  const targetYear = parseInt(year, 10); // Ensure it's a number
   d3.selectAll(".dots circle").each(function(card) {
-    const cardYear = new Date(card.release_date).getFullYear().toString();
-    if (cardYear === year) {
-      hoveredMap.set(card.name, card);
+    if (card.all_years?.includes(targetYear)) {
+      if (hoveredMap.has(card.name)) {
+        hoveredMap.delete(card.name); // Toggle off
+      } else {
+        hoveredMap.set(card.name, card); // Toggle on
+      }
     }
   });
 
-  updateState({ hoveredCards: Array.from(hoveredMap.values()), isHoverUpdate: true });
+  updateState({
+    hoveredCards: Array.from(hoveredMap.values()),
+    isHoverUpdate: true
+  });
+  d3.selectAll(".dots circle").classed("selected-hover", false);
   updateSelectedHoverClass();
 });
 
 onTimelineSetClick(setInfo => {
-  const hoveredMap = new Map((getState().hoveredCards || []).map(c => [c.name, c]));
+  const setName = setInfo.name;
+  const hoveredCards = getState().hoveredCards || [];
+  const hoveredMap = new Map(hoveredCards.map(c => [c.name, c]));
 
-  d3.selectAll(".dots circle").each(function(card) {
-    if ((card.set_name || "").toLowerCase() === setInfo.name.toLowerCase()) {
-      hoveredMap.set(card.name, card);
+  d3.selectAll(".dots circle").each(function(d) {
+    const matches = d.all_sets?.some(s => s.name === setName);
+    if (matches) {
+      if (hoveredMap.has(d.name)) {
+        hoveredMap.delete(d.name); // 💨 Toggle off
+      } else {
+        hoveredMap.set(d.name, d); // ✅ Toggle on
+      }
     }
   });
 
-  updateState({ hoveredCards: Array.from(hoveredMap.values()), isHoverUpdate: true });
+  updateState({
+    hoveredCards: Array.from(hoveredMap.values()),
+    isHoverUpdate: true
+  });
+  d3.selectAll(".dots circle").classed("selected-hover", false);
   updateSelectedHoverClass();
 });
+
 
 onAlluvialLinkClick(({ originality, rarity }) => {
   const dots = d3.selectAll(".dots circle").nodes();
   const hoveredMap = new Map(getState().hoveredCards?.map(c => [c.name, c]) || []);
 
-  dots.forEach(el => {
+ dots.forEach(el => {
     const d = d3.select(el).datum();
-    if (
+    const matches = (
       d.rarity?.toLowerCase() === rarity &&
       d.all_originalities?.includes(originality)
-    ) {
-      hoveredMap.set(d.name, d);
+    );
+
+    if (matches) {
+      if (hoveredMap.has(d.name)) {
+        hoveredMap.delete(d.name); // 💨 Toggle off
+      } else {
+        hoveredMap.set(d.name, d); // 💡 Toggle on
+      }
     }
+
+    
   });
 
   updateState({ hoveredCards: Array.from(hoveredMap.values()), isHoverUpdate: true });
+  d3.selectAll(".dots circle").classed("selected-hover", false);
   updateSelectedHoverClass();
 });
 
@@ -140,39 +175,58 @@ onIcicleClick(({ colorIdentity }) => {
   const hoveredMap = new Map(hovered.map(c => [c.name, c]));
 
   d3.selectAll(`.dots.ci-${colorIdentity}`).each(function(d) {
-    hoveredMap.set(d.name, d);
+    if (hoveredMap.has(d.name)) {
+      hoveredMap.delete(d.name); // 💨 Toggle off
+    } else {
+      hoveredMap.set(d.name, d); // ✅ Toggle on
+    }
   });
 
-  const newHoveredCards = Array.from(hoveredMap.values());
-  updateState({ hoveredCards: newHoveredCards, isHoverUpdate: true });
+  updateState({ hoveredCards: Array.from(hoveredMap.values()), isHoverUpdate: true });
+  d3.selectAll(".dots circle").classed("selected-hover", false);
   updateSelectedHoverClass();
 });
+
 
 
 onIcicleNumClick(({ numColors }) => {
   const hovered = getState().hoveredCards || [];
   const hoveredMap = new Map(hovered.map(c => [c.name, c]));
+
   d3.selectAll(`.dots.nc-${numColors}`).each(function(d) {
-    hoveredMap.set(d.name, d);
-  });
-
-  const newHoveredCards = Array.from(hoveredMap.values());
-  updateState({ hoveredCards: newHoveredCards, isHoverUpdate: true });
-  updateSelectedHoverClass();
-});
-
-onLineChartClick(({ year }) => {
-  const hovered = getState().hoveredCards || [];
-  const hoveredMap = new Map(hovered.map(c => [c.name, c]));
-
-  d3.selectAll(".dots circle").each(function(card) {
-    const cardYear = new Date(card.release_date).getFullYear().toString();
-    if (cardYear === year) {
-      hoveredMap.set(card.name, card);
+    if (hoveredMap.has(d.name)) {
+      hoveredMap.delete(d.name); // 💨 Toggle off
+    } else {
+      hoveredMap.set(d.name, d); // ✅ Toggle on
     }
   });
 
   updateState({ hoveredCards: Array.from(hoveredMap.values()), isHoverUpdate: true });
+  d3.selectAll(".dots circle").classed("selected-hover", false);
+  updateSelectedHoverClass();
+});
+
+
+onLineChartClick(({ year }) => {
+const hoveredCards = getState().hoveredCards || [];
+  const hoveredMap = new Map(hoveredCards.map(c => [c.name, c]));
+
+  const targetYear = parseInt(year, 10); // Ensure it's a number
+  d3.selectAll(".dots circle").each(function(card) {
+    if (card.all_years?.includes(targetYear)) {
+      if (hoveredMap.has(card.name)) {
+        hoveredMap.delete(card.name); // Toggle off
+      } else {
+        hoveredMap.set(card.name, card); // Toggle on
+      }
+    }
+  });
+
+  updateState({
+    hoveredCards: Array.from(hoveredMap.values()),
+    isHoverUpdate: true
+  });
+  d3.selectAll(".dots circle").classed("selected-hover", false);
   updateSelectedHoverClass();
 });
 
@@ -609,56 +663,9 @@ const maxPrice = d3.max(filteredData, d => d.avg_price);
   const iconY = height * 0.07;
   const iconRadius = width*0.93 * 0.015;
   const infoTextSize = Math.min(width * 0.0187, 15);
-  const infoGroup = svg.append("g")
-  .attr("class", "info-icon")
-  .attr("transform", `translate(${iconX},${iconY} )`);
-
-infoGroup.append("circle")
-  .attr("r", iconRadius)
-  .attr("fill", "#8A9CE4")
-  .attr("stroke", "#fff");
-
-
-infoGroup.append("text")
-  .attr("text-anchor", "middle")
-  .attr("dy", "0.35em")
-  .attr("font-size", `${infoTextSize}px`)
-  .attr("font-weight", "bold")
-  .attr("fill","#fff")
-  .text("?")
-  .attr("pointer-events", "none");
-    
 
 
 
-  infoGroup
-  .on("mouseover", function(event) {
-    d3.select("#tooltip")
-      .style("display", "block")
-      .html(scatterTooltipText);
-  })
-  .on("mousemove", function(event) {
-    const tooltip = d3.select("#tooltip");
-    const tooltipWidth = tooltip.node().offsetWidth;
-    const tooltipHeight = tooltip.node().offsetHeight;
-
-    let x = event.pageX + 10;
-    let y = event.pageY + 10;
-
-    if (x + tooltipWidth > window.innerWidth) {
-      x = window.innerWidth - tooltipWidth - 10;
-    }
-    if (y + tooltipHeight > window.innerHeight) {
-      y = window.innerHeight - tooltipHeight - 10;
-    }
-
-    tooltip
-      .style("left", `${x}px`)
-      .style("top", `${y}px`);
-  })
-  .on("mouseout", function() {
-    d3.select("#tooltip").style("display", "none");
-  });
 
     const g = svg.append("g").attr("transform", `translate(${margin.left - 8.5}, ${margin.top-15})`);
 
@@ -755,9 +762,11 @@ function updateAxes(symbol) {
   .attr("y", height - 30)
   .attr("width", 130)
   .attr("height", 30)
+   .style("pointer-events", "none")
   .append("xhtml:div")
  .html(`
     <select id="xMetricDropdown" style="
+    pointer-events: auto;
       font-size:14px;
       font-family: inherit;
       font-weight: bold;
@@ -813,6 +822,7 @@ dropdown.addEventListener("mouseover", (event) => {
     d3.select("#tooltip").style("display", "none");
   });
 }
+  
 
         svg.append("text")
     .attr("class", "y-axis-label")
@@ -946,7 +956,54 @@ for (const name of brushedNames) {
     brushOverlay.call(brush).lower();
     let fullData = filteredData;
 
+const infoGroup = svg.append("g")
+  .attr("class", "info-icon")
+  .attr("transform", `translate(${iconX},${iconY} )`);
+infoGroup.append("circle")
+  .attr("r", iconRadius)
+  .attr("fill", "#8A9CE4")
+  .attr("stroke", "#fff");
 
+
+infoGroup.append("text")
+  .attr("text-anchor", "middle")
+  .attr("dy", "0.35em")
+  .attr("font-size", `${infoTextSize}px`)
+  .attr("font-weight", "bold")
+  .attr("fill","#fff")
+  .text("?");
+    
+
+
+
+  infoGroup
+  .on("mouseover", function(event) {
+    d3.select("#tooltip")
+      .style("display", "block")
+      .html(scatterTooltipText);
+  })
+  .on("mousemove", function(event) {
+    const tooltip = d3.select("#tooltip");
+    const tooltipWidth = tooltip.node().offsetWidth;
+    const tooltipHeight = tooltip.node().offsetHeight;
+
+    let x = event.pageX + 10;
+    let y = event.pageY + 10;
+
+    if (x + tooltipWidth > window.innerWidth) {
+      x = window.innerWidth - tooltipWidth - 10;
+    }
+    if (y + tooltipHeight > window.innerHeight) {
+      y = window.innerHeight - tooltipHeight - 10;
+    }
+
+    tooltip
+      .style("left", `${x}px`)
+      .style("top", `${y}px`);
+  })
+  .on("mouseout", function() {
+    d3.select("#tooltip").style("display", "none");
+  });
 const visibleData = filteredData
     const dots = gClip.selectAll("circle")
     .data(visibleData, d => d.name)

@@ -54,11 +54,10 @@ onClearAlluvialHover(() => {
 
 const infoTooltipText = `
 <strong>Icicle Chart Interactions:</strong><br>
-• <strong>Click</strong> on a rectangle: zoom into that section.<br>
-• <strong>Ctrl + Click</strong> on a rectangle(color identities only): selects all the dots in the scatterplot that match the color identity.<br>
-• <strong>Right-Click</strong> on a rectangle: apply a global filter to the dataset.<br>
-• <strong>Hover</strong> on a rectangle: see details.<br>
-• <strong>Hover</strong> on a rectangle(color identities only): highlights the other visualizations.<br>
+• <strong>Click</strong> on a rectangle:<br>&nbsp;&nbsp;&nbsp;• Color group: selects/diselects dots with matching Nº of colors.<br>&nbsp;&nbsp;&nbsp;• Color identity: selects/diselects dots with matching identity.<br>
+• <strong>Double-click</strong>: zoom into or out of that section.<br>
+• <strong>Right-click</strong> on a rectangle: toggles global filter for that color group or identity.<br>
+• <strong>Hover</strong>: shows tooltip and highlights other visualizations (for identities and groups).<br>
 `;
 const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };
 

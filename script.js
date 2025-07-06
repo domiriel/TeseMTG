@@ -133,6 +133,8 @@ let groupedData = await readGroupedDataFromOPFS(originalData);
 
 getState().onChange("hoveredCards", (hoveredCards) => {
   showLoader();
+
+  console.log("Hello")
   const t0 = performance.now();
 
   const t1 = performance.now();
@@ -160,10 +162,12 @@ getState().onChange("hoveredCards", (hoveredCards) => {
   // Drawer: ${(t6 - t5).toFixed(2)}ms
   // Total: ${(t6 - t0).toFixed(2)}ms`);
 
+requestAnimationFrame(() => {
   updateState({
     isHoverUpdate: false,
     suppressGlobalNotify: true
   });
+});
 
   hideLoader(); // Keep this if you want the loader to fade out slightly delayed
 });
@@ -177,7 +181,7 @@ getState().onChange("hoveredCards", (hoveredCards) => {
   const freeTextSearch = stateSnapshot.freeTextSearch;
   let selectedFilters = sharedFilters || stateSnapshot.selectedFilters;
 
-
+  console.log(selectedFilters)
   const filtered = getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
  
   createIcicleChart(filtered, ".IcicleChart");
@@ -224,15 +228,14 @@ selectedPriceCurrency: stateSnapshot.selectedPriceCurrency,
     showLoader();
     if (isUpdatingFilteredData) return;
     const context = state.updateContext || "default";
-
     if (state.isHoverUpdate) return;
-
     const { selectedFilters, freeTextSearch } = state;
-
+    console.log(selectedFilters)
     const selectedPriceAttribute = getEffectivePriceAttribute(state)
-
+    const tStart = performance.now();
     const filteredData = getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
-
+    const tFiltered = performance.now();
+    console.log("Filtering took", (tFiltered - tStart).toFixed(2), "ms");
 
       updateFilterPanel(originalData, filteredData, selectedFilters, ".FilterPanel");
 
@@ -247,15 +250,22 @@ selectedPriceCurrency: stateSnapshot.selectedPriceCurrency,
 
 
       createIcicleChart(filteredData, ".IcicleChart", true);
-
+      const tIcicle = performance.now();
+      console.log("Icicle took", (tIcicle - tFiltered).toFixed(2), "ms");
 
       createTimelineView(filteredData, ".TimelineView", true);
+      const tTimeline = performance.now();
+      console.log("Timeline took", (tTimeline - tIcicle).toFixed(2), "ms");
       createStackedLineChart(filteredData, ".LineChart", true);
-
+      const tLine = performance.now();
+      console.log("Line took", (tLine - tTimeline).toFixed(2), "ms");
     createAlluvialChart(filteredData, ".AlluvialChart", true, selectedPriceAttribute);
+    const tAlluvial = performance.now();
+    console.log("Alluvial took", (tAlluvial - tLine).toFixed(2), "ms");
     const processedData = prepareScatterData(filteredData, selectedPriceAttribute);
     updateScatterPlot(processedData, selectedPriceAttribute);
-
+    const tSccatter = performance.now();
+    console.log("Scatter took", (tSccatter - tAlluvial).toFixed(2), "ms");
 
 
      let { hoveredCards } = getState();
@@ -265,6 +275,9 @@ selectedPriceCurrency: stateSnapshot.selectedPriceCurrency,
     highlightTimelineSets(hoveredCards);
     highlightLineChart(hoveredCards);
     updateDrawer(hoveredCards);
+
+    const tFinal = performance.now();
+    console.log("Hovering took", (tFinal - tSccatter).toFixed(2), "ms");
     hideLoader(100);
   });
 

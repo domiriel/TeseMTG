@@ -20,6 +20,15 @@ body {
   display: none; /* Initially hidden */
 }
 
+.brush-overlay {
+  pointer-events: none;
+}
+
+.brush-active .brush-overlay {
+  pointer-events: all;
+}
+
+
 #hiddenDrawer {
   max-height: 80vh; /* Adjust as needed */
   overflow-y: auto;

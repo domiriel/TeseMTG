@@ -109,9 +109,8 @@ function formatPriceLabel(priceAttr) {
 
 const infoTooltipText = `
 <strong>Chart Interactions:</strong><br>
-• <strong>Click</strong> on a node or link: temporarily filter the chart.<br>
-• <strong>Ctrl + Click</strong> on a node or link: Highlights the dots in the scatterplot that matches the category.<br>
-• <strong>Right-Click</strong> on a node or link: apply a global filter to the dataset.<br>
+• <strong>Click</strong> on a node or link: Selects/diselects the dots in the scatterplot that matches the category.<br>
+• <strong>Right-Click</strong> on a node or link: Applies a global filter to the dataset based on that category or pair..<br>
 • <strong>Hover</strong> on nodes or links: see details and highlights the other visualizations.<br>
 `;
 

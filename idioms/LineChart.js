@@ -5,12 +5,11 @@ import { emitLineYearHover, emitClearLineYearHover, emitLineChartClick, onNumCol
          onClearAlluvialHover   } from "./Events.js";
 const lineChartTooltipText = `
 <strong>Timeline Interactions:</strong><br>
-• <strong>Hover</strong> a circle: View year and metrics and highlights the other visuzalizations.<br>
-• <strong>Click</strong> a circle: Selects the dots in the scatterplot that have a print released in that year.<br>
-• <strong>Right-Click</strong> a circle: Filters by the selected year.<br>
-• <strong>Brush</strong> across timeline: Filters by the selected years.<br>
-• <strong>Hover</strong> a line: Inspect metric value at that year and highlights the other visuzalizations.<br>
-• <strong>Scroll</strong>: Zoom to focus on a time range.<br>
+• <strong>Hover</strong> a circle: View metrics for that year and highlight related elements across views.<br>
+• <strong>Click</strong> a circle: Selects/deselects dots in the scatterplot that match the printed year.<br>
+• <strong>Right-click</strong> a circle: Toggles a global Year filter for that year.<br>
+• <strong>Brush</strong> the timeline: Adds/removes multiple years from the global Year filter.<br>
+• <strong>Scroll</strong>: Zoom in/out on the timeline.<br>
 `;
 
 const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };
@@ -242,12 +241,21 @@ infoGroup.append("text")
     
     const firstYear = xExtent[0].getFullYear();
     const lastYear = xExtent[1].getFullYear();
+const yearSpan = lastYear - firstYear;
+
+let domainStart, domainEnd;
+if (yearSpan === 0) {
+  // Add padding: one year before and after
+  domainStart = new Date(firstYear - 1, 0, 1);
+  domainEnd = new Date(firstYear + 1, 0, 1);
+} else {
+  domainStart = new Date(firstYear, 0, 1);
+  domainEnd = new Date(lastYear, 11, 31);
+}
+
 const xScale = d3.scaleTime()
-    .domain([
-        new Date(firstYear, 0, 1),       // January 1st of first year
-        new Date(lastYear, 11, 31)       // December 31st of last year
-    ])
-    .range([10, width]);
+  .domain([domainStart, domainEnd])
+  .range([10, width]);
     
     window._lineChartXScale = xScale;
 
@@ -512,12 +520,21 @@ const xScale = d3.scaleTime()
             }
         });
 
-        d3.selectAll("circle.data-point")
-            .attr("opacity", function() {
-                const year = this.getAttribute("data-year");
-                return updatedFilters["Year"].size === 0 || updatedFilters["Year"].has(year) ? 1 : 0.5;
-            });
+         if (selectedYears.size === 0) {
+        // No data in selection: clear Year filter
+        updatedFilters["Year"].clear();
 
+
+        updateState({
+            selectedFilters: updatedFilters,
+            updateContext: "TimelineFilter"
+        });
+
+        brushGroup.call(brush.move, null);
+        brushGroup.selectAll("*").remove();
+        brushGroup.call(brush);
+        return;
+    }
         updateState({
             selectedFilters: updatedFilters,
             updateContext: "TimelineFilter"

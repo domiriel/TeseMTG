@@ -203,14 +203,14 @@ const dynamicLegendData = Array.from({ length: numBins }, (_, i) => {
 
 const timelineTooltipText = `
 <strong>Timeline Interactions:</strong><br>
-• <strong>Click</strong> a year: Selects the dots in the scatterplot that have a print released in that year.<br>
-• <strong>Hover</strong> a year: see number of sets and types.<br>
-• <strong>Click</strong> a set square: Selects the dots in the scatterplot that have a print released in that set.<br>
-• <strong>Right-Click</strong> an element: Filter by the selected element.<br>
-• <strong>Search</strong> for a set name using the bar above.<br>
-• <strong>Brush</strong>: Filters by the selected sets.<br>
-• <strong>Scroll</strong>: Focus on a time range.<br>
+• <strong>Click</strong> a year: Selects/Diselects dots in the scatterplot with prints from that year.<br>
+• <strong>Hover</strong> a year: Shows number of sets and their types.<br>
+• <strong>Click</strong> a set square: Selects dots with prints from that set.<br>
+• <strong>Right-Click</strong> a year, set square, or set type: Filter by that element.<br>
+• <strong>Brush</strong>: Adds/removes multiple sets from the global Set Names filters.<br>
+• <strong>Scroll</strong>: Zoom in/out on the timeline.<br>
 `;
+
     const yearTypeCounts = new Map();
     const typeCounts = new Map();
 
@@ -800,12 +800,12 @@ function zoomed(event) {
 
 
 function brushed(event) {
-    if (!event.selection) return;
+    if (!event.selection) return; // Let brushing happen first
 
     const [[x0, y0], [x1, y1]] = event.selection;
 
     const selected = [];
-        d3.selectAll(".set-rect").each(function (d) {
+    d3.selectAll(".set-rect").each(function (d) {
         const rect = d3.select(this);
         const x = +rect.attr("x");
         const y = +rect.attr("y");
@@ -822,18 +822,34 @@ function brushed(event) {
         }
     });
 
-
     const updatedFilters = getClonedFilters();
-
-
     if (!updatedFilters["Set Names"]) {
         updatedFilters["Set Names"] = new Set();
     }
 
-    let changed = false;
+    if (selected.length === 0) {
+        // 💨 No sets in brush: clear all Set Name filters
+        updatedFilters["Set Names"].clear();
 
+        updateState({
+            selectedFilters: updatedFilters,
+            updateContext: "TimelineFilter"
+        });
+
+        // Reset brush
+        d3.select(chartGroup.select(".brush").node()).call(brush.move, null);
+        chartGroup.select(".brush").remove();
+        chartGroup.call(brush);
+        return;
+    }
+
+    // 🔁 Toggle each selected set
+    let changed = false;
     selected.forEach(name => {
-        if (!updatedFilters["Set Names"].has(name)) {
+        if (updatedFilters["Set Names"].has(name)) {
+            updatedFilters["Set Names"].delete(name);
+            changed = true;
+        } else {
             updatedFilters["Set Names"].add(name);
             changed = true;
         }
@@ -844,16 +860,14 @@ function brushed(event) {
             selectedFilters: updatedFilters,
             updateContext: "TimelineFilter"
         });
-
-        
     }
 
-    d3.select(chartGroup.select(".brush").node()).call(brush.move, null); // Clear brush
+    // Reset brush
+    d3.select(chartGroup.select(".brush").node()).call(brush.move, null);
     chartGroup.select(".brush").remove();
-
-    // Re-append the brush from scratch
     chartGroup.call(brush);
 }
+
 
 }
 
