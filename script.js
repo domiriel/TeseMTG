@@ -23,7 +23,7 @@ const filterApplicationOrder = [
   "Types",
   "Subtypes"
 ];
-const GROUPED_DATA_VERSION = "v5";
+const GROUPED_DATA_VERSION = "v6";
 export function getEffectivePriceAttribute(state) {
   const { selectedPriceCurrency, selectedPriceSuffix } = state;
   return selectedPriceCurrency === "tix"
@@ -255,7 +255,7 @@ selectedPriceCurrency: stateSnapshot.selectedPriceCurrency,
 
       createTimelineView(filteredData, ".TimelineView", true);
       const tTimeline = performance.now();
-      console.log("Timeline took", (tTimeline - tIcicle).toFixed(2), "ms");
+      console.log("Time took", (tTimeline - tIcicle).toFixed(2), "ms");
       createStackedLineChart(filteredData, ".LineChart", true);
       const tLine = performance.now();
       console.log("Line took", (tLine - tTimeline).toFixed(2), "ms");
@@ -491,7 +491,6 @@ function extractCardValues(card, category) {
       if (!card.release_date) return [];
       return [new Date(card.release_date).getFullYear().toString()];
     case "Nº of Colors":
-      if (card.number_of_colours >= 4) return ["+4 colors"];
       if (card.number_of_colours === 1) return ["1 color"];
       if (card.number_of_colours === 0) return ["colorless"];
       return [`${card.number_of_colours} colors`];
@@ -527,8 +526,8 @@ function extractCardValues(card, category) {
         return new Date(card.release_date).getFullYear().toString();
     
       case "Nº of Colors":
-        if (card.number_of_colours >= 4) return "+4 colors";
-        if (card.number_of_colours === 0) return "colorless";
+          if (card.number_of_colours === 0) return "colorless";
+          if (card.number_of_colours === 1) return "1 color";
         return `${card.number_of_colours} colors`;
   
 case "Color Identity":

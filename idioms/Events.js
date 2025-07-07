@@ -36,6 +36,8 @@ export function onClearSetHover(callback) {
   emitter.addEventListener("set-hover-clear", callback);
 }
 
+
+
 let yearClickHandlers = [];
 export function onYearClick(handler) {
   yearClickHandlers.push(handler);

@@ -465,6 +465,7 @@ tooltip.style("left", `${left}px`)
         .style("height", `${containerHeight*0.75}px`) 
         .style("overflow-y", "scroll") 
         .style("overflow-x", "hidden") 
+         .style("position", "relative")
         .style("border", "none");
 
     const lineSpacingFactor = 0.5;  
@@ -501,51 +502,64 @@ const extraSpacing = 0;
 const svgWidth = containerWidth;  // you already use this for sizing
 const legendFontSize = Math.min(0.1*chartHeight, 12);
 
-const legend = svg.append("g")
-    .attr("class", "timeline-color-legend")
-    .style("overflow", "visible")
-    .attr("transform", `translate(${legendX}, ${legendY})`);
+const legendContainer =scrollContainer.append("div")
+  .attr("class", "timeline-color-legend")
+  .style("position", "absolute")
+  .style("top", "10px") // Adjust as needed
+  .style("left", "-10px") // Adjust as needed
+  .style("padding", "6px 10px")
+    .style("overflow", "hidden")
+  .style("box-sizing", "border-box")
+  .style("border-radius", "6px")
+  .style("font-size", `${legendFontSize}px`)
+  .style("line-height", "1.2")
+  .style("z-index", "9999")
+  .style("color", "#000")
+  .style("pointer-events", "auto");
+
+
 
 dynamicLegendData.forEach((interval, i) => {
-  const group = legend.append("g")
-    .attr("transform", `translate(0, ${i * (rectDimensions + extraSpacing)})`);
+  const row = legendContainer.append("div")
+    .style("display", "flex")
+    .style("align-items", "flex-start")
+    .style("margin", "0");
 
-  group.append("rect")
-    .attr("width", rectDimensions)
-    .attr("height", rectDimensions)
-    .attr("fill", interval.color)
-    .attr("stroke", "#000")
-    .style("shape-rendering", "crispEdges");
+  row.append("div")
+    .style("width", `${rectDimensions}px`)
+    .style("height", `${rectDimensions}px`)
+    .style("background-color", interval.color)
+    .style("border", "1px solid #000")
 
-  group.append("text")
-    .attr("x", rectDimensions + 6)
-    .attr("y",rectDimensions * 0.25 -1) 
-    .style("overflow", "visible")
-    .text(Math.round(interval.max))
-    .attr("fill", "#000")
-    .style("dominant-baseline", "alphabetic")
-    .style("font-size", `${legendFontSize}px`)
-    .style("shape-rendering", "crispEdges");
+if (i === dynamicLegendData.length - 1) {
+    const labelContainer = row.append("div")
+      .style("display", "flex")
+      .style("flex-direction", "column")
+      .style("justify-content", "space-between")
+      .style("margin-left", "6px")
+      .style("height", `${rectDimensions}px`);
+
+    labelContainer.append("div")
+      .style("font-size", `${legendFontSize}px`)
+      .style("margin-top", `-${rectDimensions * 0.25 + 1}px`)
+      .text(`${Math.round(interval.max)}`);
+
+    labelContainer.append("div")
+      .style("font-size", `${legendFontSize}px`)
+      .text("1");
+  } else {
+    // Just the max label
+    row.append("div")
+      .style("margin-left", "6px")
+      .style("margin-top", `-${rectDimensions * 0.25 + 1}px`)
+      .text(`${Math.round(interval.max)}`);
+  }
 });
-
-const lastRectY = (dynamicLegendData.length - 1) * (rectDimensions + extraSpacing);
-legend.append("text")
-    .attr("x", rectDimensions + 6)
-    .attr("y", lastRectY + rectDimensions + 2) // baseline aligned with bottom
-    .text("1")
-    .attr("fill", "#000")
-    .style("font-size", `${legendFontSize}px`)
-    .style("shape-rendering", "crispEdges");
-
-legend.append("text")
-    .attr("x", 0)
-    .attr("y", rectDimensions*6)
-    .text("Card Count")
-    .attr("fill", "#000")
-    .style("font-size", `${legendFontSize}px`)
-    .style("font-weight", "bold")
-    .style("shape-rendering", "crispEdges");
-
+legendContainer.append("div")
+  .style("font-weight", "bold")
+  .style("margin-top", "5px") // ← push it down from the content above
+  .text("Card Count");
+// Add "1" at the end (min value)
     selectedSetTypes.forEach(setType => {
         chartGroup.append("line")
             .attr("x1", 0)
@@ -555,6 +569,7 @@ legend.append("text")
             .attr("stroke", "black")
             .attr("stroke-width", 2);
     });
+
 
     const extraBrushPadding = 20;
 const brush = d3.brush()

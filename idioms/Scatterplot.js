@@ -484,20 +484,22 @@ function updatePointPositions(xScale, yScale) {
   if (!meta) return;
 
   const { chartWidth, chartHeight } = meta;
-  globalDots
-    .attr("cx", d => xScale(getXValue(d)))
-    .attr("cy", d => yScale(d.complexity))
-     .style("display", function(d) {
-      const cx = xScale(getXValue(d));
-      const cy = yScale(d.complexity);
-      const inBounds = cx >= 0 && cx <= chartWidth && cy >= 0 && cy <= chartHeight;
-      const hoveredCards = getState().hoveredCards || [];
-      const hoveredSet = new Set(hoveredCards.map(c => c.name));
-      const el = d3.select(this);
-      const showDot =  el.classed("hover-temp") || currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey;
-      return (inBounds && showDot) ? null : "none";
-    });
+  const hoveredSet = new Set((getState().hoveredCards || []).map(c => c.name));
+
+  globalDots.each(function(d) {
+    const cx = xScale(getXValue(d));
+    const cy = yScale(d.complexity);
+    const inBounds = cx >= 0 && cx <= chartWidth && cy >= 0 && cy <= chartHeight;
+    const isHovered = this.classList.contains("hover-temp");
+    const showDot = isHovered || currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey;
+
+    // Only update if needed
+    this.setAttribute("cx", cx);
+    this.setAttribute("cy", cy);
+    this.style.display = (inBounds && showDot) ? null : "none";
+  });
 }
+
 
 
 
@@ -1211,101 +1213,111 @@ svg.node().__scatterMeta__ = {
 }
 
 export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_eur") {
-
-  lastPriceAttribute = selectedPriceAttribute; // Store the last used price attribute
+  const t0 = performance.now();
+  lastPriceAttribute = selectedPriceAttribute;
   const hoveredCards = getState().hoveredCards || [];
-const hoveredSet = new Set(hoveredCards.map(c => c.name));
+  const hoveredSet = new Set(hoveredCards.map(c => c.name));
 
-    const svg = d3.select(".Scatterplot svg");
-    if (svg.empty()) return;
+  const svg = d3.select(".Scatterplot svg");
+  if (svg.empty()) return;
 
-    const {
-        yScale,
-        xAxisG,
-        yAxisG,
-        updateAxes,
-        originalYScale,
-        logXScale,
-        timeXScale
-    } = svg.node().__scales__ || {};
-    if (!yScale || !updateAxes || !originalYScale) return;
+  const {
+    yScale,
+    xAxisG,
+    yAxisG,
+    updateAxes,
+    originalYScale,
+    logXScale,
+    timeXScale
+  } = svg.node().__scales__ || {};
+  if (!yScale || !updateAxes || !originalYScale) return;
 
-    const gClip = svg.select(".dots .clip-group");
+  const gClip = svg.select(".dots .clip-group");
 
+  const t1 = performance.now();
 
+  // Update X scale domain
+  if (xMetric === "avg_price") {
+    const newMin = Math.max(0.001, d3.min(filteredData, d => d.avg_price));
+    const newMax = d3.max(filteredData, d => d.avg_price);
+    logXScale.domain([newMin, newMax]);
+  } else {
+    const validDates = filteredData.map(d => new Date(d.release_date)).filter(d => d instanceof Date && !isNaN(d));
+    const years = validDates.map(d => d.getFullYear());
+    const minDate = new Date(Math.min(...years), 0, 1);
+    const maxDate = new Date(Math.max(...years), 11, 31);
+    timeXScale.domain([minDate, maxDate]);
+  }
 
+  const t2 = performance.now();
 
+  const baseXScale = xMetric === "avg_price" ? logXScale : timeXScale;
+  const newX = currentZoomTransform ? currentZoomTransform.rescaleX(baseXScale) : baseXScale;
+  const newY = currentZoomTransform ? currentZoomTransform.rescaleY(originalYScale) : yScale;
 
-if (xMetric === "avg_price") {
-  const newMin = Math.max(0.001, d3.min(filteredData, d => d.avg_price));
-  const newMax = d3.max(filteredData, d => d.avg_price);
-  logXScale.domain([newMin, newMax]);
-} else {
-  const validDates = filteredData
-    .map(d => new Date(d.release_date))
-    .filter(d => d instanceof Date && !isNaN(d));
-  const years = validDates.map(d => d.getFullYear());
-const minYear = Math.min(...years);
-const maxYear = Math.max(...years);
-const minDate = new Date(minYear, 0, 1);     // Jan 1st
-const maxDate = new Date(maxYear, 11, 31);   // Dec 31st
-  timeXScale.domain([minDate, maxDate]);
+  const symbol = getSymbolFromAttribute(selectedPriceAttribute);
+  updateAxes(symbol);
+
+  const t3 = performance.now();
+
+  // Recompute zoom keypoints
+  filteredData.forEach(d => delete d.isZoomKey);
+  tagZoomKeyPoints(filteredData, baseXScale, yScale);
+  actualFIlteredData = filteredData;
+
+  const t4 = performance.now();
+
+  // JOIN and update circles
+  const dots = gClip.selectAll("circle")
+    .data(filteredData, d => d.name)
+    .join(
+      enter => enter.append("circle")
+        .attr("r", 2.5)
+        .style("cursor", "pointer")
+        .attr("opacity", 0.8)
+        .on("mouseover", mouseoverFn)
+        .on("mousemove", mousemoveFn)
+        .on("mouseout", mouseoutFn)
+        .on("click", clickFn),
+      update => update,
+      exit => exit.remove()
+    )
+    .attr("class", d => {
+      const numColors = d.color_identity?.length || 0;
+      const identityKey = d.color_identity?.length
+        ? d.color_identity.slice().sort().join("")
+        : "colorless";
+      return `dots ci-${identityKey} nc-${numColors}`;
+    })
+    .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
+    .attr("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
+    .attr("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
+    .style("display", d => (currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey) ? null : "none")
+    .attr("cx", d => newX(getXValue(d)))
+    .attr("cy", d => newY(d.complexity));
+
+  const t5 = performance.now();
+
+  globalDots = gClip.selectAll("circle");
+  updatePointPositions(baseXScale, yScale);
+
+  const t6 = performance.now();
+
+  updateSelectedHoverClass();
+
+  const t7 = performance.now();
+
+  console.log(`[Scatter Perf Breakdown]
+  • Setup / scales:       ${(t1 - t0).toFixed(2)} ms
+  • Update domains:       ${(t2 - t1).toFixed(2)} ms
+  • Axes update:          ${(t3 - t2).toFixed(2)} ms
+  • Tag zoom key points:  ${(t4 - t3).toFixed(2)} ms
+  • D3 .join() and attrs: ${(t5 - t4).toFixed(2)} ms
+  • Dot repositioning:    ${(t6 - t5).toFixed(2)} ms
+  • Hover sync:           ${(t7 - t6).toFixed(2)} ms
+  • TOTAL:                ${(t7 - t0).toFixed(2)} ms`);
 }
 
-const baseXScale = xMetric === "avg_price" ? logXScale : timeXScale;
-const newX = currentZoomTransform ? currentZoomTransform.rescaleX(baseXScale) : baseXScale;
-const newY = currentZoomTransform ? currentZoomTransform.rescaleY(originalYScale) : yScale;
-
-
-    const symbol = getSymbolFromAttribute(selectedPriceAttribute);
-    updateAxes(symbol);
-
-   
-
-    
-    filteredData.forEach(d => delete d.isZoomKey);
-
-    
-    tagZoomKeyPoints(filteredData, baseXScale, yScale);
-    actualFIlteredData = filteredData; // Update the actual filtered data
-
-
-  gClip.selectAll("circle").remove();
-
-// ✨ Bind new data and create fresh dots
-const dots = gClip.selectAll("circle")
-  .data(filteredData, d => d.name)
-  .enter()
-  .append("circle")
-  .attr("class", d => {
-  const numColors = d.color_identity?.length || 0;
-  const identityKey = d.color_identity?.length
-    ? d.color_identity.slice().sort().join("")
-    : "colorless";
-  return `dots ci-${identityKey} nc-${numColors}`;
-})
-  .attr("r", 2.5)
-  .style("cursor", "pointer")
-  .attr("opacity", 0.8)
-  .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
-  .attr("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
-  .attr("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
-  .style("display", d => (currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey ) ? null : "none")
-  .attr("cx", d => newX(getXValue(d)))
-  .attr("cy", d => newY(d.complexity))
-  .on("mouseover", mouseoverFn)
-  .on("mousemove", mousemoveFn)
-  .on("mouseout", mouseoutFn)
-  .on("click", clickFn);
-
-
-
-    globalDots = gClip.selectAll("circle");
-    updatePointPositions(baseXScale, yScale);
-
-
-updateSelectedHoverClass();
-}
 
 export function highlightScatterDotsFromSet(setName) {
 

@@ -117,12 +117,13 @@ function validateFilterCombination(filters) {
     if (groups.size === 0 || identities.size === 0) return true;
 
     const groupToSizes = {
-        "colorless": [0],
-        "1 color": [1],
-        "2 colors": [2],
-        "3 colors": [3],
-        "+4 colors": [4, 5]
-    };
+    "colorless": [0],
+    "1 color": [1],
+    "2 colors": [2],
+    "3 colors": [3],
+    "4 colors": [4],
+    "5 colors": [5]
+};
 
     const allowedSizes = new Set();
     for (const group of groups) {
@@ -157,7 +158,7 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
         let numColors = colors.length;
 
       
-        if (numColors >= 4) numColors = 4; 
+        if (numColors > 5) numColors = 5;
 
         
         let colorKey = colors
@@ -168,7 +169,6 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
         let colorGroupName = 
         numColors === 0 ? "Colorless" :
         numColors === 1 ? "1 Color" :
-        numColors === 4 ? "+4 Colors" :
         `${numColors} Colors`;
 
 
