@@ -205,7 +205,6 @@ const visibleCards = cards.slice(currentPage * pageSize, (currentPage + 1) * pag
       .on("click", () => {
         if (!Array.isArray(card.all_sets)) return;
         const updatedFilters = getClonedFilters();
-        console.log("1",updatedFilters)
         if (!updatedFilters["Set Names"]) {
         updatedFilters["Set Names"] = new Set();
     }
@@ -213,7 +212,6 @@ const visibleCards = cards.slice(currentPage * pageSize, (currentPage + 1) * pag
 
         card.all_sets.forEach(set =>updatedFilters["Set Names"].add(set.name));
 
-        console.log("2",updatedFilters)
 
         const newSelectedFilters = {};
 for (const key in updatedFilters) {
@@ -223,8 +221,6 @@ for (const key in updatedFilters) {
   selectedFilters: newSelectedFilters,
   updateContext: "TimelineFilter"
 });
-        console.log("CURRENT state Set Names:", getState().selectedFilters["Set Names"]);
-console.log("NEW state Set Names:", updatedFilters["Set Names"]);
 
       });
   });

@@ -156,6 +156,7 @@ export function onClearAlluvialHover(callback) {
 let alluvialClickHandlers = [];
 export function onAlluvialClick(handler) {
   alluvialClickHandlers.push(handler);
+  
 }
 export function emitAlluvialClick(payload) {
   alluvialClickHandlers.forEach(fn => fn(payload));

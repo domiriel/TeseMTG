@@ -3,7 +3,7 @@ import { updateState, getState } from "../state.js";
 // @ts-ignore
 import { showLoader, hideLoader, showPopup } from "./LoadingAnimation.js";
 import {emitIcicleRectHover, emitClearRectHover,emitIcicleClick, emitClearNumColorsHover, emitNumColorsHover, emitIcicleNumClick, 
-        onHoverCard, onClearHover, onSetHover, onClearSetHover,  onClearLineYearHover, 
+        onHoverCard, onClearHover, onSetHover, onClearSetHover,  onClearLineYearHover, onAlluvialClick, onAlluvialLinkClick,
         onLineYearHover, onAlluvialHover, onClearAlluvialHover } from "./Events.js";
 let globalRects = null;  
 let clickTimer = null;
@@ -40,6 +40,57 @@ onLineYearHover(yearInfo => {
   );
 })
 
+const activeSelections = {
+  fromAlluvial: new Set(),
+  fromLineChart: new Set(), // or other views
+  // add more sources if needed
+};
+
+
+onAlluvialClick(({ category, value }) => {
+  const key = `${category}|${value.toLowerCase()}`;
+  const selections = activeSelections.fromAlluvial;
+
+  if (selections.has(key)) {
+    selections.delete(key);
+  } else {
+    selections.add(key);
+  }
+
+  updateIcicleSelections();
+});
+
+function updateIcicleSelections() {
+  const combinedSelections = new Set();
+
+  // Merge all sources
+  for (const source of Object.values(activeSelections)) {
+    for (const key of source) {
+      combinedSelections.add(key);
+    }
+  }
+
+  d3.selectAll("rect.icicle-rect")
+    .each(function(d) {
+      const rect = d3.select(this);
+      let shouldSelect = false;
+
+      for (const sel of combinedSelections) {
+        const [cat, val] = sel.split("|");
+        if (d.depth !== 2) continue;
+
+        if (cat === "Originality" && d.data.originalities?.includes(val)) shouldSelect = true;
+        if (cat === "Rarity" && d.data.rarities?.includes(val)) shouldSelect = true;
+        // Extend this for more categories if needed
+      }
+
+      rect.classed("selectedHovered", shouldSelect)
+          .attr("fill", shouldSelect ? d.data.selectedColor : d.data.color);
+    });
+}
+
+
+
 onClearLineYearHover(() => {
   clearIcicleHoverOnly();
 })
@@ -51,6 +102,8 @@ onAlluvialHover(({ category, value }) => {
 onClearAlluvialHover(() => {
   clearIcicleHoverOnly();
 });
+
+
 
 const infoTooltipText = `
 <strong>Icicle Chart Interactions:</strong><br>
@@ -895,6 +948,9 @@ function highlightIcicleRectHoverOnlyFromAlluvial(category, value) {
       rect.classed("hover-temp", true);
     });
 }
+
+
+
 
 function clearAllViewsHoverOnly() {
   emitClearRectHover();

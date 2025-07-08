@@ -1,40 +1,59 @@
-
 import { updateState, getState } from "../state.js";
-import { updateFilterPanel } from "./FilterPanel.js"; 
-import {emitAlluvialHover, emitClearAlluvialHover, emitAlluvialClick, emitAlluvialLinkClick, onNumColorsHover, onClearNumColorsHover,
-        onHoverCard, onClearHover, onSetHover, onClearSetHover,  onRectHover, onClearRectHover, 
-        onLineYearHover, onClearLineYearHover  } from "./Events.js";
+import { updateFilterPanel } from "./FilterPanel.js";
+import {
+  emitAlluvialHover,
+  emitClearAlluvialHover,
+  emitAlluvialClick,
+  emitAlluvialLinkClick,
+  onNumColorsHover,
+  onClearNumColorsHover,
+  onHoverCard,
+  onClearHover,
+  onSetHover,
+  onClearSetHover,
+  onRectHover,
+  onClearRectHover,
+  onLineYearHover,
+  onClearLineYearHover,
+} from "./Events.js";
 
-  const customOrder = [
-    "original", "reprint", "functional reprint",
-    "common", "uncommon", "rare", "mythic", "special", "bonus"];
+const customOrder = [
+  "original",
+  "reprint",
+  "functional reprint",
+  "common",
+  "uncommon",
+  "rare",
+  "mythic",
+  "special",
+  "bonus",
+];
 
 function getDiscreteColor(percentage) {
   if (percentage < 20) return "#ceb397";
   if (percentage < 40) return "#b8997a";
   if (percentage < 60) return "#998066";
   if (percentage < 80) return "#736659";
-  return "#594a3a"; 
+  return "#594a3a";
 }
 
-function getHighlightedColor(percentage){
-if (percentage < 20) return "#fbecd0";
+function getHighlightedColor(percentage) {
+  if (percentage < 20) return "#fbecd0";
   if (percentage < 40) return "#f8dfb0";
   if (percentage < 60) return "#f2c46e";
   if (percentage < 80) return "#d89313";
-  return "#9b690d"; 
+  return "#9b690d";
 }
 
-function getSelectedColor(percentage){
-if (percentage < 20) return "#dcdfef";
+function getSelectedColor(percentage) {
+  if (percentage < 20) return "#dcdfef";
   if (percentage < 40) return "#b9bfda";
   if (percentage < 60) return "#9AA0BC";
   if (percentage < 80) return "#6a708a";
-  return "#3a4059"; 
+  return "#3a4059";
 }
 
-
-onHoverCard(card => {
+onHoverCard((card) => {
   highlightAlluvialElementsHoverOnly(card);
 });
 
@@ -42,70 +61,65 @@ onClearHover(() => {
   clearAlluvialHoverOnly();
 });
 
-
-onSetHover(setInfo => {
+onSetHover((setInfo) => {
   highlightAlluvialElementsHoverOnlyFromSet(
-    setInfo.originalities, setInfo.rarities
+    setInfo.originalities,
+    setInfo.rarities
   );
-})
+});
 
 onClearSetHover(() => {
   clearAlluvialHoverOnly();
-})
+});
 
-onLineYearHover(yearInfo => {
+onLineYearHover((yearInfo) => {
   highlightAlluvialElementsHoverOnlyFromYear(
-    yearInfo.originalities, yearInfo.rarities
+    yearInfo.originalities,
+    yearInfo.rarities
   );
-})
+});
 
 onClearLineYearHover(() => {
   clearAlluvialHoverOnly();
-})
+});
 
 onNumColorsHover(({ numColors, originalities, rarities }) => {
- highlightAlluvialElementsFromNumColors(originalities,rarities);
-
+  highlightAlluvialElementsFromNumColors(originalities, rarities);
 });
 
 onClearNumColorsHover(() => {
   clearAlluvialHoverOnly();
-})
+});
 
-
-onRectHover(rectInfo => {
-highlightAlluvialElementsFromIcicle(rectInfo)
-})
+onRectHover((rectInfo) => {
+  highlightAlluvialElementsFromIcicle(rectInfo);
+});
 
 onClearRectHover(() => {
   clearAlluvialHoverOnly();
-})
+});
 
 let localChartFilters = {
   Originality: new Set(),
-  Rarity: new Set()
+  Rarity: new Set(),
 };
-let localLinkFilters = new Set(); 
-
+let localLinkFilters = new Set();
 
 function applyColorScale(selection, attrName, priceRange) {
-  selection.attr(attrName, d => getNodeColor(d.avgPrice, priceRange.min, priceRange.max));
+  selection.attr(attrName, (d) =>
+    getNodeColor(d.avgPrice, priceRange.min, priceRange.max)
+  );
 }
 
 function formatPriceLabel(priceAttr) {
-    return priceAttr
-      .replace("price_", "") 
-      .replace(/_/g, " ")    
-      .toUpperCase();        
-  }
-    
-  function formatPriceSymbol(attr) {
-    if (attr.toLowerCase().includes("usd")) return "$";
-    if (attr.toLowerCase().includes("eur")) return "€";
-    return "";
-  }
-  
+  return priceAttr.replace("price_", "").replace(/_/g, " ").toUpperCase();
+}
 
+function formatPriceSymbol(attr) {
+  if (attr.toLowerCase().includes("usd")) return "$";
+  if (attr.toLowerCase().includes("eur")) return "€";
+  return "";
+}
 
 const infoTooltipText = `
 <strong>Chart Interactions:</strong><br>
@@ -113,9 +127,6 @@ const infoTooltipText = `
 • <strong>Right-Click</strong> on a node or link: Applies a global filter to the dataset based on that category or pair..<br>
 • <strong>Hover</strong> on nodes or links: see details and highlights the other visualizations.<br>
 `;
-
-
-
 
 function getMarginLeftOffset(screenWidth) {
   const baseOffset = 35;
@@ -128,42 +139,57 @@ function getMarginLeftOffset(screenWidth) {
 
 function getNodeColor(price, minPrice, maxPrice) {
   let percentage = ((price - minPrice) / (maxPrice - minPrice)) * 100;
-  return getDiscreteColor(percentage); 
+  return getDiscreteColor(percentage);
 }
 
-export function createAlluvialChart(data, containerId, isUpdate = false, selectedPriceAttribute = "price_eur") {
-const container = d3.select(containerId);
-const { width, height } = container.node().getBoundingClientRect();
-const svgWidth = width;
-const svgHeight = height;
-  
-const chartWidth = svgWidth * 0.85
-const chartHeight = svgHeight * 0.75
+export function createAlluvialChart(
+  data,
+  containerId,
+  isUpdate = false,
+  selectedPriceAttribute = "price_eur"
+) {
+  const container = d3.select(containerId);
+  const { width, height } = container.node().getBoundingClientRect();
+  const svgWidth = width;
+  const svgHeight = height;
 
-const margin = { top: height * 0.17, right: 26, bottom: 40, left: width *0.015 };
+  const chartWidth = svgWidth * 0.85;
+  const chartHeight = svgHeight * 0.75;
 
-const originalitySet = new Set();
-const raritySet = new Set();
-data.forEach(card => {
+  const margin = {
+    top: height * 0.17,
+    right: 26,
+    bottom: 40,
+    left: width * 0.015,
+  };
+
+  const originalitySet = new Set();
+  const raritySet = new Set();
+  data.forEach((card) => {
     if (card.originality) originalitySet.add(card.originality.toLowerCase());
     if (card.rarity) raritySet.add(card.rarity.toLowerCase());
   });
 
-const originalityCategories = Array.from(originalitySet).sort();
-const rarityCategories = Array.from(raritySet).sort();
-  
-const priceAttr = selectedPriceAttribute;
-const origPriceSums = {}, origPriceCounts = {},
-        rarityPriceSums = {}, rarityPriceCounts = {},
-        linkCounts = {}, linkPriceSums = {}, linkPriceCounts = {};
-  
-originalityCategories.forEach(o => (origPriceSums[o] = origPriceCounts[o] = 0));
-rarityCategories.forEach(r => (rarityPriceSums[r] = rarityPriceCounts[r] = 0));
+  const originalityCategories = Array.from(originalitySet).sort();
+  const rarityCategories = Array.from(raritySet).sort();
 
+  const priceAttr = selectedPriceAttribute;
+  const origPriceSums = {},
+    origPriceCounts = {},
+    rarityPriceSums = {},
+    rarityPriceCounts = {},
+    linkCounts = {},
+    linkPriceSums = {},
+    linkPriceCounts = {};
 
+  originalityCategories.forEach(
+    (o) => (origPriceSums[o] = origPriceCounts[o] = 0)
+  );
+  rarityCategories.forEach(
+    (r) => (rarityPriceSums[r] = rarityPriceCounts[r] = 0)
+  );
 
-
-   data.forEach(card => {
+  data.forEach((card) => {
     const orig = card.originality?.toLowerCase() || "";
     const rarity = card.rarity?.toLowerCase() || "";
     if (!originalitySet.has(orig) || !raritySet.has(rarity)) return;
@@ -181,10 +207,9 @@ rarityCategories.forEach(r => (rarityPriceSums[r] = rarityPriceCounts[r] = 0));
       rarityPriceCounts[rarity] += 1;
     }
   });
-  
-  
-  originalityCategories.forEach(orig => {
-    rarityCategories.forEach(rarity => {
+
+  originalityCategories.forEach((orig) => {
+    rarityCategories.forEach((rarity) => {
       const key = `${orig}|${rarity}`;
       if (!linkCounts.hasOwnProperty(key)) {
         linkCounts[key] = 0;
@@ -193,569 +218,606 @@ rarityCategories.forEach(r => (rarityPriceSums[r] = rarityPriceCounts[r] = 0));
       }
     });
   });
-  
-  
+
   const nodes = [
-    ...originalityCategories.map(o => ({
+    ...originalityCategories.map((o) => ({
       name: o,
-      avgPrice: origPriceCounts[o] ? origPriceSums[o] / origPriceCounts[o] : 0
+      avgPrice: origPriceCounts[o] ? origPriceSums[o] / origPriceCounts[o] : 0,
     })),
-    ...rarityCategories.map(r => ({
+    ...rarityCategories.map((r) => ({
       name: r,
-      avgPrice: rarityPriceCounts[r] ? rarityPriceSums[r] / rarityPriceCounts[r] : 0
-    }))
+      avgPrice: rarityPriceCounts[r]
+        ? rarityPriceSums[r] / rarityPriceCounts[r]
+        : 0,
+    })),
   ].sort((a, b) => customOrder.indexOf(a.name) - customOrder.indexOf(b.name));
-  
+
   const nodeIndexMap = Object.fromEntries(nodes.map((n, i) => [n.name, i]));
-  const links = originalityCategories.flatMap(orig =>
-    rarityCategories.map(rarity => {
+  const links = originalityCategories.flatMap((orig) =>
+    rarityCategories.map((rarity) => {
       const key = `${orig}|${rarity}`;
       return {
         source: nodeIndexMap[orig],
         target: nodeIndexMap[rarity],
         value: linkCounts[key] || 0,
-        avgPrice: linkPriceCounts[key] ? linkPriceSums[key] / linkPriceCounts[key] : 0
+        avgPrice: linkPriceCounts[key]
+          ? linkPriceSums[key] / linkPriceCounts[key]
+          : 0,
       };
     })
   );
-  
- 
-  
 
- let svg = container.select("svg");
+  let svg = container.select("svg");
   if (svg.empty()) {
-    svg = container.append("svg").attr("width", svgWidth).attr("height", svgHeight);
+    svg = container
+      .append("svg")
+      .attr("width", svgWidth)
+      .attr("height", svgHeight);
   }
   svg.selectAll("g").remove();
-  const sankeyGroup = svg.append("g").attr("transform", `translate(${margin.left}, ${margin.top})`);
-
+  const sankeyGroup = svg
+    .append("g")
+    .attr("transform", `translate(${margin.left}, ${margin.top})`);
 
   //20 and 30, r=10
-const iconX = svgWidth * 0.03;
-const iconY = svgHeight * 0.1;
-const iconRadius = svgWidth * 0.015;
-const infoTextSize = Math.min(svgWidth * 0.0187, 15);
-const infoGroup = svg.append("g")
-  .attr("class", "info-icon")
-  .attr("transform", `translate(${iconX}, ${iconY})`);
-
-infoGroup.append("circle")
-  .attr("r", iconRadius)
-  .attr("fill", "#8A9CE4")
-  .attr("stroke", "#fff");
-
-infoGroup.append("text")
-  .attr("text-anchor", "middle")
-  .attr("dy", "0.35em")
-  .attr("font-size", `${infoTextSize}px`)
-  .attr("font-weight", "bold")
-  .attr("fill","#fff")
-  .text("?")
-  .attr("pointer-events", "none");
-
+  const iconX = svgWidth * 0.03;
+  const iconY = svgHeight * 0.1;
+  const iconRadius = svgWidth * 0.015;
+  const infoTextSize = Math.min(svgWidth * 0.0187, 15);
+  const infoGroup = svg
+    .append("g")
+    .attr("class", "info-icon")
+    .attr("transform", `translate(${iconX}, ${iconY})`);
 
   infoGroup
-  .on("mouseover", function(event) {
-    tooltip.style("display", "block")
-           .html(infoTooltipText);
-  })
-  .on("mousemove", function(event) {
-    const tooltipWidth = tooltip.node().offsetWidth;
-    const tooltipHeight = tooltip.node().offsetHeight;
+    .append("circle")
+    .attr("r", iconRadius)
+    .attr("fill", "#8A9CE4")
+    .attr("stroke", "#fff");
 
-    let x = event.pageX + 10;
-    let y = event.pageY + 10;
+  infoGroup
+    .append("text")
+    .attr("text-anchor", "middle")
+    .attr("dy", "0.35em")
+    .attr("font-size", `${infoTextSize}px`)
+    .attr("font-weight", "bold")
+    .attr("fill", "#fff")
+    .text("?")
+    .attr("pointer-events", "none");
 
-    if (x + tooltipWidth > window.innerWidth) {
-      x = window.innerWidth - tooltipWidth - 10;
-    }
-    if (y + tooltipHeight > window.innerHeight) {
-      y = window.innerHeight - tooltipHeight - 10;
-    }
+  infoGroup
+    .on("mouseover", function (event) {
+      tooltip.style("display", "block").html(infoTooltipText);
+    })
+    .on("mousemove", function (event) {
+      const tooltipWidth = tooltip.node().offsetWidth;
+      const tooltipHeight = tooltip.node().offsetHeight;
 
-    tooltip
-      .style("left", `${x}px`)
-      .style("top", `${y}px`);
-  })
-  .on("mouseout", function() {
-    tooltip.style("display", "none");
-  });
+      let x = event.pageX + 10;
+      let y = event.pageY + 10;
 
-  const sankey = d3.sankey().nodeWidth(Math.min(chartHeight*0.097, 20)).nodePadding(Math.min(chartHeight*0.097, 20)).extent([[0, 0], [chartWidth, chartHeight]]);
+      if (x + tooltipWidth > window.innerWidth) {
+        x = window.innerWidth - tooltipWidth - 10;
+      }
+      if (y + tooltipHeight > window.innerHeight) {
+        y = window.innerHeight - tooltipHeight - 10;
+      }
+
+      tooltip.style("left", `${x}px`).style("top", `${y}px`);
+    })
+    .on("mouseout", function () {
+      tooltip.style("display", "none");
+    });
+
+  const sankey = d3
+    .sankey()
+    .nodeWidth(Math.min(chartHeight * 0.097, 20))
+    .nodePadding(Math.min(chartHeight * 0.097, 20))
+    .extent([
+      [0, 0],
+      [chartWidth, chartHeight],
+    ]);
   const sankeyData = sankey({
-    nodes: nodes.map(d => ({ ...d })),
-    links: links.map(d => ({ ...d }))
+    nodes: nodes.map((d) => ({ ...d })),
+    links: links.map((d) => ({ ...d })),
   });
 
-  const leftNodes = sankeyData.nodes.filter(n => n.x0 === d3.min(sankeyData.nodes, d => d.x0));
-const totalLeftHeight = d3.max(leftNodes, d => d.y1) - d3.min(leftNodes, d => d.y0);
-const offset = (chartHeight - totalLeftHeight) / 2;
-leftNodes.forEach(node => {
-  node.y0 += offset;
-  node.y1 += offset;
-});
-sankey.update(sankeyData); 
-  
-const allPrices = [...sankeyData.nodes.map(d => d.avgPrice), ...sankeyData.links.map(d => d.avgPrice)];
-const priceRange = { min: d3.min(allPrices), max: d3.max(allPrices) };
+  const leftNodes = sankeyData.nodes.filter(
+    (n) => n.x0 === d3.min(sankeyData.nodes, (d) => d.x0)
+  );
+  const totalLeftHeight =
+    d3.max(leftNodes, (d) => d.y1) - d3.min(leftNodes, (d) => d.y0);
+  const offset = (chartHeight - totalLeftHeight) / 2;
+  leftNodes.forEach((node) => {
+    node.y0 += offset;
+    node.y1 += offset;
+  });
+  sankey.update(sankeyData);
 
-const tooltip = d3.select("#tooltip");
+  const allPrices = [
+    ...sankeyData.nodes.map((d) => d.avgPrice),
+    ...sankeyData.links.map((d) => d.avgPrice),
+  ];
+  const priceRange = { min: d3.min(allPrices), max: d3.max(allPrices) };
 
-sankeyGroup.selectAll(".link")
-    .data(sankeyData.links, d => `${d.source.name}|${d.target.name}`)
+  const tooltip = d3.select("#tooltip");
+
+  sankeyGroup
+    .selectAll(".link")
+    .data(sankeyData.links, (d) => `${d.source.name}|${d.target.name}`)
     .data(sankeyData.links.sort((a, b) => b.width - a.width))
     .join(
-      enter => enter.append("path")
-        .attr("class", "link")
-        .attr("d", d3.sankeyLinkHorizontal())
-        .attr("fill", "none")
-        .attr("stroke-opacity", 0.5)
-        .attr("stroke-width", d => Math.max(1, d.width))
-        .call(sel => applyColorScale(sel, "stroke", priceRange))
-.on("mouseover", function(event, d) {
-  tooltip.style("display", "block")
-         .html(`From: ${d.source.name}<br>To: ${d.target.name}<br>Cards: ${d.value}<br>Avg Price: $${d.avgPrice.toFixed(2)}`);
-  
-  d3.selectAll("g.node rect")
-    .filter(node => node.name === d.source.name || node.name === d.target.name)
-    .transition()
-    .duration(200)
-    .attr("transform", node => {
-      const centerX = node.x0 + (node.x1 - node.x0) / 2;
-      const centerY = node.y0 + (node.y1 - node.y0) / 2;
-      return `translate(${centerX}, ${centerY}) scale(1.2) translate(${-centerX}, ${-centerY})`;
-    })
-    .attr("stroke-width", 3);
-})
-        .on("mousemove", function(event) {
-  const tooltipWidth = tooltip.node().offsetWidth;
-  const tooltipHeight = tooltip.node().offsetHeight;
+      (enter) =>
+        enter
+          .append("path")
+          .attr("class", "link")
+          .attr("d", d3.sankeyLinkHorizontal())
+          .attr("fill", "none")
+          .attr("stroke-opacity", 0.5)
+          .attr("stroke-width", (d) => Math.max(1, d.width))
+          .call((sel) => applyColorScale(sel, "stroke", priceRange))
+          .on("mouseover", function (event, d) {
+            tooltip
+              .style("display", "block")
+              .html(
+                `From: ${d.source.name}<br>To: ${d.target.name}<br>Cards: ${
+                  d.value
+                }<br>Avg Price: $${d.avgPrice.toFixed(2)}`
+              );
 
-  let x = event.pageX + 10;
-  let y = event.pageY + 10;
+            d3.selectAll("g.node rect")
+              .filter(
+                (node) =>
+                  node.name === d.source.name || node.name === d.target.name
+              )
+              .transition()
+              .duration(200)
+              .attr("transform", (node) => {
+                const centerX = node.x0 + (node.x1 - node.x0) / 2;
+                const centerY = node.y0 + (node.y1 - node.y0) / 2;
+                return `translate(${centerX}, ${centerY}) scale(1.2) translate(${-centerX}, ${-centerY})`;
+              })
+              .attr("stroke-width", 3);
+          })
+          .on("mousemove", function (event) {
+            const tooltipWidth = tooltip.node().offsetWidth;
+            const tooltipHeight = tooltip.node().offsetHeight;
 
-  if (x + tooltipWidth > window.innerWidth) {
-    x = window.innerWidth - tooltipWidth - 10;
-  }
-  if (y + tooltipHeight > window.innerHeight) {
-    y = window.innerHeight - tooltipHeight - 10;
-  }
+            let x = event.pageX + 10;
+            let y = event.pageY + 10;
 
-  tooltip
-    .style("left", `${x}px`)
-    .style("top", `${y}px`);
-})
-.on("mouseout", function(event, d) {
-  tooltip.style("display", "none");
+            if (x + tooltipWidth > window.innerWidth) {
+              x = window.innerWidth - tooltipWidth - 10;
+            }
+            if (y + tooltipHeight > window.innerHeight) {
+              y = window.innerHeight - tooltipHeight - 10;
+            }
 
-  d3.selectAll("g.node rect")
-    .filter(node => node.name === d.source.name || node.name === d.target.name)
-    .transition()
-    .duration(200)
-    .attr("transform", null)
-    .attr("stroke-width", 1);
-})
-        .on("click", function(event, d) {
+            tooltip.style("left", `${x}px`).style("top", `${y}px`);
+          })
+          .on("mouseout", function (event, d) {
+            tooltip.style("display", "none");
 
-              emitAlluvialLinkClick({
-                originality: d.source.name.toLowerCase(),
-                rarity: d.target.name.toLowerCase()
-              });
+            d3.selectAll("g.node rect")
+              .filter(
+                (node) =>
+                  node.name === d.source.name || node.name === d.target.name
+              )
+              .transition()
+              .duration(200)
+              .attr("transform", null)
+              .attr("stroke-width", 1);
+          })
+          .on("click", function (event, d) {
+            emitAlluvialLinkClick({
+              originality: d.source.name.toLowerCase(),
+              rarity: d.target.name.toLowerCase(),
+            });
+          })
+          .on("contextmenu", function (event, d) {
+            event.preventDefault(); // prevent the browser menu
+            const currentState = getState();
+            const updatedFilters = {};
 
- 
-})
-        .on("contextmenu", function(event, d) {
-        event.preventDefault(); // prevent the browser menu
-      const currentState = getState();
-      const updatedFilters = {};
-    
-      for (const key in currentState.selectedFilters) {
-        updatedFilters[key] = new Set(currentState.selectedFilters[key]);
-      }
-    
-      const orig = d.source.name;
-      const rarity = d.target.name;
-    
-      
-      if (updatedFilters["Originality"].has(orig)) {
-        updatedFilters["Originality"].delete(orig);
-      } else {
-        updatedFilters["Originality"].add(orig);
-      }
-    
-      
-      if (updatedFilters["Rarity"].has(rarity)) {
-        updatedFilters["Rarity"].delete(rarity);
-      } else {
-        updatedFilters["Rarity"].add(rarity);
-      }
-    
-      updateState({ selectedFilters: updatedFilters});
+            for (const key in currentState.selectedFilters) {
+              updatedFilters[key] = new Set(currentState.selectedFilters[key]);
+            }
 
-    }),
-      update => update
-        .attr("d", d3.sankeyLinkHorizontal())
-        .attr("stroke-width", d => Math.max(1, d.width))
-        .call(sel => applyColorScale(sel, "stroke", priceRange)),
-      exit => exit.remove()
+            const orig = d.source.name;
+            const rarity = d.target.name;
+
+            if (updatedFilters["Originality"].has(orig)) {
+              updatedFilters["Originality"].delete(orig);
+            } else {
+              updatedFilters["Originality"].add(orig);
+            }
+
+            if (updatedFilters["Rarity"].has(rarity)) {
+              updatedFilters["Rarity"].delete(rarity);
+            } else {
+              updatedFilters["Rarity"].add(rarity);
+            }
+
+            updateState({ selectedFilters: updatedFilters });
+          }),
+      (update) =>
+        update
+          .attr("d", d3.sankeyLinkHorizontal())
+          .attr("stroke-width", (d) => Math.max(1, d.width))
+          .call((sel) => applyColorScale(sel, "stroke", priceRange)),
+      (exit) => exit.remove()
     );
 
-
-
-
-
-    
-    
   function applyLocalLinkAndNodeFilter() {
-  const activeLinks = Array.from(localLinkFilters);
-  const activeSources = new Set();
-  const activeTargets = new Set();
+    const activeLinks = Array.from(localLinkFilters);
+    const activeSources = new Set();
+    const activeTargets = new Set();
 
+    activeLinks.forEach((linkKey) => {
+      const [source, target] = linkKey.split("|");
+      activeSources.add(source);
+      activeTargets.add(target);
+    });
 
-  activeLinks.forEach(linkKey => {
-    const [source, target] = linkKey.split("|");
-    activeSources.add(source);
-    activeTargets.add(target);
-  });
+    d3.selectAll("path.link").each(function (d) {
+      const key = `${d.source.name}|${d.target.name}`;
+      const show = localLinkFilters.size === 0 || localLinkFilters.has(key);
 
+      d3.select(this)
+        .classed("alluvial-hidden", !show)
+        .classed("alluvial-visible", show);
+    });
 
-  d3.selectAll("path.link").each(function(d) {
-    const key = `${d.source.name}|${d.target.name}`;
-    const show = localLinkFilters.size === 0 || localLinkFilters.has(key);
+    d3.selectAll("g.node rect").each(function (d) {
+      const isLeft = d.x0 === 0;
+      const show =
+        localLinkFilters.size === 0 ||
+        (isLeft && activeSources.has(d.name)) ||
+        (!isLeft && activeTargets.has(d.name));
 
-    d3.select(this)
-      .classed("alluvial-hidden", !show)
-      .classed("alluvial-visible", show);
-  });
+      d3.select(this)
+        .classed("alluvial-hidden", !show)
+        .classed("alluvial-visible", show);
+    });
 
+    d3.selectAll("g.node text").each(function (d) {
+      const isLeft = d.x0 === 0;
+      const show =
+        localLinkFilters.size === 0 ||
+        (isLeft && activeSources.has(d.name)) ||
+        (!isLeft && activeTargets.has(d.name));
 
-  d3.selectAll("g.node rect").each(function(d) {
-    const isLeft = d.x0 === 0;
-    const show = localLinkFilters.size === 0 ||
-                 (isLeft && activeSources.has(d.name)) ||
-                 (!isLeft && activeTargets.has(d.name));
+      d3.select(this)
+        .classed("alluvial-hidden", !show)
+        .classed("alluvial-visible", show);
+    });
+  }
 
-    d3.select(this)
-      .classed("alluvial-hidden", !show)
-      .classed("alluvial-visible", show);
-  });
-
-
-  d3.selectAll("g.node text").each(function(d) {
-    const isLeft = d.x0 === 0;
-    const show = localLinkFilters.size === 0 ||
-                 (isLeft && activeSources.has(d.name)) ||
-                 (!isLeft && activeTargets.has(d.name));
-
-    d3.select(this)
-      .classed("alluvial-hidden", !show)
-      .classed("alluvial-visible", show);
-  });
-}
-
-
-  
-const nodeGroups = sankeyGroup.selectAll(".node")
-    .data(sankeyData.nodes, d => d.name)
+  const nodeGroups = sankeyGroup
+    .selectAll(".node")
+    .data(sankeyData.nodes, (d) => d.name)
     .join(
-      enter => {
+      (enter) => {
         const g = enter.append("g").attr("class", "node");
         g.append("rect")
-          .attr("x", d => Math.round(d.x0))
-          .attr("y", d => Math.round(d.y0))
-          .attr("width", d => d.x1 - d.x0)
-          .attr("height", d => d.y1 - d.y0)
+          .attr("x", (d) => Math.round(d.x0))
+          .attr("y", (d) => Math.round(d.y0))
+          .attr("width", (d) => d.x1 - d.x0)
+          .attr("height", (d) => d.y1 - d.y0)
           .style("shape-rendering", "crispEdges")
           .attr("stroke", "#000")
-.call(sel => {
-  sel.each(function(d) {
-    const color = getNodeColor(d.avgPrice, priceRange.min, priceRange.max);
-    d.baseColor = color;
-    d.highlightColor = getHighlightedColor(((d.avgPrice - priceRange.min) / (priceRange.max - priceRange.min)) * 100);
-    d.selectedColor = getSelectedColor(((d.avgPrice - priceRange.min) / (priceRange.max - priceRange.min)) * 100);
-    d3.select(this).attr("fill", color);
-  });
-})
-          .on("mouseover", function(event, d) {
+          .call((sel) => {
+            sel.each(function (d) {
+              const color = getNodeColor(
+                d.avgPrice,
+                priceRange.min,
+                priceRange.max
+              );
+              d.baseColor = color;
+              d.highlightColor = getHighlightedColor(
+                ((d.avgPrice - priceRange.min) /
+                  (priceRange.max - priceRange.min)) *
+                  100
+              );
+              d.selectedColor = getSelectedColor(
+                ((d.avgPrice - priceRange.min) /
+                  (priceRange.max - priceRange.min)) *
+                  100
+              );
+              d3.select(this).attr("fill", color);
+            });
+          })
+          .on("mouseover", function (event, d) {
+            const rect = d3.select(this);
+            rect.attr("fill", d.highlightColor).classed("hover-temp", true);
 
-              const rect = d3.select(this);
-            rect
-    .attr("fill", d.highlightColor)
-    .classed("hover-temp", true);
+            tooltip
+              .style("display", "block")
+              .html(
+                `Category: ${d.name}<br>Total cards: ${
+                  d.value
+                }<br>Avg Price: $${d.avgPrice.toFixed(2)}`
+              );
+            highlightAllViewsForAlluvial(d);
+          })
+          .on("mousemove", function (event) {
+            const tooltipWidth = tooltip.node().offsetWidth;
+            const tooltipHeight = tooltip.node().offsetHeight;
 
-      tooltip.style("display", "block")
-             .html(`Category: ${d.name}<br>Total cards: ${d.value}<br>Avg Price: $${d.avgPrice.toFixed(2)}`);
-             highlightAllViewsForAlluvial(d);
-    })
-          .on("mousemove", function(event) {
-  const tooltipWidth = tooltip.node().offsetWidth;
-  const tooltipHeight = tooltip.node().offsetHeight;
+            let x = event.pageX + 10;
+            let y = event.pageY + 10;
 
-  let x = event.pageX + 10;
-  let y = event.pageY + 10;
+            if (x + tooltipWidth > window.innerWidth) {
+              x = window.innerWidth - tooltipWidth - 10;
+            }
+            if (y + tooltipHeight > window.innerHeight) {
+              y = window.innerHeight - tooltipHeight - 10;
+            }
 
-  if (x + tooltipWidth > window.innerWidth) {
-    x = window.innerWidth - tooltipWidth - 10;
-  }
-  if (y + tooltipHeight > window.innerHeight) {
-    y = window.innerHeight - tooltipHeight - 10;
-  }
-
-  tooltip
-    .style("left", `${x}px`)
-    .style("top", `${y}px`);
-})
-          .on("mouseout", function(event, d) {
-
+            tooltip.style("left", `${x}px`).style("top", `${y}px`);
+          })
+          .on("mouseout", function (event, d) {
             const rect = d3.select(this);
             rect.classed("hover-temp", false);
 
             const isSelectedHovered = rect.classed("selectedHovered");
-  rect.attr("fill", isSelectedHovered ? d.selectedColor : d.baseColor);
+            rect.attr(
+              "fill",
+              isSelectedHovered ? d.selectedColor : d.baseColor
+            );
 
-      tooltip.style("display", "none");
-      emitClearAlluvialHover(); 
-    })
-          .on("click", function(event, d) {
- const category = d.x0 === 0 ? "Originality" : "Rarity";
+            tooltip.style("display", "none");
+            emitClearAlluvialHover();
+          })
+.on("click", function (event, d) {
+  const rect = d3.select(this);
+  const category = d.x0 === 0 ? "Originality" : "Rarity";
   const name = d.name;
+  const value = name.toLowerCase();
+  const isSelected = rect.classed("selectedHovered");
 
+  if (isSelected) {
+    // Unselect
+    rect.classed("selectedHovered", false)
+        .attr("fill", d.baseColor);
+  } else {
+    // Select
+    rect.classed("selectedHovered", true)
+        .attr("fill", d.selectedColor);
+  }
 
-    emitAlluvialClick({ category, value: name.toLowerCase() });
-
+  emitAlluvialClick({ category, value });
 })
 
-          .on("contextmenu", function(event, d) {
+
+          .on("contextmenu", function (event, d) {
             event.preventDefault();
-      const category = d.x0 === 0 ? "Originality" : "Rarity"; 
-      const currentState = getState();
-      const updatedFilters = {};
-  
-      for (const key in currentState.selectedFilters) {
-        updatedFilters[key] = new Set(currentState.selectedFilters[key]);
-      }
-  
-      
-      if (updatedFilters[category].has(d.name)) {
-        updatedFilters[category].delete(d.name);
-      } else {
-        updatedFilters[category].add(d.name);
-      }
-      
-      updateState({ selectedFilters: updatedFilters });
+            const category = d.x0 === 0 ? "Originality" : "Rarity";
+            const currentState = getState();
+            const updatedFilters = {};
 
-    });
+            for (const key in currentState.selectedFilters) {
+              updatedFilters[key] = new Set(currentState.selectedFilters[key]);
+            }
 
-      const nodeTextSize = Math.min(svgWidth * 0.0187, 13);
+            if (updatedFilters[category].has(d.name)) {
+              updatedFilters[category].delete(d.name);
+            } else {
+              updatedFilters[category].add(d.name);
+            }
+
+            updateState({ selectedFilters: updatedFilters });
+          });
+
+        const nodeTextSize = Math.min(svgWidth * 0.0187, 13);
         g.append("text")
-          .attr("x", d => {
-      const centerX = (d.x0 + d.x1) / 2;
-      const isLeftSide = centerX < width / 2;
-      return isLeftSide ? d.x0 : d.x1;
-  })
-          .attr("y", d => d.y0 - 5)
-          .attr("text-anchor", d => {
-      const centerX = (d.x0 + d.x1) / 2;
-      const isLeftSide = centerX < width / 2;
-      return isLeftSide ? "start" : "end";
-  })
-          .text(d => d.name)
+          .attr("x", (d) => {
+            const centerX = (d.x0 + d.x1) / 2;
+            const isLeftSide = centerX < width / 2;
+            return isLeftSide ? d.x0 : d.x1;
+          })
+          .attr("y", (d) => d.y0 - 5)
+          .attr("text-anchor", (d) => {
+            const centerX = (d.x0 + d.x1) / 2;
+            const isLeftSide = centerX < width / 2;
+            return isLeftSide ? "start" : "end";
+          })
+          .text((d) => d.name)
           .attr("font-size", `${nodeTextSize}px`)
           .style("shape-rendering", "crispEdges")
           .attr("fill", "#000")
           .style("pointer-events", "auto")
-          .on("mouseover", function(event, d) {
-    const explanations = {
-      "original": `<strong>Original Card</strong><br>This is the first-ever printing of a card, typically from its debut set.`,
-      "reprint": `<strong>Reprint</strong><br>A card that has been printed again in a later set without functional changes.`,
-      "functional reprint": `<strong>Functional Reprint</strong><br>A different card with identical rules text and function, but a different name or flavor.`
-    };
-  
-    const key = d.name.toLowerCase();
-    if (explanations[key]) {
-      tooltip
-        .style("display", "block")
-        .html(explanations[key]);
-    }
-  })
-          .on("mousemove", function(event) {
-  const tooltipWidth = tooltip.node().offsetWidth;
-  const tooltipHeight = tooltip.node().offsetHeight;
+          .on("mouseover", function (event, d) {
+            const explanations = {
+              original: `<strong>Original Card</strong><br>This is the first-ever printing of a card, typically from its debut set.`,
+              reprint: `<strong>Reprint</strong><br>A card that has been printed again in a later set without functional changes.`,
+              "functional reprint": `<strong>Functional Reprint</strong><br>A different card with identical rules text and function, but a different name or flavor.`,
+            };
 
-  let x = event.pageX + 10;
-  let y = event.pageY + 10;
+            const key = d.name.toLowerCase();
+            if (explanations[key]) {
+              tooltip.style("display", "block").html(explanations[key]);
+            }
+          })
+          .on("mousemove", function (event) {
+            const tooltipWidth = tooltip.node().offsetWidth;
+            const tooltipHeight = tooltip.node().offsetHeight;
 
-  if (x + tooltipWidth > window.innerWidth) {
-    x = window.innerWidth - tooltipWidth - 10;
-  }
-  if (y + tooltipHeight > window.innerHeight) {
-    y = window.innerHeight - tooltipHeight - 10;
-  }
+            let x = event.pageX + 10;
+            let y = event.pageY + 10;
 
-  tooltip
-    .style("left", `${x}px`)
-    .style("top", `${y}px`);
-})
-          .on("mouseout", function() {
-    tooltip.style("display", "none");
-  });
+            if (x + tooltipWidth > window.innerWidth) {
+              x = window.innerWidth - tooltipWidth - 10;
+            }
+            if (y + tooltipHeight > window.innerHeight) {
+              y = window.innerHeight - tooltipHeight - 10;
+            }
+
+            tooltip.style("left", `${x}px`).style("top", `${y}px`);
+          })
+          .on("mouseout", function () {
+            tooltip.style("display", "none");
+          });
         return g;
       },
-      update => update.select("rect")
-        .attr("x", d => d.x0)
-        .attr("y", d => d.y0)
-        .attr("width", d => d.x1 - d.x0)
-        .attr("height", d => d.y1 - d.y0)
-        .call(sel => applyColorScale(sel, "fill", priceRange)),
-      exit => exit.remove()
+      (update) =>
+        update
+          .select("rect")
+          .attr("x", (d) => d.x0)
+          .attr("y", (d) => d.y0)
+          .attr("width", (d) => d.x1 - d.x0)
+          .attr("height", (d) => d.y1 - d.y0)
+          .call((sel) => applyColorScale(sel, "fill", priceRange)),
+      (exit) => exit.remove()
     );
-  
-function applyLocalChartFilter() {
-  const origSet = localChartFilters.Originality;
-  const raritySet = localChartFilters.Rarity;
 
-  d3.selectAll("g.node rect").each(function(d) {
-    const isOrig = d.x0 === 0;
-    const category = isOrig ? "Originality" : "Rarity";
-    const filterSet = isOrig ? origSet : raritySet;
-    const match = filterSet.size === 0 || filterSet.has(d.name);
+  function applyLocalChartFilter() {
+    const origSet = localChartFilters.Originality;
+    const raritySet = localChartFilters.Rarity;
 
-    d3.select(this)
-      .classed("alluvial-hidden", !match)
-      .classed("alluvial-visible", match);
-  });
+    d3.selectAll("g.node rect").each(function (d) {
+      const isOrig = d.x0 === 0;
+      const category = isOrig ? "Originality" : "Rarity";
+      const filterSet = isOrig ? origSet : raritySet;
+      const match = filterSet.size === 0 || filterSet.has(d.name);
 
-  d3.selectAll("path.link").each(function(d) {
-    const origMatch = origSet.size === 0 || origSet.has(d.source.name);
-    const rarityMatch = raritySet.size === 0 || raritySet.has(d.target.name);
-    const match = origMatch && rarityMatch;
+      d3.select(this)
+        .classed("alluvial-hidden", !match)
+        .classed("alluvial-visible", match);
+    });
 
-    d3.select(this)
-      .classed("alluvial-hidden", !match)
-      .classed("alluvial-visible", match);
-  });
-}
+    d3.selectAll("path.link").each(function (d) {
+      const origMatch = origSet.size === 0 || origSet.has(d.source.name);
+      const rarityMatch = raritySet.size === 0 || raritySet.has(d.target.name);
+      const match = origMatch && rarityMatch;
 
-  
+      d3.select(this)
+        .classed("alluvial-hidden", !match)
+        .classed("alluvial-visible", match);
+    });
+  }
 
-  
-  const numBins = 5; 
+  const numBins = 5;
 
-  
   const priceStep = (priceRange.max - priceRange.min) / numBins;
 
-  
   const symbol = formatPriceSymbol(priceAttr);
 
   const dynamicLegendData = Array.from({ length: numBins }, (_, i) => ({
-    label: `${symbol ? symbol + " " : ""}${(priceRange.min + (i + 1) * priceStep).toFixed(2)}`,
-    color: getDiscreteColor(i * (100 / numBins))
+    label: `${symbol ? symbol + " " : ""}${(
+      priceRange.min +
+      (i + 1) * priceStep
+    ).toFixed(2)}`,
+    color: getDiscreteColor(i * (100 / numBins)),
   })).reverse();
-  
-  
 
+  const legendX = chartWidth + margin.right; // slight adjustment inward
+  const legendY = margin.top;
+  const rectDimensions = Math.min(chartHeight * 0.097, 22);
 
-    
-  
-const legendX = chartWidth + margin.right;  // slight adjustment inward
-const legendY = margin.top;
-const rectDimensions = Math.min(chartHeight*0.097, 22);
+  const extraSpacing = 0;
 
-const extraSpacing = 0;
-
-const legendFontSize = Math.min(svgWidth * 0.0187, 13);
-const legend = svg.append("g")
+  const legendFontSize = Math.min(svgWidth * 0.0187, 13);
+  const legend = svg
+    .append("g")
     .attr("class", "legend")
     .attr("transform", `translate(${legendX}, ${legendY})`);
 
-    legend.append("text")
+  legend
+    .append("text")
     .attr("x", 0)
-    .attr("y", Math.min(rectDimensions* 6, 132))
+    .attr("y", Math.min(rectDimensions * 6, 132))
     .text("Avg Price")
     .attr("fill", "#000")
     .style("font-size", `${legendFontSize}px`)
     .style("shape-rendering", "crispEdges")
     .style("font-weight", "bold");
 
-legend.append("text")
+  legend
+    .append("text")
     .attr("x", 0)
     .attr("y", Math.min(rectDimensions * 6.75, 149))
-    .text("(" + formatPriceLabel(priceAttr)+ ")")
+    .text("(" + formatPriceLabel(priceAttr) + ")")
     .attr("fill", "#000")
     .style("font-size", `${legendFontSize}px`)
     .style("shape-rendering", "crispEdges")
     .style("font-weight", "bold");
 
+  dynamicLegendData.forEach((interval, i) => {
+    const legendEntry = legend
+      .append("g")
+      .attr(
+        "transform",
+        `translate(0, ${i * (rectDimensions + extraSpacing)})`
+      );
 
-dynamicLegendData.forEach((interval, i) => {
-    const legendEntry = legend.append("g")
-      .attr("transform", `translate(0, ${i * (rectDimensions + extraSpacing)})`);
+    legendEntry
+      .append("rect")
+      .attr("width", rectDimensions)
+      .attr("height", rectDimensions)
+      .style("shape-rendering", "crispEdges")
+      .attr("fill", interval.color)
+      .attr("stroke", "#000");
 
-    legendEntry.append("rect")
-        .attr("width", rectDimensions)
-        .attr("height", rectDimensions)
-        .style("shape-rendering", "crispEdges")
-        .attr("fill", interval.color)
-        .attr("stroke", "#000");
+    legendEntry
+      .append("text")
+      .attr("x", chartWidth * 0.054)
+      .attr("y", rectDimensions * 0.25 - 1)
+      .text(interval.label)
+      .attr("fill", "#000")
+      .style("font-size", `${legendFontSize}px`)
+      .style("shape-rendering", "crispEdges");
+  });
 
-    legendEntry.append("text")
-        .attr("x", chartWidth * 0.054) 
-        .attr("y",rectDimensions * 0.25 -1) 
-        .text(interval.label) 
-        .attr("fill", "#000")
-        .style("font-size", `${legendFontSize}px`)
-        .style("shape-rendering", "crispEdges");
-});
+  const zeroEntry = legend
+    .append("g")
+    .attr(
+      "transform",
+      `translate(0, ${numBins * (rectDimensions + extraSpacing)})`
+    );
 
-
-const zeroEntry = legend.append("g")
-    .attr("transform", `translate(0, ${numBins * (rectDimensions + extraSpacing)})`);
-
-zeroEntry.append("text")
+  zeroEntry
+    .append("text")
     .attr("x", chartWidth * 0.054)
-    .attr("y", rectDimensions * 0.25-1)
+    .attr("y", rectDimensions * 0.25 - 1)
     .text(`${symbol} 0.00`)
     .attr("fill", "#000")
     .style("font-size", `${legendFontSize}px`)
     .style("shape-rendering", "crispEdges");
-
 }
-
 
 export function highlightAlluvialElements(hoveredCards) {
   const rects = d3.selectAll("g.node rect");
 
   if (!hoveredCards || hoveredCards.length === 0) {
-    rects
-      .classed("selectedHovered", false)
-      .attr("fill", d => d.baseColor);
+    rects.classed("selectedHovered", false).attr("fill", (d) => d.baseColor);
     return;
   }
 
   const hoveredRarities = new Set();
   const hoveredOriginalities = new Set();
 
-  hoveredCards.forEach(card => {
+  hoveredCards.forEach((card) => {
     if (card.rarity) hoveredRarities.add(card.rarity.toLowerCase());
     if (Array.isArray(card.all_originalities)) {
-      card.all_originalities.forEach(o => hoveredOriginalities.add(o.toLowerCase()));
+      card.all_originalities.forEach((o) =>
+        hoveredOriginalities.add(o.toLowerCase())
+      );
     }
   });
 
-rects.each(function(d) {
-  const isRarity = d.x0 !== 0;
-  const isOriginality = d.x0 === 0;
-  const match =
-    (isRarity && hoveredRarities.has(d.name)) ||
-    (isOriginality && hoveredOriginalities.has(d.name));
+  rects.each(function (d) {
+    const isRarity = d.x0 !== 0;
+    const isOriginality = d.x0 === 0;
+    const match =
+      (isRarity && hoveredRarities.has(d.name)) ||
+      (isOriginality && hoveredOriginalities.has(d.name));
 
-
-  d3.select(this)
-    .classed("selectedHovered", match)
-    .attr("fill", match ? d.selectedColor : d.baseColor);
-});
+    d3.select(this)
+      .classed("selectedHovered", match)
+      .attr("fill", match ? d.selectedColor : d.baseColor);
+  });
 }
-
 
 export function highlightAlluvialElementsHoverOnly(card) {
   if (!card) return;
@@ -768,61 +830,61 @@ export function highlightAlluvialElementsHoverOnly(card) {
   }
 
   if (Array.isArray(card.all_originalities)) {
-    card.all_originalities.forEach(o => hoveredOriginalities.add(o.toLowerCase()));
+    card.all_originalities.forEach((o) =>
+      hoveredOriginalities.add(o.toLowerCase())
+    );
   }
 
   d3.selectAll("g.node rect")
-    .filter(d =>
-      (d.x0 === 0 && hoveredOriginalities.has(d.name)) ||
-      (d.x0 !== 0 && hoveredRarities.has(d.name))
+    .filter(
+      (d) =>
+        (d.x0 === 0 && hoveredOriginalities.has(d.name)) ||
+        (d.x0 !== 0 && hoveredRarities.has(d.name))
     )
-    .each(function(d) {
+    .each(function (d) {
       const rect = d3.select(this);
-      rect
-        .attr("fill", d.highlightColor)
-        .classed("hover-temp", true);
+      rect.attr("fill", d.highlightColor).classed("hover-temp", true);
     });
 }
-
-
 
 export function highlightAlluvialElementsFromIcicle(rectInfo) {
   const { originalities, rarities } = rectInfo;
   if (!originalities && !rarities) return;
 
   d3.selectAll("g.node rect")
-    .filter(d =>
-      (d.x0 === 0 && originalities?.has(d.name)) ||
-      (d.x0 !== 0 && rarities?.has(d.name))
+    .filter(
+      (d) =>
+        (d.x0 === 0 && originalities?.has(d.name)) ||
+        (d.x0 !== 0 && rarities?.has(d.name))
     )
-    .each(function(d) {
+    .each(function (d) {
       const rect = d3.select(this);
-      rect
-        .attr("fill", d.highlightColor)
-        .classed("hover-temp", true);
+      rect.attr("fill", d.highlightColor).classed("hover-temp", true);
       rect.classed("hover-temp", true);
     });
 }
 
-export function highlightAlluvialElementsFromNumColors(originalities, rarities) {
+export function highlightAlluvialElementsFromNumColors(
+  originalities,
+  rarities
+) {
   if (!originalities && !rarities) return;
 
   d3.selectAll("g.node rect")
-    .filter(d =>
-      (d.x0 === 0 && originalities?.has(d.name)) ||
-      (d.x0 !== 0 && rarities?.has(d.name))
+    .filter(
+      (d) =>
+        (d.x0 === 0 && originalities?.has(d.name)) ||
+        (d.x0 !== 0 && rarities?.has(d.name))
     )
-    .each(function(d) {
+    .each(function (d) {
       const rect = d3.select(this);
-      rect
-        .attr("fill", d.highlightColor)
-        .classed("hover-temp", true);
+      rect.attr("fill", d.highlightColor).classed("hover-temp", true);
       rect.classed("hover-temp", true);
     });
 }
 
 export function clearAlluvialHoverOnly() {
-  d3.selectAll("g.node rect").each(function(d) {
+  d3.selectAll("g.node rect").each(function (d) {
     const rect = d3.select(this);
     rect.classed("hover-temp", false);
 
@@ -831,37 +893,39 @@ export function clearAlluvialHoverOnly() {
   });
 }
 
-export function highlightAlluvialElementsHoverOnlyFromSet(originalities, rarities) {
+export function highlightAlluvialElementsHoverOnlyFromSet(
+  originalities,
+  rarities
+) {
   d3.selectAll("g.node rect")
-    .filter(d =>
-      (d.x0 === 0 && originalities.has(d.name)) ||
-      (d.x0 !== 0 && rarities.has(d.name))
+    .filter(
+      (d) =>
+        (d.x0 === 0 && originalities.has(d.name)) ||
+        (d.x0 !== 0 && rarities.has(d.name))
     )
-    .each(function(d) {
+    .each(function (d) {
       const rect = d3.select(this);
-      rect
-        .attr("fill", d.highlightColor)
-        .classed("hover-temp", true);
+      rect.attr("fill", d.highlightColor).classed("hover-temp", true);
       rect.classed("hover-temp", true);
     });
 }
 
-export function highlightAlluvialElementsHoverOnlyFromYear(originalities, rarities) {
+export function highlightAlluvialElementsHoverOnlyFromYear(
+  originalities,
+  rarities
+) {
   d3.selectAll("g.node rect")
-    .filter(d =>
-      (d.x0 === 0 && originalities.has(d.name)) ||
-      (d.x0 !== 0 && rarities.has(d.name))
+    .filter(
+      (d) =>
+        (d.x0 === 0 && originalities.has(d.name)) ||
+        (d.x0 !== 0 && rarities.has(d.name))
     )
-    .each(function(d) {
+    .each(function (d) {
       const rect = d3.select(this);
-      rect
-        .attr("fill", d.highlightColor)
-        .classed("hover-temp", true);
+      rect.attr("fill", d.highlightColor).classed("hover-temp", true);
       rect.classed("hover-temp", true);
     });
 }
-
-
 
 function highlightAllViewsForAlluvial(d) {
   if (!d || !d.name) return;

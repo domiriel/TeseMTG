@@ -1,6 +1,6 @@
 
 import { updateState, getState, saveFilterSettings, loadFilterSettings, generateFilterShareURL, resetState} from "../state.js";
-import { filterData, filterPriceOnly, getEffectivePriceAttribute } from "../script.js"; 
+import { filterData, filterPriceOnly, getEffectivePriceAttribute, isFilterEmpty  } from "../script.js"; 
 import { showLoader, hideLoader } from "./LoadingAnimation.js";
 const EXCLUDED_SET_TYPES = new Set(["alchemy", "minigame"]);
 const optionMap = new Map();  
@@ -768,156 +768,131 @@ wrapper.append("input")
 }
 
 export function updateFilterPanel(originalData, filteredCards, selectedFilters, containerId = ".FilterPanel") {
+  const t0 = performance.now();
+  selectedFilters = selectedFilters || {};
 
+  const groupedData = getState().groupedData;
+  const priceAttr = getEffectivePriceAttribute(getState());
 
-    selectedFilters = selectedFilters || {};
-  function getOrderIndex(category, value) {
-  if (category === "Nº of Colors") {
-    return numColorsOrder.indexOf(value);
-  }
-  if (category === "Color Identity") {
-    return colorIdentityOrder.indexOf(value.toLowerCase());
-  }
-  return value;
-}
+  const filters = new Map();
+  const mode = getState().filterLogicMode || "AND-OR";
+  const applyAndWithin = mode.endsWith("AND");
 
+  const getOrderIndex = (category, value) => {
+    if (category === "Nº of Colors") return numColorsOrder.indexOf(value);
+    if (category === "Color Identity") return colorIdentityOrder.indexOf(value.toLowerCase());
+    return value;
+  };
 
-    
+  const getFilteredSetExcluding = (categoryToIgnore, selectedFiltersArg) => {
+    const filtered = filterData(groupedData, selectedFiltersArg, { excludeCategory: categoryToIgnore });
+    const cleaned = filterPriceOnly(filtered, priceAttr);
+    return cleaned;
+  };
 
-    const uniqueCardNames = Array.from(new Set(filteredCards.map(card => card.name))).sort();
+  const t1 = performance.now();
+  let cachedFilteredSet = null;
 
-    // Update datalist
-    d3.select(containerId)
-      .select("datalist")
-      .selectAll("option")
-      .data(uniqueCardNames, d => d)
-      .join(
-        enter => enter.append("option").attr("value", d => d),
-        update => update.attr("value", d => d),
-        exit => exit.remove()
-      );
-    const filters = new Map();
-const t0 = performance.now();
-const groupedData = getState().groupedData;
-const priceAttr = getEffectivePriceAttribute(getState());
-
-function getFilteredSetExcluding(categoryToIgnore, selectedFiltersArg) {
-  const filtered = filterData(groupedData, selectedFiltersArg, { excludeCategory: categoryToIgnore });
-  const cleaned = filterPriceOnly(filtered, priceAttr);
-
-  return cleaned
-}
-
-const mode = getState().filterLogicMode || "AND-OR";
-const applyAndWithin = mode.endsWith("AND");
-
-let cachedFilteredSet = null;
-VISIBLE_FILTER_CATEGORIES.forEach(category => {
-  const categoryGroup = groupedData[category];
-  if (!categoryGroup) return;
+  VISIBLE_FILTER_CATEGORIES.forEach(category => {
+    const tCatStart = performance.now();
+    const categoryGroup = groupedData[category];
+    if (!categoryGroup) return;
 
 let filteredSet;
-if (!applyAndWithin) {
-  // AND-OR logic: exclude current category to keep values independent
+
+if (isFilterEmpty(selectedFilters)) {
+  // No filters active: just use all visible cards
+  filteredSet = filteredCards;
+} else if (!applyAndWithin) {
   filteredSet = getFilteredSetExcluding(category, selectedFilters);
 } else {
-  // AND-AND logic: include current category
   if (!cachedFilteredSet) {
     const allFiltered = filterData(groupedData, selectedFilters);
     cachedFilteredSet = filterPriceOnly(allFiltered, priceAttr);
   }
   filteredSet = cachedFilteredSet;
 }
+    const filteredIds = new Set(filteredSet.map(c => c.index));
+    const optionCounts = new Map();
 
-const filteredIds = new Set(filteredSet.map(c => c.index));
-
-
-
-const optionCounts = new Map();
-categoryGroup.forEach((cards, value) => {
-  const count = cards.reduce((acc, card) =>
-    acc + filteredIds.has(card.index), 0);
-
-  optionCounts.set(value, count);
-});
-
-  const sortedEntries = Array.from(optionCounts.entries()).sort((a, b) => {
-  const aVal = getOrderIndex(category, a[0]);
-  const bVal = getOrderIndex(category, b[0]);
-  if (typeof aVal === "number" && typeof bVal === "number") {
-    return aVal - bVal;
-  }
-  return a[0].localeCompare(b[0]);
-});
-
-filters.set(category, new Map(sortedEntries));
-
-if (category === "Color Identity") {
-  // console.log("Sorted filter keys for Color Identity:");
-  // console.log(Array.from(filters.get(category).keys()));
-}
-
-// console.log("OptionMap keys:");
-// console.log(Array.from(optionMap.keys()).filter(k => k.startsWith("Color Identity")));
-});
-
-
-
-const t1 = performance.now();
-    window.requestAnimationFrame(() => {
-        optionMap.forEach((el, key) => {
-            const [category, value] = key.split("|");
-            if (!filters.has(category)) return;
-
-            const normValue = getNormalizedKey(category, value);
-            const count = filters.get(category)?.get(normValue) || 0;
-            const span = el.select("span");
-            span.text(`${formatDisplayLabel(category, normValue)} (${count})`).attr("data-count", count);
-
-            const selectedSet = selectedFilters[category] || new Set();
-             const isSelected = selectedSet.has(value);
-
-            el.style("opacity", count === 0 && !isSelected ? 0.4 : 1);
-            el.style("pointer-events", count === 0 && !isSelected ? "none" : "auto");
-            el.style("background-color", isSelected ? "#cce5ff" : "#fff");
-        });
+    categoryGroup.forEach((cards, value) => {
+      const count = cards.reduce((acc, card) =>
+        acc + filteredIds.has(card.index), 0);
+      optionCounts.set(value, count);
     });
 
-    Object.entries(selectedFilters).forEach(([category, selectedSet]) => {
-        if (!VISIBLE_FILTER_CATEGORIES.includes(category) && category !== "FreeTextSearch") return;
+    const sortedEntries = Array.from(optionCounts.entries()).sort((a, b) => {
+      const aVal = getOrderIndex(category, a[0]);
+      const bVal = getOrderIndex(category, b[0]);
+      if (typeof aVal === "number" && typeof bVal === "number") return aVal - bVal;
+      return a[0].localeCompare(b[0]);
+    });
 
-        const pillContainer = pillMap.get(category);
-        if (!pillContainer) return;
-      
-        const pills = pillContainer.selectAll(".pill")
-          .data(Array.from(selectedSet), d => d);
-      
-        pills.enter()
-          .append("div")
-          .attr("class", "pill")
-          .style("background",  "#8A9CE4")
-          .style("color", "white")
-          .style("padding", "2px 8px")
-          .style("border-radius", "12px")
-          .style("font-size", "12px")
-          .text(d => formatDisplayLabel(category, d))
+    filters.set(category, new Map(sortedEntries));
 
-          .append("span")
-          .style("margin-left", "6px")
-          .style("cursor", "pointer")
-          .text("\u2715")
-          .on("click", function (event, value) {
-              selectedSet.delete(value);
-              const updatedFilters = cloneFilters(selectedFilters);
-              updateState({ selectedFilters: updatedFilters });
-          });
-      
-        pills.exit().remove();
+    const tCatEnd = performance.now();
+  });
+
+  const t2 = performance.now();
+
+  window.requestAnimationFrame(() => {
+    optionMap.forEach((el, key) => {
+      const [category, value] = key.split("|");
+      if (!filters.has(category)) return;
+
+      const normValue = getNormalizedKey(category, value);
+      const count = filters.get(category)?.get(normValue) || 0;
+      const span = el.select("span");
+      span.text(`${formatDisplayLabel(category, normValue)} (${count})`).attr("data-count", count);
+
+      const selectedSet = selectedFilters[category] || new Set();
+      const isSelected = selectedSet.has(value);
+
+      el.style("opacity", count === 0 && !isSelected ? 0.4 : 1);
+      el.style("pointer-events", count === 0 && !isSelected ? "none" : "auto");
+      el.style("background-color", isSelected ? "#cce5ff" : "#fff");
+    });
+
+    const t3 = performance.now();
+    //console.log(`[UI optionMap patch] took ${(t3 - t2).toFixed(2)}ms`);
+  });
+
+  const t4 = performance.now();
+
+  Object.entries(selectedFilters).forEach(([category, selectedSet]) => {
+    if (!VISIBLE_FILTER_CATEGORIES.includes(category) && category !== "FreeTextSearch") return;
+
+    const pillContainer = pillMap.get(category);
+    if (!pillContainer) return;
+
+    const pills = pillContainer.selectAll(".pill")
+      .data(Array.from(selectedSet), d => d);
+
+    pills.enter()
+      .append("div")
+      .attr("class", "pill")
+      .style("background", "#8A9CE4")
+      .style("color", "white")
+      .style("padding", "2px 8px")
+      .style("border-radius", "12px")
+      .style("font-size", "12px")
+      .text(d => formatDisplayLabel(category, d))
+      .append("span")
+      .style("margin-left", "6px")
+      .style("cursor", "pointer")
+      .text("\u2715")
+      .on("click", function (event, value) {
+        selectedSet.delete(value);
+        const updatedFilters = cloneFilters(selectedFilters);
+        updateState({ selectedFilters: updatedFilters });
       });
-    
 
+    pills.exit().remove();
+  });
 
+  const t5 = performance.now();
 }
+
 
 
 function extractCardValue(card, category) {

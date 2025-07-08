@@ -1,7 +1,7 @@
 
 import { updateState, getState } from "../state.js";
 import { emitLineYearHover, emitClearLineYearHover, emitLineChartClick, onNumColorsHover, onClearNumColorsHover,
-         onHoverCard, onClearHover, onSetHover, onClearSetHover, onRectHover, onClearRectHover, onAlluvialHover, 
+         onHoverCard, onClearHover, onSetHover, onClearSetHover, onRectHover, onClearRectHover, onAlluvialHover, onAlluvialClick, onAlluvialLinkClick,
          onClearAlluvialHover   } from "./Events.js";
 const lineChartTooltipText = `
 <strong>Timeline Interactions:</strong><br>
@@ -744,6 +744,82 @@ function clearAllViewsHoverOnly() {
 
 }
 
+const activeLineSelections = {
+  fromAlluvial: new Set(),
+  fromIcicle: new Set(),       // optional future use
+  fromOtherViews: new Set(),   // extend as needed
+};
+
+
+onAlluvialClick(({ category, value }) => {
+  if (!category || !value) return;
+
+  const key = `${category}|${value.toLowerCase()}`;
+  const selections = activeLineSelections.fromAlluvial;
+
+  if (selections.has(key)) {
+    selections.delete(key);
+  } else {
+    selections.add(key);
+  }
+
+  updateLineChartSelections();
+});
+
+
+function updateLineChartSelections() {
+  const svg = d3.select(".LineChart svg");
+  if (svg.empty()) return;
+
+  svg.selectAll(".highlight-hover-line").remove();
+
+  // Aggregate keys
+  const allKeys = new Set();
+  for (const sourceSet of Object.values(activeLineSelections)) {
+    for (const key of sourceSet) allKeys.add(key);
+  }
+
+  const matchingYears = new Set();
+
+  svg.selectAll("circle.data-point").each(function (d) {
+    if (!d) return;
+
+    for (const sel of allKeys) {
+      const [cat, val] = sel.split("|");
+      if (
+        (cat === "Originality" && d.originalities?.has(val)) ||
+        (cat === "Rarity" && d.rarities?.has(val))
+      ) {
+        matchingYears.add(d.year.getTime());
+        break;
+      }
+    }
+  });
+
+  const y1 = +svg.select(".hover-line").attr("y1");
+  const y2 = +svg.select(".hover-line").attr("y2");
+  const marginLeft = +svg.select(".stacked-line-wrapper svg g")
+    .attr("transform")?.match(/translate\(([\d.]+)/)?.[1] || 0;
+
+  matchingYears.forEach(t => {
+    const date = new Date(+t);
+    const x = window._lineChartXScale(date) + marginLeft;
+
+    svg.append("line")
+      .attr("class", "highlight-hover-line")
+      .attr("x1", x)
+      .attr("x2", x)
+      .attr("y1", y1)
+      .attr("y2", y2)
+      .attr("stroke", "#9AA0BC")
+      .attr("stroke-width", 1.5)
+      .attr("stroke-dasharray", "4 2")
+      .lower();
+  });
+}
+
+
+
 function highlightLineChartFromAlluvialCategory(category, value) {
   if (!category || !value) return;
 
@@ -763,6 +839,7 @@ function highlightLineChartFromAlluvialCategory(category, value) {
       return false;
     });
 }
+
 
 function highlightLineChartFromNumColors(numColors) {
   if (numColors === undefined || numColors === null) return;

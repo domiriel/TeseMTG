@@ -1,7 +1,7 @@
 
 import { updateState, getState } from "../state.js";
 import { updateFilterPanel } from "./FilterPanel.js";
-import { emitSetHover, emitClearHover, onNumColorsHover, onClearNumColorsHover,
+import { emitSetHover, emitClearHover, onNumColorsHover, onClearNumColorsHover, onAlluvialClick, onAlluvialLinkClick,
         onHoverCard, onClearHover, emitClearSetHover,emitTimelineSetClick, 
         emitYearClick, onRectHover, onClearRectHover, onClearLineYearHover, 
         onLineYearHover, onAlluvialHover, onClearAlluvialHover } from "./Events.js";
@@ -990,6 +990,62 @@ export function highlightTimelineSetsFromYearInfo(yearInfo) {
     .filter(d => d.releaseDate.getFullYear() === targetYear)
     .attr("fill",d => d.highlightColor);
 }
+
+const activeTimelineSelections = {
+  fromAlluvial: new Set(),
+  // optionally later: fromIcicle, fromLineChart, etc.
+};
+
+onAlluvialClick(({ category, value }) => {
+  if (!category || !value) return;
+
+  const key = `${category}|${value.toLowerCase()}`;
+  const selectionSet = activeTimelineSelections.fromAlluvial;
+
+  if (selectionSet.has(key)) {
+    selectionSet.delete(key);
+  } else {
+    selectionSet.add(key);
+  }
+
+  updateTimelineSelections();
+});
+
+function updateTimelineSelections() {
+  const rects = d3.selectAll(".set-rect");
+
+  // Gather all active selection keys
+  const allKeys = new Set();
+  for (const set of Object.values(activeTimelineSelections)) {
+    for (const key of set) allKeys.add(key);
+  }
+
+  rects.each(function(d) {
+    const rect = d3.select(this);
+
+    let isMatched = false;
+    for (const key of allKeys) {
+      const [cat, val] = key.split("|");
+
+      if (cat === "Originality") {
+        if ([...(d.originalities || [])].some(o => o === val)) {
+          isMatched = true;
+          break;
+        }
+      } else if (cat === "Rarity") {
+        if ([...(d.rarities || [])].some(r => r === val)) {
+          isMatched = true;
+          break;
+        }
+      }
+      // add more category checks if needed
+    }
+
+    rect.classed("selectedHovered", isMatched)
+        .attr("fill", isMatched ? d.selectedColor : d.baseColor);
+  });
+}
+
 
 
 function highlightTimelineSetsFromAlluvialCategory(category, value) {

@@ -71,6 +71,7 @@ const scatterTooltipText = `
 `;
 
 onAlluvialClick(({ category, value }) => {
+
   const dots = d3.selectAll(".dots circle").nodes();
   const hoveredMap = new Map(getState().hoveredCards?.map(c => [c.name, c]) || []);
 
@@ -1268,37 +1269,38 @@ export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_
   const t4 = performance.now();
 
   // JOIN and update circles
-  const dots = gClip.selectAll("circle")
-    .data(filteredData, d => d.name)
-    .join(
-      enter => enter.append("circle")
-        .attr("r", 2.5)
-        .style("cursor", "pointer")
-        .attr("opacity", 0.8)
-        .on("mouseover", mouseoverFn)
-        .on("mousemove", mousemoveFn)
-        .on("mouseout", mouseoutFn)
-        .on("click", clickFn),
-      update => update,
-      exit => exit.remove()
-    )
-    .attr("class", d => {
-      const numColors = d.color_identity?.length || 0;
-      const identityKey = d.color_identity?.length
-        ? d.color_identity.slice().sort().join("")
-        : "colorless";
-      return `dots ci-${identityKey} nc-${numColors}`;
-    })
-    .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
-    .attr("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
-    .attr("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2)
-    .style("display", d => (currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey) ? null : "none")
-    .attr("cx", d => newX(getXValue(d)))
-    .attr("cy", d => newY(d.complexity));
+const dots = gClip.selectAll("circle")
+  .data(filteredData, d => d.name)
+  .join(
+    enter => enter.append("circle")
+      .attr("r", 2.5)
+      .style("cursor", "pointer")
+      .attr("opacity", 0.8)
+      .on("mouseover", mouseoverFn)
+      .on("mousemove", mousemoveFn)
+      .on("mouseout", mouseoutFn)
+      .on("click", clickFn)
+      .attr("class", d => {
+        const numColors = d.color_identity?.length || 0;
+        const identityKey = d.color_identity?.slice().sort().join("") || "colorless";
+        return `dots ci-${identityKey} nc-${numColors}`;
+      })
+      .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
+      .attr("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
+      .attr("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2),
+    update => update,
+    exit => exit.remove()
+  );
+
+dots
+  .attr("cx", d => newX(getXValue(d)))
+  .attr("cy", d => newY(d.complexity));
+
 
   const t5 = performance.now();
 
   globalDots = gClip.selectAll("circle");
+  
   updatePointPositions(baseXScale, yScale);
 
   const t6 = performance.now();
@@ -1307,15 +1309,15 @@ export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_
 
   const t7 = performance.now();
 
-  console.log(`[Scatter Perf Breakdown]
-  • Setup / scales:       ${(t1 - t0).toFixed(2)} ms
-  • Update domains:       ${(t2 - t1).toFixed(2)} ms
-  • Axes update:          ${(t3 - t2).toFixed(2)} ms
-  • Tag zoom key points:  ${(t4 - t3).toFixed(2)} ms
-  • D3 .join() and attrs: ${(t5 - t4).toFixed(2)} ms
-  • Dot repositioning:    ${(t6 - t5).toFixed(2)} ms
-  • Hover sync:           ${(t7 - t6).toFixed(2)} ms
-  • TOTAL:                ${(t7 - t0).toFixed(2)} ms`);
+  // console.log(`[Scatter Perf Breakdown]
+  // • Setup / scales:       ${(t1 - t0).toFixed(2)} ms
+  // • Update domains:       ${(t2 - t1).toFixed(2)} ms
+  // • Axes update:          ${(t3 - t2).toFixed(2)} ms
+  // • Tag zoom key points:  ${(t4 - t3).toFixed(2)} ms
+  // • D3 .join() and attrs: ${(t5 - t4).toFixed(2)} ms
+  // • Dot repositioning:    ${(t6 - t5).toFixed(2)} ms
+  // • Hover sync:           ${(t7 - t6).toFixed(2)} ms
+  // • TOTAL:                ${(t7 - t0).toFixed(2)} ms`);
 }
 
 

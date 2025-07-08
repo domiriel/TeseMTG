@@ -138,16 +138,15 @@ getState().onChange("hoveredCards", (hoveredCards) => {
   const t0 = performance.now();
 
   const t1 = performance.now();
-  highlightAlluvialElements(hoveredCards);
   const t2 = performance.now();
 
-  highlightIcicleRect(hoveredCards);
+  //highlightIcicleRect(hoveredCards);
   const t3 = performance.now();
 
-  highlightTimelineSets(hoveredCards);
+  //highlightTimelineSets(hoveredCards);
   const t4 = performance.now();
 
-  highlightLineChart(hoveredCards);
+  //highlightLineChart(hoveredCards);
   const t5 = performance.now();
 
   updateDrawer(hoveredCards);
@@ -224,62 +223,73 @@ selectedPriceCurrency: stateSnapshot.selectedPriceCurrency,
 
   hideLoader(150);
 
-  subscribe((state) => {
-    showLoader();
-    if (isUpdatingFilteredData) return;
-    const context = state.updateContext || "default";
-    if (state.isHoverUpdate) return;
-    const { selectedFilters, freeTextSearch } = state;
-    console.log(selectedFilters)
-    const selectedPriceAttribute = getEffectivePriceAttribute(state)
-    const tStart = performance.now();
-    const filteredData = getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
-    const tFiltered = performance.now();
-    console.log("Filtering took", (tFiltered - tStart).toFixed(2), "ms");
+subscribe((state) => {
+  showLoader();
+  if (isUpdatingFilteredData) return;
+  if (state.isHoverUpdate) return;
 
-      updateFilterPanel(originalData, filteredData, selectedFilters, ".FilterPanel");
+  const t0 = performance.now();
+  const context = state.updateContext || "default";
+  const { selectedFilters, freeTextSearch } = state;
+  const selectedPriceAttribute = getEffectivePriceAttribute(state);
 
-    if (window._prevFilteredLength === filteredData.length &&
-        window._prevPriceAttribute === selectedPriceAttribute &&
-        context === "default") {
-      return;
-    }
+  const t1 = performance.now();
+  const filteredData = getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
+  const t2 = performance.now();
+  //console.log(`[t${(t2 - t1).toFixed(2)}ms] Filtered data`);
 
-    window._prevFilteredLength = filteredData.length;
-    window._prevPriceAttribute = selectedPriceAttribute;
+  updateFilterPanel(originalData, filteredData, selectedFilters, ".FilterPanel");
+  const t3 = performance.now();
+  //console.log(`[t${(t3 - t2).toFixed(2)}ms] Updated filter panel`);
 
-
-      createIcicleChart(filteredData, ".IcicleChart", true);
-      const tIcicle = performance.now();
-      console.log("Icicle took", (tIcicle - tFiltered).toFixed(2), "ms");
-
-      createTimelineView(filteredData, ".TimelineView", true);
-      const tTimeline = performance.now();
-      console.log("Time took", (tTimeline - tIcicle).toFixed(2), "ms");
-      createStackedLineChart(filteredData, ".LineChart", true);
-      const tLine = performance.now();
-      console.log("Line took", (tLine - tTimeline).toFixed(2), "ms");
-    createAlluvialChart(filteredData, ".AlluvialChart", true, selectedPriceAttribute);
-    const tAlluvial = performance.now();
-    console.log("Alluvial took", (tAlluvial - tLine).toFixed(2), "ms");
-    const processedData = prepareScatterData(filteredData, selectedPriceAttribute);
-    updateScatterPlot(processedData, selectedPriceAttribute);
-    const tSccatter = performance.now();
-    console.log("Scatter took", (tSccatter - tAlluvial).toFixed(2), "ms");
-
-
-     let { hoveredCards } = getState();
-
-    highlightAlluvialElements(hoveredCards);
-    highlightIcicleRect(hoveredCards);
-    highlightTimelineSets(hoveredCards);
-    highlightLineChart(hoveredCards);
-    updateDrawer(hoveredCards);
-
-    const tFinal = performance.now();
-    console.log("Hovering took", (tFinal - tSccatter).toFixed(2), "ms");
+  if (
+    window._prevFilteredLength === filteredData.length &&
+    window._prevPriceAttribute === selectedPriceAttribute &&
+    context === "default"
+  ) {
     hideLoader(100);
-  });
+    return;
+  }
+
+  window._prevFilteredLength = filteredData.length;
+  window._prevPriceAttribute = selectedPriceAttribute;
+
+  createIcicleChart(filteredData, ".IcicleChart", true);
+  const t4 = performance.now();
+  //console.log(`[t${(t4 - t3).toFixed(2)}ms] Icicle chart updated`);
+
+  createTimelineView(filteredData, ".TimelineView", true);
+  const t5 = performance.now();
+  //console.log(`[t${(t5 - t4).toFixed(2)}ms] Timeline view updated`);
+
+  createStackedLineChart(filteredData, ".LineChart", true);
+  const t6 = performance.now();
+ // console.log(`[t${(t6 - t5).toFixed(2)}ms] Line chart updated`);
+
+  createAlluvialChart(filteredData, ".AlluvialChart", true, selectedPriceAttribute);
+  const t7 = performance.now();
+  //console.log(`[t${(t7 - t6).toFixed(2)}ms] Alluvial chart updated`);
+
+  const processedData = prepareScatterData(filteredData, selectedPriceAttribute);
+  updateScatterPlot(processedData, selectedPriceAttribute);
+  const t8 = performance.now();
+  //console.log(`[t${(t8 - t7).toFixed(2)}ms] Scatterplot updated`);
+
+  const { hoveredCards } = getState();
+  highlightAlluvialElements(hoveredCards);
+  highlightIcicleRect(hoveredCards);
+  highlightTimelineSets(hoveredCards);
+  highlightLineChart(hoveredCards);
+  updateDrawer(hoveredCards);
+  const t9 = performance.now();
+  //console.log(`[t${(t9 - t8).toFixed(2)}ms] Highlights and drawer updated`);
+
+  const total = (t9 - t0).toFixed(2);
+  console.log(`[Total: ${total}ms] Full update cycle`);
+
+  hideLoader(100);
+});
+
 
   window.addEventListener("resize", () => {
     const { selectedFilters, freeTextSearch, hoveredCards } = getState();
@@ -314,7 +324,7 @@ export function filterData(groupedData, selectedFilters, options = {}) {
 
   const perCategoryMatches = [];
 
-  for (const category of getState().filterApplicationOrder || Object.keys(selectedFilters)) {
+  for (const category of filterApplicationOrder || Object.keys(selectedFilters)) {
     if (excludeCategory && category === excludeCategory) continue;
 
     const values = selectedFilters[category];
@@ -626,7 +636,7 @@ function shallowCompareFilters(a, b) {
   });
 }
 
-function isFilterEmpty(selectedFilters) {
+export function isFilterEmpty(selectedFilters) {
   return Object.values(selectedFilters).every(set => set.size === 0);
 }
 
