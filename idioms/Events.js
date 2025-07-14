@@ -37,7 +37,6 @@ export function onClearSetHover(callback) {
 }
 
 export function emitSetTypeHover(setTypeInfo) {
-  console.log(setTypeInfo)
   emitter.dispatchEvent(new CustomEvent("set-type-hover", { detail: setTypeInfo }));
 }
 

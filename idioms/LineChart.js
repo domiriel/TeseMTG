@@ -1,8 +1,32 @@
-
 import { updateState, getState } from "../state.js";
-import { emitLineYearHover, emitClearLineYearHover, emitLineChartClick, onNumColorsHover, onClearNumColorsHover, emitLineChartBrush,
-         onHoverCard, onClearHover, onSetHover,onSetTypeHover, onClearSetHover, onRectHover, onClearRectHover, onAlluvialHover, onAlluvialClick, onAlluvialLinkClick, emitClearLineChartBrush,
-         onIcicleClick, onIcicleNumClick,  onClearAlluvialHover, onAlluvialLinkHover, onClearAlluvialLinkHover, onTimelineSetClick, onTimelineBrush, onClearTimelineBrush, onTimelineSetTypeClick} from "./Events.js";
+import {
+  emitLineYearHover,
+  emitClearLineYearHover,
+  emitLineChartClick,
+  onNumColorsHover,
+  onClearNumColorsHover,
+  emitLineChartBrush,
+  onHoverCard,
+  onClearHover,
+  onSetHover,
+  onSetTypeHover,
+  onClearSetHover,
+  onRectHover,
+  onClearRectHover,
+  onAlluvialHover,
+  onAlluvialClick,
+  onAlluvialLinkClick,
+  emitClearLineChartBrush,
+  onIcicleClick,
+  onIcicleNumClick,
+  onClearAlluvialHover,
+  onAlluvialLinkHover,
+  onClearAlluvialLinkHover,
+  onTimelineSetClick,
+  onTimelineBrush,
+  onClearTimelineBrush,
+  onTimelineSetTypeClick,
+} from "./Events.js";
 const lineChartTooltipText = `
 <strong>Timeline Interactions:</strong><br>
 • <strong>Hover</strong> a circle: View metrics for that year and highlight related elements across views.<br>
@@ -14,7 +38,7 @@ const lineChartTooltipText = `
 
 const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };
 let localSelectedYears = new Set();
-onHoverCard(card => {
+onHoverCard((card) => {
   highlightLineChartHoverOnly(card);
 });
 
@@ -22,37 +46,33 @@ onClearHover(() => {
   clearLineChartHoverOnly();
 });
 
-onSetHover(setInfo => {
+onSetHover((setInfo) => {
+  highlightLineChartHoverOnlyFromSet(setInfo.releaseDate);
+});
 
- highlightLineChartHoverOnlyFromSet(setInfo.releaseDate);
-})
-
-onSetTypeHover(setInfo => {
-
- highlightLineChartHoverOnlyFromSetType(setInfo.releaseDates);
-})
+onSetTypeHover((setInfo) => {
+  highlightLineChartHoverOnlyFromSetType(setInfo.releaseDates);
+});
 
 onClearSetHover(() => {
   clearLineChartHoverOnly();
-})
+});
 
-onRectHover(rectInfo => {
-highlightLineChartFromIcicle(rectInfo)
-})
+onRectHover((rectInfo) => {
+  highlightLineChartFromIcicle(rectInfo);
+});
 
 onClearRectHover(() => {
-  clearLineChartHoverOnly()
-})
+  clearLineChartHoverOnly();
+});
 
 onNumColorsHover(({ numColors, originalities, rarities }) => {
- highlightLineChartFromNumColors(numColors);
-
+  highlightLineChartFromNumColors(numColors);
 });
 
 onClearNumColorsHover(() => {
   clearLineChartHoverOnly();
-})
-
+});
 
 onAlluvialHover(({ category, value }) => {
   highlightLineChartFromAlluvialCategory(category, value);
@@ -62,9 +82,8 @@ onClearAlluvialHover(() => {
   clearLineChartHoverOnly();
 });
 
-
 onAlluvialLinkHover(({ originality, rarity }) => {
-  highlightLineChartFromAlluvialLink(originality, rarity)
+  highlightLineChartFromAlluvialLink(originality, rarity);
 });
 
 onClearAlluvialLinkHover(() => {
@@ -74,627 +93,619 @@ onClearAlluvialLinkHover(() => {
 let brushing = false;
 
 function getClonedFilters() {
-    const currentState = getState();
-    const cloned = {};
-    for (const key in currentState.selectedFilters) {
-        cloned[key] = new Set(currentState.selectedFilters[key]);
-    }
-    return cloned;
+  const currentState = getState();
+  const cloned = {};
+  for (const key in currentState.selectedFilters) {
+    cloned[key] = new Set(currentState.selectedFilters[key]);
+  }
+  return cloned;
 }
 export function createStackedLineChart(data, containerId, isUpdate = false) {
-    d3.select(containerId).selectAll("*").remove();
+  d3.select(containerId).selectAll("*").remove();
 
-    
-    data = data.filter(card => card.name !== "Gleemax");
+  data = data.filter((card) => card.name !== "Gleemax");
 
-    const groupedData = d3.rollups(
-        data,
-        cards => {
-            const reprints = cards.filter(c => c.originality === 'functional reprint').length;
-            const avgComplexity = d3.mean(cards, c => +c.complexity || 0);
-            const avgCMC = d3.mean(cards, c => +c.cmc || 0);
-            
-            const originalities = new Set();
-            const rarities = new Set();
-            const colorIdentities = new Set();
-            const numColorsPresent = new Set();
+  const groupedData = d3
+    .rollups(
+      data,
+      (cards) => {
+        const reprints = cards.filter(
+          (c) => c.originality === "functional reprint"
+        ).length;
+        const avgComplexity = d3.mean(cards, (c) => +c.complexity || 0);
+        const avgCMC = d3.mean(cards, (c) => +c.cmc || 0);
 
-            cards.forEach(card => {
-      if (card.originality) originalities.add(card.originality.toLowerCase());
-      if (card.rarity) rarities.add(card.rarity.toLowerCase());
+        const originalities = new Set();
+        const rarities = new Set();
+        const colorIdentities = new Set();
+        const numColorsPresent = new Set();
 
-      let identity;
-      let numColors;
-      if (!card.color_identity || card.color_identity.length === 0) {
-        identity = "Colorless";
-        numColors = 0
-      } else {
-        identity = card.color_identity.slice().sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b]).join("");
-        numColors = identity.length
-      }
-      colorIdentities.add(identity);
-      numColorsPresent.add(numColors)
-    });
-            if (cards[0] && new Date(cards[0].release_date).getFullYear() === 2004) {
-                cards.forEach(c => {
-                    const raw = c.cmc;
-                    const numeric = +raw;
-                    if (isNaN(numeric) || numeric > 100) {
-                        console.warn("Suspicious CMC in 2004:", {
-                            name: c.name,
-                            cmc: c.cmc,
-                            set: c.set_name
-                        });
-                    }
-                });
+        cards.forEach((card) => {
+          if (card.originality)
+            originalities.add(card.originality.toLowerCase());
+          if (card.rarity) rarities.add(card.rarity.toLowerCase());
+
+          let identity;
+          let numColors;
+          if (!card.color_identity || card.color_identity.length === 0) {
+            identity = "Colorless";
+            numColors = 0;
+          } else {
+            identity = card.color_identity
+              .slice()
+              .sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b])
+              .join("");
+            numColors = identity.length;
+          }
+          colorIdentities.add(identity);
+          numColorsPresent.add(numColors);
+        });
+        if (
+          cards[0] &&
+          new Date(cards[0].release_date).getFullYear() === 2004
+        ) {
+          cards.forEach((c) => {
+            const raw = c.cmc;
+            const numeric = +raw;
+            if (isNaN(numeric) || numeric > 100) {
+              console.warn("Suspicious CMC in 2004:", {
+                name: c.name,
+                cmc: c.cmc,
+                set: c.set_name,
+              });
             }
-            return {
-                
-                reprints,
-                avgComplexity,
-                avgCMC,
-                originalities,
-                rarities,
-                colorIdentities,
-                numColorsPresent
-            };
-        },
-        d => new Date(d.release_date).getFullYear()
+          });
+        }
+        return {
+          reprints,
+          avgComplexity,
+          avgCMC,
+          originalities,
+          rarities,
+          colorIdentities,
+          numColorsPresent,
+        };
+      },
+      (d) => new Date(d.release_date).getFullYear()
     )
     .map(([year, values]) => {
-
-        return {
-            year: new Date(year, 0, 1),
-            ...values
-        };
+      return {
+        year: new Date(year, 0, 1),
+        ...values,
+      };
     })
     .sort((a, b) => a.year - b.year);
 
-    const metrics = [
-        { key: "reprints", label: "Func. Reprints", color: "#998066" },
-        { key: "avgComplexity", label: "Avg. Complexity", color: "#998066" },
-        { key: "avgCMC", label: "Avg. MV", color: "#998066" }
-    ];
-    
-    const container = d3.select(containerId);
+  const metrics = [
+    { key: "reprints", label: "Func. Reprints", color: "#998066" },
+    { key: "avgComplexity", label: "Avg. Complexity", color: "#998066" },
+    { key: "avgCMC", label: "Avg. MV", color: "#998066" },
+  ];
 
-    const containerBounds = container.node().getBoundingClientRect();
-    const containerWidth = containerBounds.width;
-    const containerHeight = containerBounds.height;
+  const container = d3.select(containerId);
 
-    const margin = { top: 20, right: 21, bottom: 30, left: 50 };
-    const width = containerWidth - margin.left - margin.right;
-    const chartHeight = containerHeight*0.9 / 4; 
-    const chartSpacing = 15;
-    const height = (chartHeight + chartSpacing) * metrics.length - chartSpacing; 
+  const containerBounds = container.node().getBoundingClientRect();
+  const containerWidth = containerBounds.width;
+  const containerHeight = containerBounds.height;
 
+  const margin = { top: 20, right: 21, bottom: 30, left: 50 };
+  const width = containerWidth - margin.left - margin.right;
+  const chartHeight = (containerHeight * 0.9) / 4;
+  const chartSpacing = 15;
+  const height = (chartHeight + chartSpacing) * metrics.length - chartSpacing;
 
-    if (isUpdate) {
-        container.select(".stacked-line-wrapper").remove();
-    }
-    const tooltip = d3.select("#tooltip");
+  if (isUpdate) {
+    container.select(".stacked-line-wrapper").remove();
+  }
+  const tooltip = d3.select("#tooltip");
 
-    const wrapper = container.append("div")
-        .attr("class", "stacked-line-wrapper")
-        .style("position", "relative")
-        .style("width", `${containerWidth}px`);
+  const wrapper = container
+    .append("div")
+    .attr("class", "stacked-line-wrapper")
+    .style("position", "relative")
+    .style("width", `${containerWidth}px`);
 
-
-    const zoom = d3.zoom()
-    .filter(event => event.type === "wheel") // 👈 allow zooming ONLY via scroll
+  const zoom = d3
+    .zoom()
+    .filter((event) => event.type === "wheel") // 👈 allow zooming ONLY via scroll
     .scaleExtent([1, 20])
-    .translateExtent([[0, 0], [containerWidth, containerHeight]])
-    .extent([[0, 0], [containerWidth, containerHeight]])
+    .translateExtent([
+      [0, 0],
+      [containerWidth, containerHeight],
+    ])
+    .extent([
+      [0, 0],
+      [containerWidth, containerHeight],
+    ])
     .on("zoom", zoomed);
-    const svg = wrapper.append("svg")
-        .attr("width", containerWidth)
-        .attr("height", containerHeight)
-        .call(zoom);
+  const svg = wrapper
+    .append("svg")
+    .attr("width", containerWidth)
+    .attr("height", containerHeight)
+    .call(zoom);
 
-
- const iconX = containerWidth * 0.985;
-const iconY = containerHeight * 0.04;
-const iconRadius = containerWidth*0.93 * 0.014;
-const infoTextSize = Math.min(containerWidth * 0.0187, 14);
-const infoGroup = svg.append("g")
-  .attr("class", "info-icon")
-  .attr("transform", `translate(${iconX}, ${iconY})`);
-
-infoGroup.append("circle")
-  .attr("r", iconRadius)
-  .attr("fill", "#8A9CE4")
-  .attr("stroke", "#fff");
-
-infoGroup.append("text")
-  .attr("text-anchor", "middle")
-  .attr("dy", "0.35em")
-  .attr("font-size", `${infoTextSize}px`)
-  .attr("font-weight", "bold")
-  .attr("fill","#fff")
-  .text("?")
-  .attr("pointer-events", "none");
-
+  const iconX = containerWidth * 0.985;
+  const iconY = containerHeight * 0.04;
+  const iconRadius = containerWidth * 0.93 * 0.014;
+  const infoTextSize = Math.min(containerWidth * 0.0187, 14);
+  const infoGroup = svg
+    .append("g")
+    .attr("class", "info-icon")
+    .attr("transform", `translate(${iconX}, ${iconY})`);
 
   infoGroup
-  .on("mouseover", function(event) {
-    d3.select("#tooltip")
-      .style("display", "block")
-      .html(lineChartTooltipText);
-  })
-  .on("mousemove", function(event) {
-    const tooltip = d3.select("#tooltip");
-    const tooltipWidth = tooltip.node().offsetWidth;
-    const tooltipHeight = tooltip.node().offsetHeight;
-    const padding = 10;
+    .append("circle")
+    .attr("r", iconRadius)
+    .attr("fill", "#8A9CE4")
+    .attr("stroke", "#fff");
 
-    let x = event.pageX + padding;
-    let y = event.pageY + padding;
+  infoGroup
+    .append("text")
+    .attr("text-anchor", "middle")
+    .attr("dy", "0.35em")
+    .attr("font-size", `${infoTextSize}px`)
+    .attr("font-weight", "bold")
+    .attr("fill", "#fff")
+    .text("?")
+    .attr("pointer-events", "none");
 
-    if (x + tooltipWidth > window.innerWidth) {
-      x = window.innerWidth - tooltipWidth - 10;
-    }
-    if (y + tooltipHeight > window.innerHeight) {
-      y = window.innerHeight - tooltipHeight - 10;
-    }
+  infoGroup
+    .on("mouseover", function (event) {
+      d3.select("#tooltip")
+        .style("display", "block")
+        .html(lineChartTooltipText);
+    })
+    .on("mousemove", function (event) {
+      const tooltip = d3.select("#tooltip");
+      const tooltipWidth = tooltip.node().offsetWidth;
+      const tooltipHeight = tooltip.node().offsetHeight;
+      const padding = 10;
 
-    tooltip
-      .style("left", `${x}px`)
-      .style("top", `${y}px`);
-  })
-  .on("mouseout", function() {
-    d3.select("#tooltip").style("display", "none");
-  });
-    const chartGroup = svg.append("g")
-        .attr("transform", `translate(${margin.left}, ${margin.top})`);
+      let x = event.pageX + padding;
+      let y = event.pageY + padding;
 
-    const xExtent = d3.extent(groupedData, d => d.year);
+      if (x + tooltipWidth > window.innerWidth) {
+        x = window.innerWidth - tooltipWidth - 10;
+      }
+      if (y + tooltipHeight > window.innerHeight) {
+        y = window.innerHeight - tooltipHeight - 10;
+      }
 
-    
-    const xPadding = (xExtent[1] - xExtent[0]) / 50;
-    
-    const firstYear = xExtent[0].getFullYear();
-    const lastYear = xExtent[1].getFullYear();
-const yearSpan = lastYear - firstYear;
+      tooltip.style("left", `${x}px`).style("top", `${y}px`);
+    })
+    .on("mouseout", function () {
+      d3.select("#tooltip").style("display", "none");
+    });
+  const chartGroup = svg
+    .append("g")
+    .attr("transform", `translate(${margin.left}, ${margin.top})`);
 
-let domainStart, domainEnd;
-if (yearSpan === 0) {
-  // Add padding: one year before and after
-  domainStart = new Date(firstYear - 1, 0, 1);
-  domainEnd = new Date(firstYear + 1, 0, 1);
-} else {
-  domainStart = new Date(firstYear, 0, 1);
-  domainEnd = new Date(lastYear, 11, 31);
-}
+  const xExtent = d3.extent(groupedData, (d) => d.year);
 
-const xScale = d3.scaleTime()
-  .domain([domainStart, domainEnd])
-  .range([10, width]);
-    
-    window._lineChartXScale = xScale;
+  const xPadding = (xExtent[1] - xExtent[0]) / 50;
 
+  const firstYear = xExtent[0].getFullYear();
+  const lastYear = xExtent[1].getFullYear();
+  const yearSpan = lastYear - firstYear;
 
+  let domainStart, domainEnd;
+  if (yearSpan === 0) {
+    // Add padding: one year before and after
+    domainStart = new Date(firstYear - 1, 0, 1);
+    domainEnd = new Date(firstYear + 1, 0, 1);
+  } else {
+    domainStart = new Date(firstYear, 0, 1);
+    domainEnd = new Date(lastYear, 11, 31);
+  }
 
-    const allYears = groupedData.map(d => d.year);
-    const xAxis = d3.axisBottom(xScale)
-            .tickValues(allYears)
-            .tickFormat(d3.timeFormat("%Y"));
-        
+  const xScale = d3
+    .scaleTime()
+    .domain([domainStart, domainEnd])
+    .range([10, width]);
 
-    
+  window._lineChartXScale = xScale;
 
-    const yScales = [];
-    const linePaths = [];
-    const circleGroups = [];
-    const xAxisGroups = [];
+  const allYears = groupedData.map((d) => d.year);
+  const xAxis = d3
+    .axisBottom(xScale)
+    .tickValues(allYears)
+    .tickFormat(d3.timeFormat("%Y"));
 
+  const yScales = [];
+  const linePaths = [];
+  const circleGroups = [];
+  const xAxisGroups = [];
 
-    svg.append("defs").append("clipPath")
-        .attr("id", "clip-left-margin")
-        .append("rect")
-        .attr("x", 0)
-        .attr("y", 0)
-        .attr("width", width+ 11)  
-        .attr("height", containerHeight);  
+  svg
+    .append("defs")
+    .append("clipPath")
+    .attr("id", "clip-left-margin")
+    .append("rect")
+    .attr("x", 0)
+    .attr("y", 0)
+    .attr("width", width + 11)
+    .attr("height", containerHeight);
 
+  const sharedHoverLine = svg
+    .append("line")
+    .attr("class", "hover-line")
+    .attr("y1", margin.top)
+    .attr("y2", margin.top + height)
+    .attr("stroke", "#000")
+    .attr("stroke-width", 1)
+    .attr("pointer-events", "none")
+    .style("display", "none");
+  metrics.forEach((metric, i) => {
+    const y = d3
+      .scaleLinear()
+      .domain([0, d3.max(groupedData, (d) => d[metric.key])])
+      .nice()
+      .range([chartHeight, 4]);
 
+    yScales.push(y);
 
-    const sharedHoverLine = svg.append("line")
-        .attr("class", "hover-line")
-        .attr("y1", margin.top)
-        .attr("y2", margin.top + height)  
-        .attr("stroke", "#000")
-        .attr("stroke-width", 1)
-        .attr("pointer-events", "none")
-        .style("display", "none");
-    metrics.forEach((metric, i) => {
-        const y = d3.scaleLinear()
-        .domain([
-            0,
-            d3.max(groupedData, d => d[metric.key])
-        ])
-        .nice()
-        .range([chartHeight, 4]);
+    const line = d3
+      .line()
+      .x((d) => xScale(d.year))
+      .y((d) => y(d[metric.key]));
 
-        yScales.push(y);
+    const g = chartGroup
+      .append("g")
+      .attr("transform", `translate(0, ${i * (chartHeight + chartSpacing)})`);
 
-        const line = d3.line()
-            .x(d => xScale(d.year))
-            .y(d => y(d[metric.key]));
+    const clippedGroup = g
+      .append("g")
+      .attr("clip-path", "url(#clip-left-margin)");
 
-        const g = chartGroup.append("g")
-            .attr("transform", `translate(0, ${i * (chartHeight + chartSpacing)})`);
+    const linePath = clippedGroup
+      .append("path")
 
-        const clippedGroup = g.append("g")
-        .attr("clip-path", "url(#clip-left-margin)");
+      .datum(groupedData)
+      .attr("fill", "none")
+      .attr("stroke", metric.color)
+      .attr("stroke-width", 2)
+      .attr("d", line);
 
+    linePaths.push({ line, path: linePath });
 
-        const linePath = clippedGroup.append("path")
+    clippedGroup
+      .selectAll("circle")
+      .data(groupedData)
+      .enter()
+      .append("circle")
+      .attr("cx", (d) => xScale(d.year))
+      .attr("cy", (d) => y(d[metric.key]))
+      .attr("r", 4)
+      .attr("fill", metric.color)
+      .attr("data-year", (d) => d.year.getFullYear())
+      .style("cursor", "pointer")
+      .attr("class", "data-point")
+      .on("mouseover", (event, d) => {
+        const year = d.year.getFullYear();
+        const allMetrics = metrics
+          .map((m) => {
+            const value = d[m.key];
+            const formatted =
+              m.key === "reprints"
+                ? Math.round(value)
+                : value?.toFixed(2) ?? "N/A";
+            return `<strong>${m.label}:</strong> ${formatted}`;
+          })
+          .join("<br/>");
 
-        .datum(groupedData)
-        .attr("fill", "none")
-        .attr("stroke", metric.color)
-        .attr("stroke-width", 2)
-        .attr("d", line);
-
-        linePaths.push({ line, path: linePath });
-
-
-        clippedGroup.selectAll("circle")
-            .data(groupedData)
-            .enter()
-            .append("circle")
-            .attr("cx", d => xScale(d.year))
-            .attr("cy", d => y(d[metric.key]))
-            .attr("r", 4)
-            .attr("fill", metric.color)
-            .attr("data-year", d => d.year.getFullYear()) 
-            .style("cursor", "pointer")
-            .attr("class", "data-point") 
-            .on("mouseover", (event, d) => {
-                const year = d.year.getFullYear();
-                const allMetrics = metrics.map(m => {
-                    const value = d[m.key];
-                    const formatted = m.key === "reprints"
-                        ? Math.round(value)             
-                        : (value?.toFixed(2) ?? "N/A");
-                    return `<strong>${m.label}:</strong> ${formatted}`;
-                }).join("<br/>");
-            
-
-                tooltip
-                    .style("display", "block")
-                    .style("font-size", "16px")
-                    .html(`
+        tooltip.style("display", "block").style("font-size", "16px").html(`
                         <strong>Year:</strong> ${year}<br/>
                         ${allMetrics}
                     `);
 
-            
-                d3.selectAll(`circle.data-point[data-year='${d.year.getFullYear()}']`)
-                    .classed("hover-temp", true)
-                    .attr("stroke", "#000")
-                    .attr("stroke-width", 1.5);
-                highlightAllViewsForYear(d);
+        d3.selectAll(`circle.data-point[data-year='${d.year.getFullYear()}']`)
+          .classed("hover-temp", true)
+          .attr("stroke", "#000")
+          .attr("stroke-width", 1.5);
+        highlightAllViewsForYear(d);
+      })
+      .on("mousemove", (event) => {
+        const [mouseX, mouseY] = d3.pointer(event, document.body); // relative to page
 
-            })
-            .on("mousemove", (event) => {
-                const [mouseX, mouseY] = d3.pointer(event, document.body); // relative to page
+        const tooltipNode = tooltip.node();
+        const tooltipWidth = tooltipNode.offsetWidth;
+        const tooltipHeight = tooltipNode.offsetHeight;
+        const padding = 10;
 
-                const tooltipNode = tooltip.node();
-                const tooltipWidth = tooltipNode.offsetWidth;
-                const tooltipHeight = tooltipNode.offsetHeight;
-                const padding = 10;
+        let left = mouseX + padding;
 
-            
-                let left = mouseX + padding;
-            
-                if (left + tooltipWidth > window.innerWidth) {
-                    left = mouseX - tooltipWidth - padding;
-                }
-            
-                tooltip
-                    .style("left", left + "px")
-                    .style("top", (mouseY - 20) + "px");
-            }) 
-            .on("mouseout", () => {
-                tooltip.style("display", "none");
-                tooltip.style("font-size", "12px");
-
-            
-                d3.selectAll("circle.data-point")
-                    .classed("hover-temp", false)
-                    .attr("r", 4)
-                    .attr("stroke", "none");
-                emitClearLineYearHover();
-            })
-            .on("click", function(event, d) {
-                const selectedYear = d.year.getFullYear().toString();
-                
-
-              if (activeLineSelections.fromYears.has(selectedYear)) {
-                activeLineSelections.fromYears.delete(selectedYear);
-              } else {
-                activeLineSelections.fromYears.add(selectedYear);
-              }
-
-              updateLineChartSelections(); // 👈 highlight matching years
-
-        emitLineChartClick({ year: selectedYear, originalities: d.originalities, rarities: d.rarities });
-
-            })
-            .on("contextmenu", function(event,d){
-                event.preventDefault();
-                const selectedYear = d.year.getFullYear().toString();
-                const updatedFilters = getClonedFilters();
-
-                if (updatedFilters["Year"].has(selectedYear)) {
-                    updatedFilters["Year"].delete(selectedYear);
-                } else {
-                    updatedFilters["Year"].add(selectedYear);
-                }
-
-                
-                updateState({
-                    selectedFilters: updatedFilters,
-                    updateContext: "TimelineFilter"
-                });
-
-            });
-
-        const brush = d3.brushX()
-            .extent([[0, 0], [width, height]])
- .on("start", () => {
-    brushing = true;
-    brushGroup.select(".overlay").style("pointer-events", "all");
-  })
-            .on("end", (event) => {
-        brushing = false;
-        brushed(event);
-    });
-
-        const brushGroup = svg.append("g")
-    .attr("class", "brush")
-    .attr("transform", `translate(${margin.left}, ${margin.top})`)
-    .call(brush)
-    .lower();
-        
-
-         svg.append("rect")
-        .attr("class", "hover-overlay")
-        .attr("x", margin.left)
-        .attr("y", margin.top)
-        .attr("width", width)
-        .attr("height", height)
-        .style("fill", "none")
-        .style("pointer-events", "none")
-        
-
-
-   svg
-  .on("mousemove", (event) => {
-    if (brushing) return;
-
-    const [mouseX, mouseY] = d3.pointer(event, svg.node());
-
-    const chartLeft = margin.left;
-    const chartRight = margin.left + width;
-    const chartTop = margin.top;
-    const chartBottom = margin.top + height;
-
-    const isOutside =
-      mouseX < chartLeft ||
-      mouseX > chartRight ||
-      mouseY < chartTop ||
-      mouseY > chartBottom;
-
-    if (isOutside) {
-      sharedHoverLine.style("display", "none");
-      return;
-    }
-
-    const date = xScale.invert(mouseX - margin.left);
-
-    sharedHoverLine
-      .attr("x1", mouseX)
-      .attr("x2", mouseX)
-      .style("display", "block");
-  })
-  .on("mouseout", () => {
-    sharedHoverLine.style("display", "none");
-  });
-
-
-function brushed(event) {
-  if (!event.selection) return;
-
-  const [x0, x1] = event.selection;
-  const startDate = xScale.invert(x0);
-  const endDate = xScale.invert(x1);
-
-  const brushedEntries = groupedData
-    .filter(d => d.year >= startDate && d.year <= endDate)
-    .map(d => {
-      const yearStr = d.year.getFullYear().toString();
-      return {
-        year: yearStr,
-        originalities: new Set(d.originalities),
-        rarities: new Set(d.rarities),
-        colorIdentities: new Set(d.colorIdentities)
-      };
-    });
-
-  if (brushedEntries.length === 0) {
-    activeLineSelections.fromYears.clear();
-    emitClearLineChartBrush(); 
-    updateLineChartSelections();
-    brushGroup.call(brush.move, null);
-    brushGroup.selectAll("*").remove();
-    brushGroup.call(brush);
-    return;
-  }
-
-  // Toggle brushed years in selection
-  brushedEntries.forEach(entry => {
-    if (activeLineSelections.fromYears.has(entry.year)) {
-      activeLineSelections.fromYears.delete(entry.year);
-    } else {
-      activeLineSelections.fromYears.add(entry.year);
-    }
-  });
-
-  updateLineChartSelections();
-
-  emitLineChartBrush(brushedEntries);  // ✅ Emit enriched payload
-
-  // Reset brush UI
-  brushGroup.call(brush.move, null);
-  brushGroup.selectAll("*").remove();
-  brushGroup.call(brush);
-}
-
-
-        circleGroups.push({ group: g, yScale: y, metric });  
-
-
-
-
-        
-        g.append("g").call(d3.axisLeft(y).ticks(4));
-
-       
-        g.append("text")
-            .attr("x", 5)
-            .attr("y",8)
-            .attr("text-anchor", "left")
-            .text(metric.label)
-            .attr("fill", "#000")
-            .attr("font-size", "11px")
-            .style("font-weight", "bold");
-
-       
-        
-    
-        const xAxisG = clippedGroup.append("g")
-            .attr("transform", `translate(0, ${chartHeight})`)
-            .call(xAxis);
-
-        xAxisGroups.push({ g: xAxisG, isBottom: i === metrics.length - 1 });
-
-
-        xAxisG.selectAll("text")
-        .text(function(d) {
-            return d.getFullYear() % 2 === 1 ? d3.timeFormat("%Y")(d) : "";  
-        })
-            .attr("transform", "rotate(-45)")
-            .style("text-anchor", "end")
-            .attr("font-size", "10px");
-
-
-        if (i !== metrics.length - 1) {
-            xAxisG.selectAll("text").remove();
-            xAxisG.selectAll("line").attr("stroke-opacity", 0.3); 
+        if (left + tooltipWidth > window.innerWidth) {
+          left = mouseX - tooltipWidth - padding;
         }
 
-        
-    });
+        tooltip.style("left", left + "px").style("top", mouseY - 20 + "px");
+      })
+      .on("mouseout", () => {
+        tooltip.style("display", "none");
+        tooltip.style("font-size", "12px");
 
+        d3.selectAll("circle.data-point")
+          .classed("hover-temp", false)
+          .attr("r", 4)
+          .attr("stroke", "none");
+        emitClearLineYearHover();
+      })
+      .on("click", function (event, d) {
+        const selectedYear = d.year.getFullYear().toString();
 
+        if (activeLineSelections.fromYears.has(selectedYear)) {
+          activeLineSelections.fromYears.delete(selectedYear);
+        } else {
+          activeLineSelections.fromYears.add(selectedYear);
+        }
 
+        updateLineChartSelections(); // 👈 highlight matching years
 
-   
-        
+        emitLineChartClick({
+          year: selectedYear,
+          originalities: d.originalities,
+          rarities: d.rarities,
+        });
+      })
+      .on("contextmenu", function (event, d) {
+        event.preventDefault();
+        const selectedYear = d.year.getFullYear().toString();
+        const updatedFilters = getClonedFilters();
 
+        if (updatedFilters["Year"].has(selectedYear)) {
+          updatedFilters["Year"].delete(selectedYear);
+        } else {
+          updatedFilters["Year"].add(selectedYear);
+        }
 
+        updateState({
+          selectedFilters: updatedFilters,
+          updateContext: "TimelineFilter",
+        });
+      });
 
+    const brush = d3
+      .brushX()
+      .extent([
+        [0, 0],
+        [width, height],
+      ])
+      .on("start", () => {
+        brushing = true;
+        brushGroup.select(".overlay").style("pointer-events", "all");
+      })
+      .on("end", (event) => {
+        brushing = false;
+        brushed(event);
+      });
 
+    const brushGroup = svg
+      .append("g")
+      .attr("class", "brush")
+      .attr("transform", `translate(${margin.left}, ${margin.top})`)
+      .call(brush)
+      .lower();
 
+    svg
+      .append("rect")
+      .attr("class", "hover-overlay")
+      .attr("x", margin.left)
+      .attr("y", margin.top)
+      .attr("width", width)
+      .attr("height", height)
+      .style("fill", "none")
+      .style("pointer-events", "none");
 
-    function zoomed(event) {
-        const transform = event.transform;
-        const newXScale = transform.rescaleX(xScale);
+    svg
+      .on("mousemove", (event) => {
+        if (brushing) return;
 
+        const [mouseX, mouseY] = d3.pointer(event, svg.node());
 
-        linePaths.forEach(({ line, path }) => {
-            path.attr("d", line.x(d => newXScale(d.year)));
+        const chartLeft = margin.left;
+        const chartRight = margin.left + width;
+        const chartTop = margin.top;
+        const chartBottom = margin.top + height;
+
+        const isOutside =
+          mouseX < chartLeft ||
+          mouseX > chartRight ||
+          mouseY < chartTop ||
+          mouseY > chartBottom;
+
+        if (isOutside) {
+          sharedHoverLine.style("display", "none");
+          return;
+        }
+
+        const date = xScale.invert(mouseX - margin.left);
+
+        sharedHoverLine
+          .attr("x1", mouseX)
+          .attr("x2", mouseX)
+          .style("display", "block");
+      })
+      .on("mouseout", () => {
+        sharedHoverLine.style("display", "none");
+      });
+
+    function brushed(event) {
+      if (!event.selection) return;
+
+      const [x0, x1] = event.selection;
+      const startDate = xScale.invert(x0);
+      const endDate = xScale.invert(x1);
+
+      const brushedEntries = groupedData
+        .filter((d) => d.year >= startDate && d.year <= endDate)
+        .map((d) => {
+          const yearStr = d.year.getFullYear().toString();
+          return {
+            year: yearStr,
+            originalities: new Set(d.originalities),
+            rarities: new Set(d.rarities),
+            colorIdentities: new Set(d.colorIdentities),
+          };
         });
 
+      if (brushedEntries.length === 0) {
+        activeLineSelections.fromYears.clear();
+        emitClearLineChartBrush();
+        updateLineChartSelections();
+        brushGroup.call(brush.move, null);
+        brushGroup.selectAll("*").remove();
+        brushGroup.call(brush);
+        return;
+      }
 
-        circleGroups.forEach(({ group, yScale, metric }) => {
-            group.selectAll("circle")
-                .attr("cx", d => newXScale(d.year))
-                .attr("cy", d => yScale(d[metric.key]));
-        });
+      // Toggle brushed years in selection
+      brushedEntries.forEach((entry) => {
+        if (activeLineSelections.fromYears.has(entry.year)) {
+          activeLineSelections.fromYears.delete(entry.year);
+        } else {
+          activeLineSelections.fromYears.add(entry.year);
+        }
+      });
 
+      updateLineChartSelections();
 
-        xAxisGroups.forEach(({ g, isBottom }) => {
-            g.call(d3.axisBottom(newXScale)
-                .tickValues(allYears)
-                .tickFormat(d3.timeFormat("%Y"))
-            );
+      emitLineChartBrush(brushedEntries); // ✅ Emit enriched payload
 
-            g.selectAll("text")
-                .text(function(d) {
-                    return isBottom && d.getFullYear() % 2 === 1 ? d3.timeFormat("%Y")(d) : "";
-                })
-                .attr("transform", "rotate(-45)")
-                .style("text-anchor", "end")
-                .attr("font-size", "10px");
-
-            if (!isBottom) {
-                g.selectAll("text").remove();
-            }
-        });
+      // Reset brush UI
+      brushGroup.call(brush.move, null);
+      brushGroup.selectAll("*").remove();
+      brushGroup.call(brush);
     }
 
+    circleGroups.push({ group: g, yScale: y, metric });
 
+    g.append("g").call(d3.axisLeft(y).ticks(4));
+
+    g.append("text")
+      .attr("x", 5)
+      .attr("y", 8)
+      .attr("text-anchor", "left")
+      .text(metric.label)
+      .attr("fill", "#000")
+      .attr("font-size", "11px")
+      .style("font-weight", "bold");
+
+    const xAxisG = clippedGroup
+      .append("g")
+      .attr("transform", `translate(0, ${chartHeight})`)
+      .call(xAxis);
+
+    xAxisGroups.push({ g: xAxisG, isBottom: i === metrics.length - 1 });
+
+    xAxisG
+      .selectAll("text")
+      .text(function (d) {
+        return d.getFullYear() % 2 === 1 ? d3.timeFormat("%Y")(d) : "";
+      })
+      .attr("transform", "rotate(-45)")
+      .style("text-anchor", "end")
+      .attr("font-size", "10px");
+
+    if (i !== metrics.length - 1) {
+      xAxisG.selectAll("text").remove();
+      xAxisG.selectAll("line").attr("stroke-opacity", 0.3);
+    }
+  });
+
+  function zoomed(event) {
+    const transform = event.transform;
+    const newXScale = transform.rescaleX(xScale);
+
+    linePaths.forEach(({ line, path }) => {
+      path.attr(
+        "d",
+        line.x((d) => newXScale(d.year))
+      );
+    });
+
+    circleGroups.forEach(({ group, yScale, metric }) => {
+      group
+        .selectAll("circle")
+        .attr("cx", (d) => newXScale(d.year))
+        .attr("cy", (d) => yScale(d[metric.key]));
+    });
+
+    xAxisGroups.forEach(({ g, isBottom }) => {
+      g.call(
+        d3
+          .axisBottom(newXScale)
+          .tickValues(allYears)
+          .tickFormat(d3.timeFormat("%Y"))
+      );
+
+      g.selectAll("text")
+        .text(function (d) {
+          return isBottom && d.getFullYear() % 2 === 1
+            ? d3.timeFormat("%Y")(d)
+            : "";
+        })
+        .attr("transform", "rotate(-45)")
+        .style("text-anchor", "end")
+        .attr("font-size", "10px");
+
+      if (!isBottom) {
+        g.selectAll("text").remove();
+      }
+    });
+  }
 }
 
 export function highlightLineChart(hoveredCards) {
-    const svg = d3.select(".LineChart svg");
-    if (svg.empty()) return;
+  const svg = d3.select(".LineChart svg");
+  if (svg.empty()) return;
 
-    const years = new Set(
-        hoveredCards.map(card => {
-            const date = new Date(card.release_date);
-            return new Date(date.getFullYear(), 0, 1).getTime(); 
-        })
-    );
+  const years = new Set(
+    hoveredCards.map((card) => {
+      const date = new Date(card.release_date);
+      return new Date(date.getFullYear(), 0, 1).getTime();
+    })
+  );
 
-    svg.selectAll(".highlight-hover-line").remove();
+  svg.selectAll(".highlight-hover-line").remove();
 
-
-    years.forEach(time => {
-        svg.append("line")
-            .attr("class", "highlight-hover-line")
-            .attr("x1", d => {
-                const x = getXCoordFromYear(new Date(time), svg);
-                return x;
-            })
-            .attr("x2", d => {
-                const x = getXCoordFromYear(new Date(time), svg);
-                return x;
-            })
-            .attr("y1", +svg.select(".hover-line").attr("y1"))
-            .attr("y2", +svg.select(".hover-line").attr("y2"))
-            .attr("stroke", "#9AA0BC")
-            .attr("stroke-width", 1.5)
-            .attr("stroke-dasharray", "4 2")
-            .lower();
-    });
+  years.forEach((time) => {
+    svg
+      .append("line")
+      .attr("class", "highlight-hover-line")
+      .attr("x1", (d) => {
+        const x = getXCoordFromYear(new Date(time), svg);
+        return x;
+      })
+      .attr("x2", (d) => {
+        const x = getXCoordFromYear(new Date(time), svg);
+        return x;
+      })
+      .attr("y1", +svg.select(".hover-line").attr("y1"))
+      .attr("y2", +svg.select(".hover-line").attr("y2"))
+      .attr("stroke", "#9AA0BC")
+      .attr("stroke-width", 1.5)
+      .attr("stroke-dasharray", "4 2")
+      .lower();
+  });
 }
 
 function getXCoordFromYear(date, svg) {
-    if (!window._lineChartXScale) return 0;
-    const marginLeft = +svg.select(".stacked-line-wrapper svg g").attr("transform")?.match(/translate\(([\d.]+)/)?.[1] || 0;
-    return window._lineChartXScale(date) + marginLeft;
+  if (!window._lineChartXScale) return 0;
+  const marginLeft =
+    +svg
+      .select(".stacked-line-wrapper svg g")
+      .attr("transform")
+      ?.match(/translate\(([\d.]+)/)?.[1] || 0;
+  return window._lineChartXScale(date) + marginLeft;
 }
 export function highlightLineChartHoverOnly(card) {
-    if (!card?.release_date) return;
+  if (!card?.release_date) return;
 
-    const year = new Date(card.release_date).getFullYear().toString();
+  const year = new Date(card.release_date).getFullYear().toString();
 
-    d3.select(".LineChart").selectAll(`circle.data-point[data-year='${year}']`)
-      .classed("hover-temp", true);
+  d3.select(".LineChart")
+    .selectAll(`circle.data-point[data-year='${year}']`)
+    .classed("hover-temp", true);
 }
 
 function highlightLineChartFromIcicle(rectInfo) {
@@ -703,19 +714,18 @@ function highlightLineChartFromIcicle(rectInfo) {
 
   d3.select(".LineChart")
     .selectAll("circle.data-point")
-    .classed("hover-temp", function() {
+    .classed("hover-temp", function () {
       const year = this.getAttribute("data-year");
       return years.has(year);
     });
 }
 export function clearLineChartHoverOnly() {
-    d3.select(".LineChart").selectAll("circle.data-point")
-      .classed("hover-temp", false);
+  d3.select(".LineChart")
+    .selectAll("circle.data-point")
+    .classed("hover-temp", false);
 }
 
-
 export function highlightLineChartHoverOnlyFromSet(setReleaseDate) {
-
   if (!setReleaseDate) return;
 
   const year = setReleaseDate.getFullYear().toString();
@@ -727,7 +737,7 @@ export function highlightLineChartHoverOnlyFromSet(setReleaseDate) {
 export function highlightLineChartHoverOnlyFromSetType(setTypeReleaseDates) {
   if (!setTypeReleaseDates) return;
 
-  const years = Array.from(setTypeReleaseDates).map(date =>
+  const years = Array.from(setTypeReleaseDates).map((date) =>
     date.getFullYear().toString()
   );
 
@@ -742,10 +752,7 @@ export function highlightLineChartHoverOnlyFromSetType(setTypeReleaseDates) {
   });
 }
 
-
-
 export function highlightAllViewsForYear(entry) {
-
   if (!entry) return;
 
   emitLineYearHover({
@@ -761,20 +768,18 @@ export function highlightAllViewsForYear(entry) {
 
 function clearAllViewsHoverOnly() {
   emitClearLineYearHover();
-
 }
 
 const activeLineSelections = {
-fromAlluvialOriginality: new Set(),
+  fromAlluvialOriginality: new Set(),
   fromAlluvialRarity: new Set(),
-  fromAlluvialLinkPairs: new Set(), 
+  fromAlluvialLinkPairs: new Set(),
   fromIcicleIdentity: new Set(),
   fromIcicleColors: new Set(),
-  fromYears: new Set(),  // 👈 ADD THIS
+  fromYears: new Set(), // 👈 ADD THIS
   yearsFromTimelineSets: new Map(),
-yearsFromSetTypes: new Map() // 👈 NEW
+  yearsFromSetTypes: new Map(), // 👈 NEW
 };
-
 
 onAlluvialClick(({ category, value }) => {
   if (!category || !value) return;
@@ -821,9 +826,9 @@ onTimelineBrush((entries) => {
     const yearStr = releaseDate.getFullYear().toString();
 
     if (store.has(name)) {
-      store.delete(name);  // toggle off
+      store.delete(name); // toggle off
     } else {
-      store.set(name, yearStr);  // toggle on
+      store.set(name, yearStr); // toggle on
     }
   });
 
@@ -833,46 +838,42 @@ onTimelineBrush((entries) => {
 onClearTimelineBrush(() => {
   activeLineSelections.yearsFromTimelineSets.clear();
   updateLineChartSelections();
-
-
 });
 
-
-
-onTimelineSetClick(setInfo => {
-  const { name,releaseDate} = setInfo;
+onTimelineSetClick((setInfo) => {
+  const { name, releaseDate } = setInfo;
   if (!name || !releaseDate) return;
 
-const yearStr = releaseDate.getFullYear().toString();
+  const yearStr = releaseDate.getFullYear().toString();
 
-if (activeLineSelections.yearsFromTimelineSets.has(name)) {
-  activeLineSelections.yearsFromTimelineSets.delete(name);
-} else {
-  activeLineSelections.yearsFromTimelineSets.set(name, yearStr);
-}
-
+  if (activeLineSelections.yearsFromTimelineSets.has(name)) {
+    activeLineSelections.yearsFromTimelineSets.delete(name);
+  } else {
+    activeLineSelections.yearsFromTimelineSets.set(name, yearStr);
+  }
 
   updateLineChartSelections();
 });
 
-onTimelineSetTypeClick(setInfo => {
+onTimelineSetTypeClick((setInfo) => {
   const { type, releaseDates } = setInfo;
   if (!type || !releaseDates) return;
 
-  const yearStrings = Array.from(releaseDates).map(d => d.getFullYear().toString());
+  const yearStrings = Array.from(releaseDates).map((d) =>
+    d.getFullYear().toString()
+  );
   const targetSet = activeLineSelections.yearsFromSetTypes;
 
   const isAlreadySelected = targetSet.has(type);
 
   if (isAlreadySelected) {
-    targetSet.delete(type);  // ❌ Remove the type's years
+    targetSet.delete(type); // ❌ Remove the type's years
   } else {
     targetSet.set(type, new Set(yearStrings)); // ✅ Add the type's years
   }
 
   updateLineChartSelections();
 });
-
 
 onIcicleClick(({ colorIdentity }) => {
   if (!colorIdentity) return;
@@ -888,8 +889,6 @@ onIcicleClick(({ colorIdentity }) => {
   updateLineChartSelections();
 });
 
-
-
 onIcicleNumClick(({ numColors }) => {
   if (!numColors) return;
 
@@ -903,7 +902,6 @@ onIcicleNumClick(({ numColors }) => {
 
   updateLineChartSelections();
 });
-
 
 function updateLineChartSelections() {
   const svg = d3.select(".LineChart svg");
@@ -920,10 +918,18 @@ function updateLineChartSelections() {
     const yearStr = d.year.getFullYear().toString();
 
     let match =
-      [...activeLineSelections.fromAlluvialOriginality].some(val => d.originalities?.has(val)) ||
-      [...activeLineSelections.fromAlluvialRarity].some(val => d.rarities?.has(val)) ||
-      [...activeLineSelections.fromIcicleIdentity].some(val => d.colorIdentities?.has(val)) ||
-      [...activeLineSelections.fromIcicleColors].some(val => d.numColorsPresent?.has(val)) ||
+      [...activeLineSelections.fromAlluvialOriginality].some((val) =>
+        d.originalities?.has(val)
+      ) ||
+      [...activeLineSelections.fromAlluvialRarity].some((val) =>
+        d.rarities?.has(val)
+      ) ||
+      [...activeLineSelections.fromIcicleIdentity].some((val) =>
+        d.colorIdentities?.has(val)
+      ) ||
+      [...activeLineSelections.fromIcicleColors].some((val) =>
+        d.numColorsPresent?.has(val)
+      ) ||
       [...activeLineSelections.fromYears].includes(yearStr);
 
     if (!match) {
@@ -939,24 +945,23 @@ function updateLineChartSelections() {
     }
 
     // ✅ Check yearsFromTimelineSets sets
-if (!match) {
-  for (const storedYear of activeLineSelections.yearsFromTimelineSets.values()) {
-    if (storedYear === yearStr) {
-      match = true;
-      break;
+    if (!match) {
+      for (const storedYear of activeLineSelections.yearsFromTimelineSets.values()) {
+        if (storedYear === yearStr) {
+          match = true;
+          break;
+        }
+      }
     }
-  }
-}
 
-if (!match) {
-  for (const yearSet of activeLineSelections.yearsFromSetTypes.values()) {
-    if (yearSet.has(yearStr)) {
-      match = true;
-      break;
+    if (!match) {
+      for (const yearSet of activeLineSelections.yearsFromSetTypes.values()) {
+        if (yearSet.has(yearStr)) {
+          match = true;
+          break;
+        }
+      }
     }
-  }
-}
-
 
     if (match) {
       matchingYears.add(d.year.getTime());
@@ -965,14 +970,18 @@ if (!match) {
 
   const y1 = +svg.select(".hover-line").attr("y1");
   const y2 = +svg.select(".hover-line").attr("y2");
-  const marginLeft = +svg.select(".stacked-line-wrapper svg g")
-    .attr("transform")?.match(/translate\(([\d.]+)/)?.[1] || 0;
+  const marginLeft =
+    +svg
+      .select(".stacked-line-wrapper svg g")
+      .attr("transform")
+      ?.match(/translate\(([\d.]+)/)?.[1] || 0;
 
-  matchingYears.forEach(t => {
+  matchingYears.forEach((t) => {
     const date = new Date(+t);
     const x = window._lineChartXScale(date) + marginLeft;
 
-    svg.append("line")
+    svg
+      .append("line")
       .attr("class", "highlight-hover-line")
       .attr("x1", x)
       .attr("x2", x)
@@ -985,10 +994,6 @@ if (!match) {
   });
 }
 
-
-
-
-
 function highlightLineChartFromAlluvialCategory(category, value) {
   if (!category || !value) return;
 
@@ -996,7 +1001,7 @@ function highlightLineChartFromAlluvialCategory(category, value) {
 
   d3.select(".LineChart")
     .selectAll("circle.data-point")
-    .classed("hover-temp", function() {
+    .classed("hover-temp", function () {
       const d = d3.select(this).datum();
       if (!d) return false;
 
@@ -1020,10 +1025,7 @@ function highlightLineChartFromAlluvialLink(originality, rarity) {
       const d = d3.select(this).datum();
       if (!d) return false;
 
-      return (
-        d.originalities?.has(lowerOrig) &&
-        d.rarities?.has(lowerRarity)
-      );
+      return d.originalities?.has(lowerOrig) && d.rarities?.has(lowerRarity);
     });
 }
 

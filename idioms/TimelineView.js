@@ -1063,7 +1063,6 @@ function highlightAllViewsForSet(setName) {
 
 function highlightAllViewsForSetType(setType) {
   const setInfo = setTypeStats.get(setType);
-  console.log(setInfo)
   if (!setInfo) return;
 
   emitSetTypeHover({
@@ -1149,7 +1148,6 @@ onLineChartClick(({ year }) => {
   } else {
     selections.add(yearStr);
   }
-  console.log(selections)
   updateTimelineSelections();
 });
 

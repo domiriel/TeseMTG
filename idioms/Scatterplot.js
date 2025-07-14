@@ -18,6 +18,8 @@ function getSymbolFromAttribute(attr) {
     return "";
 }
 
+
+
 function getXMetricTooltipText() {
   if (xMetric === "release_date") {
     return "Cards are positioned along the X-axis by their first <b>release date</b>.";
@@ -488,7 +490,8 @@ if (xMetric === "avg_price") {
     const newMax = d3.max(data, d => d.avg_price);
     logXScale.domain([newMin, newMax]);
       tagZoomKeyPoints(data, logXScale, yScale);
-  updateAxes(getSymbolFromAttribute(lastPriceAttribute));
+ const activeX = xMetric === "avg_price" ? logXScale : timeXScale;
+updateAxes(getSymbolFromAttribute(lastPriceAttribute), activeX);
   updatePointPositions(logXScale, yScale);
   } else {
     const validDates = data
@@ -501,7 +504,8 @@ const minDate = new Date(minYear, 0, 1);     // Jan 1st
 const maxDate = new Date(maxYear, 11, 31);   // Dec 31st
     timeXScale.domain([minDate, maxDate]);
       tagZoomKeyPoints(data, timeXScale, yScale);
-  updateAxes(getSymbolFromAttribute(lastPriceAttribute));
+   const activeX = xMetric === "avg_price" ? logXScale : timeXScale;
+updateAxes(getSymbolFromAttribute(lastPriceAttribute), activeX);
   updatePointPositions(timeXScale, yScale);
   }
 
@@ -880,36 +884,36 @@ const timeXScale = d3.scaleTime()
 
 
 
-function updateAxes(symbol) {
-  if (xMetric === "avg_price") {
+function updateAxes(symbol, customX = null) {
+  const xS = customX || xScale;
 
-    const logMin = Math.log10(xScale.domain()[0]);
-    const logMax = Math.log10(xScale.domain()[1]);
+  if (xMetric === "avg_price") {
+    const logMin = Math.log10(xS.domain()[0]);
+    const logMax = Math.log10(xS.domain()[1]);
     const ticks = d3.range(numTicks).map(i =>
       Math.pow(10, logMin + i / (numTicks - 1) * (logMax - logMin))
     );
-
     if (ticks.length > 0 && ticks[0] < 0.001) ticks[0] = 0.001;
 
-
     xAxisG.call(
-      d3.axisBottom(logXScale)
+      d3.axisBottom(xS)
         .tickValues(ticks)
         .tickFormat(d => `${symbol}${d.toFixed(3)}`)
     );
   } else if (xMetric === "release_date") {
     xAxisG.call(
-      d3.axisBottom(timeXScale)
+      d3.axisBottom(xS)
         .ticks(d3.timeYear.every(1))
         .tickFormat(d => {
-      const year = d.getFullYear();
-      return year % 2 === 1 ? year.toString() : ""; // Show only odd years
-    })
+          const year = d.getFullYear();
+          return year % 2 === 1 ? year.toString() : "";
+        })
     );
   }
 
   yAxisG.call(d3.axisLeft(yScale).ticks(numTicks));
 }
+
 
 
 
@@ -1318,10 +1322,15 @@ function applyZoomTransform(transform) {
   const newX = transform.rescaleX(baseXScale);
   const newY = transform.rescaleY(originalYScale);
 
+
+  console.log("[Zoom] Transform:", transform.toString());
+console.log("[Zoom] New X domain:", newX.domain());
+console.log("[Zoom] New Y domain:", newY.domain());
   // ✨ DON'T mutate base scale
   yScale.domain(newY.domain());
 
-  updateAxes(getSymbolFromAttribute(lastPriceAttribute));
+  updateAxes(getSymbolFromAttribute(lastPriceAttribute), newX);
+
 
   const gClip = d3.select(".clip-group");
 
@@ -1331,6 +1340,7 @@ function applyZoomTransform(transform) {
     .style("display", d => (currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey) ? null : "none");
 
   globalDots = gClip.selectAll("circle");
+
 }
 
 
