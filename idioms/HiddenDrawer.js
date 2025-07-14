@@ -270,14 +270,71 @@ export function createIllegalDrawer(cards, containerSelector = "body") {
 
 const illegalDrawer = container.append("div")
   .attr("id", "illegalDrawer")
-  .attr("class", "drawer")
-  .html(`
-  <div class="drawer-title" title="These cards are not shown in the visualizations because they have no price data in EUR, USD, or TIX.">
-  Unpriced Cards
-</div>
-
+.attr("class", "drawer")
+.html(`
+  <div class="illegal-header">
+    <div class="drawer-title" title="These cards are not shown in the visualizations because they have no price data in EUR, USD, or TIX.">
+      Unpriced Cards
+    </div>
+    <input id="illegalSearchInput" type="text" placeholder="Search card..." list="illegalCardNamesList">
+  </div>
   <div id="illegalCardImages"></div>
 `);
+
+
+
+
+
+illegalDrawer.select(".illegal-header")
+  .style("display", "flex")
+  .style("flex-direction", "column")
+  .style("align-items", "center")
+  .style("gap", "8px")
+  .style("margin-bottom", "12px");
+
+illegalDrawer.select("#illegal-search-bar")
+  .style("display", "flex")
+  .style("gap", "6px")
+  .style("justify-content", "center");
+
+illegalDrawer.select("#illegalSearchInput")
+  .style("padding", "4px 8px")
+  .style("font-size", "14px")
+  .style("border", "1px solid #ccc")
+  .style("border-radius", "4px")
+  .style("width", "150px");
+
+illegalDrawer.select("#illegalSearchButton")
+  .style("padding", "4px 8px")
+  .style("font-size", "14px")
+  .style("background", "#007bff")
+  .style("color", "white")
+  .style("border", "none")
+  .style("border-radius", "4px")
+  .style("cursor", "pointer");
+
+container.append("datalist")
+  .attr("id", "illegalCardNamesList");
+
+d3.select("#illegalSearchInput").on("keydown", (event) => {
+  if (event.key === "Enter") {
+    const query = event.target.value.trim().toLowerCase();
+    if (!query) return;
+
+    const index = illegalCardsInDrawer.findIndex(card => card.name.toLowerCase().includes(query));
+    if (index !== -1) {
+      illegalCurrentPage = Math.floor(index / pageSize);
+      updateIllegalDrawer(illegalCardsInDrawer);
+    } else {
+      d3.select("#illegalSearchInput").style("border", "1px solid red");
+      setTimeout(() => {
+        d3.select("#illegalSearchInput").style("border", "1px solid #ccc");
+      }, 1500);
+    }
+  }
+});
+
+
 
 
 // Append button after the drawer
@@ -286,12 +343,13 @@ const illegalButton = container.append("button")
   .style("background", "#D9534F")
   .style("color", "white")
   .text(`← (${cards.length})`)
-  .on("click", () => {
-    const isVisible = illegalDrawer.classed("visible");
-    illegalDrawer.classed("visible", !isVisible);
-    const arrow = isVisible ? "→" : "←";
-    illegalButton.text(`${arrow} (${cards.length})`);
-  });
+.on("click", () => {
+  const nowVisible = !illegalDrawer.classed("visible");
+  illegalDrawer.classed("visible", nowVisible);
+  const arrow = nowVisible ? "→" : "←"; // ← when closed, → when open
+  illegalButton.text(`${arrow} (${cards.length})`);
+});
+
 
 
   d3.select("#illegalCardImages")
@@ -299,6 +357,13 @@ const illegalButton = container.append("button")
   .style("flex-direction", "column")
   .style("align-items", "center");
   updateIllegalDrawer(cards);
+
+
+  const datalist = d3.select("#illegalCardNamesList");
+datalist.selectAll("option")
+  .data(cards)
+  .join("option")
+  .attr("value", d => d.name);
 }
 
 export function updateIllegalDrawer(cards = []) {

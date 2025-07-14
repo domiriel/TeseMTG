@@ -198,6 +198,16 @@ body {
   stroke-width: 2px !important;
 }
 
+.year-tick-timeline.hovered,
+.set-type-label.hovered {
+  fill: #d89313;
+}
+
+.year-tick-timeline.selected,
+.set-type-label.selected {
+  fill: #007bff;
+}
+
 
   .node rect.highlighted {
     stroke: orange;

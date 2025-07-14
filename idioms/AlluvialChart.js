@@ -3,6 +3,8 @@ import { updateFilterPanel } from "./FilterPanel.js";
 import {
   emitAlluvialHover,
   emitClearAlluvialHover,
+  emitAlluvialLinkHover,
+  emitClearAlluvialLinkHover,
   emitAlluvialClick,
   emitAlluvialLinkClick,
   onNumColorsHover,
@@ -14,7 +16,18 @@ import {
   onRectHover,
   onClearRectHover,
   onLineYearHover,
+onLineChartClick, 
+onLineChartBrush,
+onTimelineBrush,
+onTimelineSetClick,
+onClearTimelineBrush,
+onClearLineChartBrush,
+onClearSetTypeHover,
+onSetTypeHover,
+onTimelineSetTypeClick,
   onClearLineYearHover,
+  onIcicleClick,
+  onIcicleNumClick,
 } from "./Events.js";
 
 const customOrder = [
@@ -68,6 +81,193 @@ onSetHover((setInfo) => {
   );
 });
 
+onSetTypeHover((setInfo) => {
+  console.log(setInfo)
+  highlightAlluvialElementsHoverOnlyFromSet(
+    setInfo.originalities,
+    setInfo.rarities
+  );
+});
+
+const activeAlluvialSelections = new Map();
+
+onIcicleClick(({ colorIdentity, originalities, rarities }) => {
+  if (!colorIdentity) return;
+
+  const key = colorIdentity; // could also be numColors or other ids in other handlers
+
+  if (activeAlluvialSelections.has(key)) {
+    activeAlluvialSelections.delete(key);
+  } else {
+    activeAlluvialSelections.set(key, {
+      source: "icicleColors",
+      originalities: new Set(originalities),
+      rarities: new Set(rarities)
+    });
+  }
+
+  updateAlluvialFromSelections();
+});
+
+
+
+
+onIcicleNumClick(({ numColors, originalities, rarities }) => {
+  if (!numColors) return;
+
+  const key = numColors; // could also be numColors or other ids in other handlers
+
+  if (activeAlluvialSelections.has(key)) {
+    activeAlluvialSelections.delete(key);
+  } else {
+    activeAlluvialSelections.set(key, {
+      source: "icicleNumColors",
+      originalities: new Set(originalities),
+      rarities: new Set(rarities)
+    });
+  }
+
+  updateAlluvialFromSelections();
+});
+
+onTimelineSetClick(setInfo => {
+  const { name, originalities, rarities } = setInfo;
+  if (!name || !originalities || !rarities) return;
+
+  if (activeAlluvialSelections.has(name)) {
+    // Toggle OFF
+    activeAlluvialSelections.delete(name);
+  } else {
+    // Toggle ON: store the identities
+    activeAlluvialSelections.set(name, {
+      source: "timeline",
+      originalities: new Set(originalities),
+      rarities: new Set(rarities)
+    });
+  }
+
+  updateAlluvialFromSelections();
+});
+
+onTimelineSetTypeClick(setInfo => {
+  const { type, originalities, rarities } = setInfo;
+  if (!type || !originalities || !rarities) return;
+
+  if (activeAlluvialSelections.has(type)) {
+    // Toggle OFF
+    activeAlluvialSelections.delete(type);
+  } else {
+    // Toggle ON: store the identities
+    activeAlluvialSelections.set(type, {
+      source: "timelineSetsType",
+      originalities: new Set(originalities),
+      rarities: new Set(rarities)
+    });
+  }
+
+  updateAlluvialFromSelections();
+});
+onLineChartClick(({ year, originalities, rarities }) => {
+  if (!year) return;
+
+  const key = year; // could also be numColors or other ids in other handlers
+
+  if (activeAlluvialSelections.has(key)) {
+    activeAlluvialSelections.delete(key);
+  } else {
+    activeAlluvialSelections.set(key, {
+      source: "lineChart",
+      originalities: new Set(originalities),
+      rarities: new Set(rarities)
+    });
+  }
+
+  updateAlluvialFromSelections();
+});
+
+onLineChartBrush((entries) => {
+  entries.forEach(({ year, originalities, rarities }) => {
+    if (!year) return;
+
+    const key = year;
+
+    if (activeAlluvialSelections.has(key)) {
+      activeAlluvialSelections.delete(key);
+    } else {
+      activeAlluvialSelections.set(key, {
+        source: "lineChart",
+        originalities: new Set(originalities),
+        rarities: new Set(rarities)
+      });
+    }
+  });
+
+  updateAlluvialFromSelections();
+});
+
+onTimelineBrush((entries) => {
+  entries.forEach(({ name, originalities, rarities }) => {
+    if (!name) return;
+
+    const key = name;
+
+    if (activeAlluvialSelections.has(key)) {
+      activeAlluvialSelections.delete(key);
+    } else {
+      activeAlluvialSelections.set(key, {
+        source: "timeline",
+        originalities: new Set(originalities),
+        rarities: new Set(rarities)
+      });
+    }
+  });
+
+  updateAlluvialFromSelections();
+});
+
+onClearTimelineBrush(() => {
+  for (const [key, value] of activeAlluvialSelections.entries()) {
+    if (value.source === "timeline") {
+      activeAlluvialSelections.delete(key);
+    }
+  }
+
+  updateAlluvialFromSelections(); // to re-render Alluvial visuals
+});
+
+onClearLineChartBrush(() => {
+  for (const [key, value] of activeAlluvialSelections.entries()) {
+    if (value.source === "lineChart") {
+      activeAlluvialSelections.delete(key);
+    }
+  }
+
+  updateAlluvialFromSelections(); // to re-render Alluvial visuals
+});
+
+function updateAlluvialFromSelections() {
+  const allSelectedOriginalities = new Set();
+  const allSelectedRarities = new Set();
+  console.log("Updating Alluvial from selections:", activeAlluvialSelections);
+  // Merge all originalities and rarities from each Icicle selection
+  for (const { originalities, rarities } of activeAlluvialSelections.values()) {
+    originalities?.forEach((o) => allSelectedOriginalities.add(o));
+    rarities?.forEach((r) => allSelectedRarities.add(r));
+  }
+
+  // Go through each Alluvial node rect and update class + fill
+  d3.selectAll("g.node rect")
+    .each(function (d) {
+      const isOriginality = d.x0 === 0;
+      const match = isOriginality
+        ? allSelectedOriginalities.has(d.name)
+        : allSelectedRarities.has(d.name);
+
+      d3.select(this)
+        .classed("selectedHovered", match)
+        .attr("fill", match ? d.selectedColor : d.baseColor);
+    });
+}
 onClearSetHover(() => {
   clearAlluvialHoverOnly();
 });
@@ -366,18 +566,20 @@ export function createAlluvialChart(
               );
 
             d3.selectAll("g.node rect")
-              .filter(
-                (node) =>
-                  node.name === d.source.name || node.name === d.target.name
+              .filter(node =>
+                node.name === d.source.name || node.name === d.target.name
               )
-              .transition()
-              .duration(200)
-              .attr("transform", (node) => {
-                const centerX = node.x0 + (node.x1 - node.x0) / 2;
-                const centerY = node.y0 + (node.y1 - node.y0) / 2;
-                return `translate(${centerX}, ${centerY}) scale(1.2) translate(${-centerX}, ${-centerY})`;
-              })
-              .attr("stroke-width", 3);
+              .each(function(node) {
+                const rect = d3.select(this);
+                rect.attr("fill", node.highlightColor).classed("hover-temp", true);
+              });
+
+              emitAlluvialLinkHover({
+              originality: d.source.name.toLowerCase(),
+              rarity: d.target.name.toLowerCase()
+            });
+
+
           })
           .on("mousemove", function (event) {
             const tooltipWidth = tooltip.node().offsetWidth;
@@ -399,14 +601,16 @@ export function createAlluvialChart(
             tooltip.style("display", "none");
 
             d3.selectAll("g.node rect")
-              .filter(
-                (node) =>
-                  node.name === d.source.name || node.name === d.target.name
-              )
-              .transition()
-              .duration(200)
-              .attr("transform", null)
-              .attr("stroke-width", 1);
+  .filter(node =>
+    node.name === d.source.name || node.name === d.target.name
+  )
+  .each(function(node) {
+    const rect = d3.select(this);
+    rect.classed("hover-temp", false);
+    const isSelectedHovered = rect.classed("selectedHovered");
+    rect.attr("fill", isSelectedHovered ? node.selectedColor : node.baseColor);
+  });
+              emitClearAlluvialLinkHover();
           })
           .on("click", function (event, d) {
             emitAlluvialLinkClick({
@@ -570,24 +774,22 @@ export function createAlluvialChart(
             emitClearAlluvialHover();
           })
 .on("click", function (event, d) {
-  const rect = d3.select(this);
   const category = d.x0 === 0 ? "Originality" : "Rarity";
-  const name = d.name;
-  const value = name.toLowerCase();
-  const isSelected = rect.classed("selectedHovered");
+  const value = d.name.toLowerCase();
 
-  if (isSelected) {
-    // Unselect
-    rect.classed("selectedHovered", false)
-        .attr("fill", d.baseColor);
+  if (activeAlluvialSelections.has(value)) {
+    activeAlluvialSelections.delete(value);
   } else {
-    // Select
-    rect.classed("selectedHovered", true)
-        .attr("fill", d.selectedColor);
+    activeAlluvialSelections.set(value, {
+      originalities: category === "Originality" ? new Set([value]) : new Set(),
+      rarities: category === "Rarity" ? new Set([value]) : new Set()
+    });
   }
 
-  emitAlluvialClick({ category, value });
+  updateAlluvialFromSelections(); // handles all fill + class logic
+  emitAlluvialClick({ category, value }); // if needed for cross-view sync
 })
+
 
 
           .on("contextmenu", function (event, d) {
@@ -743,31 +945,59 @@ export function createAlluvialChart(
     .style("shape-rendering", "crispEdges")
     .style("font-weight", "bold");
 
-  dynamicLegendData.forEach((interval, i) => {
-    const legendEntry = legend
-      .append("g")
-      .attr(
-        "transform",
-        `translate(0, ${i * (rectDimensions + extraSpacing)})`
-      );
+ dynamicLegendData.forEach((interval, i) => {
+  const legendEntry = legend
+    .append("g")
+    .attr("transform", `translate(0, ${i * (rectDimensions + extraSpacing)})`);
 
-    legendEntry
-      .append("rect")
-      .attr("width", rectDimensions)
-      .attr("height", rectDimensions)
-      .style("shape-rendering", "crispEdges")
-      .attr("fill", interval.color)
-      .attr("stroke", "#000");
+  const patternId = `legend-pattern-${i}`;
 
-    legendEntry
-      .append("text")
-      .attr("x", chartWidth * 0.054)
-      .attr("y", rectDimensions * 0.25 - 1)
-      .text(interval.label)
-      .attr("fill", "#000")
-      .style("font-size", `${legendFontSize}px`)
-      .style("shape-rendering", "crispEdges");
-  });
+  // Reverse the selectedColor scale so it matches base color order
+  const reversedIndex = numBins - 1 - i;
+
+  const baseColor = interval.color;
+  const selectedColor = getSelectedColor(reversedIndex * (100 / numBins));
+
+  // Append pattern to defs
+  const defs = svg.select("defs").empty() ? svg.append("defs") : svg.select("defs");
+
+  const pattern = defs.append("pattern")
+    .attr("id", patternId)
+    .attr("width", 1)
+    .attr("height", 1)
+    .attr("patternUnits", "objectBoundingBox")
+    .attr("patternContentUnits", "objectBoundingBox");
+
+  // Top-left triangle: selectedColor
+  pattern.append("path")
+    .attr("d", "M0,0 L1,0 L0,1 Z")
+    .attr("fill", selectedColor);
+
+  // Bottom-right triangle: baseColor
+  pattern.append("path")
+    .attr("d", "M1,0 L1,1 L0,1 Z")
+    .attr("fill", baseColor);
+
+  // Use pattern as fill
+  legendEntry
+    .append("rect")
+    .attr("width", rectDimensions)
+    .attr("height", rectDimensions)
+    .style("shape-rendering", "crispEdges")
+    .attr("fill", `url(#${patternId})`)
+    .attr("stroke", "#000");
+
+  // Add label
+  legendEntry
+    .append("text")
+    .attr("x", chartWidth * 0.054)
+    .attr("y", rectDimensions * 0.25 - 1)
+    .text(interval.label)
+    .attr("fill", "#000")
+    .style("font-size", `${legendFontSize}px`)
+    .style("shape-rendering", "crispEdges");
+});
+
 
   const zeroEntry = legend
     .append("g")

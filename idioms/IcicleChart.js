@@ -2,9 +2,9 @@
 import { updateState, getState } from "../state.js";
 // @ts-ignore
 import { showLoader, hideLoader, showPopup } from "./LoadingAnimation.js";
-import {emitIcicleRectHover, emitClearRectHover,emitIcicleClick, emitClearNumColorsHover, emitNumColorsHover, emitIcicleNumClick, 
-        onHoverCard, onClearHover, onSetHover, onClearSetHover,  onClearLineYearHover, onAlluvialClick, onAlluvialLinkClick,
-        onLineYearHover, onAlluvialHover, onClearAlluvialHover } from "./Events.js";
+import {emitIcicleRectHover, emitClearRectHover,emitIcicleClick, emitClearNumColorsHover, emitNumColorsHover, emitIcicleNumClick, onLineChartClick,
+        onHoverCard, onClearHover, onSetHover, onSetTypeHover, onClearSetHover,  onClearLineYearHover, onAlluvialClick, onAlluvialLinkClick, onAlluvialLinkHover, onClearAlluvialLinkHover,
+        onLineYearHover, onAlluvialHover, onClearAlluvialHover, onLineChartBrush, onTimelineSetClick, onTimelineBrush, onClearTimelineBrush, onClearLineChartBrush, onTimelineSetTypeClick } from "./Events.js";
 let globalRects = null;  
 let clickTimer = null;
 
@@ -29,6 +29,13 @@ onSetHover(setInfo => {
   );
 })
 
+onSetTypeHover(setInfo => {
+
+  highlightIcicleRectHoverOnlyFromSet(
+    setInfo.colorIdentities
+  );
+})
+
 onClearSetHover(() => {
   clearIcicleHoverOnly();
 })
@@ -40,16 +47,130 @@ onLineYearHover(yearInfo => {
   );
 })
 
+
+onAlluvialLinkHover(({ originality, rarity }) => {
+  highlightIcicleRectHoverOnlyFromAlluvialLink(originality, rarity);
+  // your highlight logic here
+});
+
+onClearAlluvialLinkHover(() => {
+  clearIcicleHoverOnly();
+})
+
+
 const activeSelections = {
-  fromAlluvial: new Set(),
-  fromLineChart: new Set(), // or other views
-  // add more sources if needed
+      fromAlluvialOriginality: new Set(),
+      fromAlluvialRarity: new Set(),
+      fromAlluvialLinkPairs: new Set(),
+      fromIcicleIdentity: new Set(),
+      fromIcicleColors: new Set(),
+      fromYears: new Set(),
+      colorIdentitiesFromTimelineSets: new Map(),
+      colorIdentitiesFromTimelineSetsTypes: new Map(),
 };
+
+onLineChartClick(({year}) => {
+  const set = activeSelections.fromYears;
+  if (set.has(year)) {
+    set.delete(year);
+  } else {
+    set.add(year);
+  }
+
+  updateIcicleSelections();
+
+
+
+});
+
+onLineChartBrush((entries) => {
+  const set = activeSelections.fromYears;
+  entries.forEach(({ year}) => {
+    if (!year) return;
+
+
+  if (set.has(year)) {
+    set.delete(year);
+  } else {
+    set.add(year);
+  }
+  });
+
+  updateIcicleSelections();
+});
+
+onTimelineBrush((entries) => {
+  const store = activeSelections.colorIdentitiesFromTimelineSets;
+
+  entries.forEach(({ name, colorIdentities }) => {
+    if (!name || !colorIdentities) return;
+
+    if (store.has(name)) {
+      store.delete(name);  // toggle off
+    } else {
+      store.set(name, new Set(colorIdentities));  // toggle on
+    }
+  });
+
+  updateIcicleSelections();
+});
+
+onClearTimelineBrush(() =>{
+  activeSelections.colorIdentitiesFromTimelineSets.clear();
+  updateIcicleSelections();
+
+} )
+
+onClearLineChartBrush(() =>{
+  activeSelections.fromYears.clear();
+  updateIcicleSelections();
+
+} )
+onTimelineSetClick(setInfo => {
+  const { name, colorIdentities } = setInfo;
+  if (!name || !colorIdentities) return;
+
+  if (activeSelections.colorIdentitiesFromTimelineSets.has(name)) {
+    // Toggle OFF
+    activeSelections.colorIdentitiesFromTimelineSets.delete(name);
+  } else {
+    // Toggle ON: store the identities
+    activeSelections.colorIdentitiesFromTimelineSets.set(name, new Set(colorIdentities));
+  }
+
+  updateIcicleSelections();
+});
+
+onTimelineSetTypeClick(setInfo => {
+  const { type, colorIdentities } = setInfo;
+  if (!type || !colorIdentities) return;
+
+  if (activeSelections.colorIdentitiesFromTimelineSetsTypes.has(type)) {
+    // Toggle OFF
+    activeSelections.colorIdentitiesFromTimelineSetsTypes.delete(type);
+  } else {
+    // Toggle ON: store the identities
+    activeSelections.colorIdentitiesFromTimelineSetsTypes.set(type, new Set(colorIdentities));
+  }
+
+  updateIcicleSelections();
+});
+
 
 
 onAlluvialClick(({ category, value }) => {
-  const key = `${category}|${value.toLowerCase()}`;
-  const selections = activeSelections.fromAlluvial;
+  if (!category || !value) return;
+
+  const key = value.toLowerCase();
+  let selections;
+
+  if (category === "Originality") {
+    selections = activeSelections.fromAlluvialOriginality;
+  } else if (category === "Rarity") {
+    selections = activeSelections.fromAlluvialRarity;
+  } else {
+    return; // unsupported category
+  }
 
   if (selections.has(key)) {
     selections.delete(key);
@@ -60,34 +181,105 @@ onAlluvialClick(({ category, value }) => {
   updateIcicleSelections();
 });
 
-function updateIcicleSelections() {
-  const combinedSelections = new Set();
+onAlluvialLinkClick(({ originality, rarity }) => {
+const pairKey = `${originality}|${rarity}`;
+  const set = activeSelections.fromAlluvialLinkPairs;
 
-  // Merge all sources
-  for (const source of Object.values(activeSelections)) {
-    for (const key of source) {
-      combinedSelections.add(key);
-    }
+  if (set.has(pairKey)) {
+    set.delete(pairKey);
+  } else {
+    set.add(pairKey);
   }
 
+  updateIcicleSelections();
+});
+
+
+
+
+function updateIcicleSelections() {
   d3.selectAll("rect.icicle-rect")
     .each(function(d) {
       const rect = d3.select(this);
       let shouldSelect = false;
 
-      for (const sel of combinedSelections) {
-        const [cat, val] = sel.split("|");
-        if (d.depth !== 2) continue;
+      if (d.depth !== 2) return;
 
-        if (cat === "Originality" && d.data.originalities?.includes(val)) shouldSelect = true;
-        if (cat === "Rarity" && d.data.rarities?.includes(val)) shouldSelect = true;
-        // Extend this for more categories if needed
+      for (const val of activeSelections.fromAlluvialOriginality) {
+        if (d.data.originalities?.includes(val)) {
+          shouldSelect = true;
+          break;
+        }
       }
+
+      if (!shouldSelect) {
+        for (const val of activeSelections.fromAlluvialRarity) {
+          if (d.data.rarities?.includes(val)) {
+            shouldSelect = true;
+            break;
+          }
+        }
+      }
+
+      for (const pair of activeSelections.fromAlluvialLinkPairs) {
+      const [orig, rare] = pair.split("|");
+
+      if (
+        d.data.originalities?.includes(orig) &&
+        d.data.rarities?.includes(rare)
+      ) {
+        shouldSelect = true;
+        break;
+      }
+      }
+
+      for (const val of activeSelections.fromIcicleIdentity) {
+        if (val === d.data.name) {
+          shouldSelect = true;
+          break;
+        }
+      }
+
+      for (const val of activeSelections.fromIcicleColors) {
+        if (d.data.colorIdentity?.includes(val)) {
+          shouldSelect = true;
+          break;
+        }
+      }
+
+      for (const val of activeSelections.fromYears) {
+        if (d.data.years?.includes(val)) {
+          shouldSelect = true;
+          break;
+        }
+      }
+
+
+ if (!shouldSelect) {
+  const identity = d.data.name;
+  for (const identitySet of activeSelections.colorIdentitiesFromTimelineSets.values()) {
+    if (identitySet.has(identity)) {
+      shouldSelect = true;
+      break;
+    }
+  }
+}
+
+ if (!shouldSelect) {
+  const identity = d.data.name;
+  for (const identitySet of activeSelections.colorIdentitiesFromTimelineSetsTypes.values()) {
+    if (identitySet.has(identity)) {
+      shouldSelect = true;
+      break;
+    }
+  }
+}
 
       rect.classed("selectedHovered", shouldSelect)
           .attr("fill", shouldSelect ? d.data.selectedColor : d.data.color);
     });
 }
+
 
 
 
@@ -506,13 +698,42 @@ const levelHeight = chartHeight / depth;
 
               clickTimer = setTimeout(() => {
                 if (d.depth === 1) {
-                  // Group-level click (e.g., "1 Color", "2 Colors", etc.)
-                  emitIcicleNumClick({
-                    numColors: d.data.numColors
-                  });
+                 const children = d.children || [];
+                const identities = children.map(child => child.data.name);
+
+                const allAlreadySelected = identities.every(id => activeSelections.fromIcicleIdentity.has(id));
+
+                if (allAlreadySelected) {
+                  identities.forEach(id => activeSelections.fromIcicleIdentity.delete(id));
+                } else {
+                  identities.forEach(id => activeSelections.fromIcicleIdentity.add(id));
+                }
+
+                updateIcicleSelections();
+
+                emitIcicleNumClick({
+                  numColors: d.data.numColors,
+                  originalities: d.data.originalities,
+                  rarities: d.data.rarities
+                });
                 } else if (d.depth === 2) {
                   // Identity-level click (e.g., "W", "UB", "Colorless", etc.)
-                  emitIcicleClick({ colorIdentity: d.data.name });
+
+                  const identity = d.data.name;
+                    if (activeSelections.fromIcicleIdentity.has(identity)) {
+                      activeSelections.fromIcicleIdentity.delete(identity);
+                    } else {
+                      activeSelections.fromIcicleIdentity.add(identity);
+                    }
+
+                    // Update visuals based on new selection state
+                  updateIcicleSelections();
+                  emitIcicleClick({
+                    colorIdentity: d.data.name,
+                    originalities: d.data.originalities,  // should be a Set<string> or array
+                    rarities: d.data.rarities             // should be a Set<string> or array
+                  });
+
                 }
 
                 clickTimer = null;
@@ -775,26 +996,48 @@ legend.append("text")
     .style("font-weight", "bold");
 
 
-    colorScale.slice().reverse().forEach((interval, i) => {
-        const legendEntry = legend.append("g")
-            .attr("transform", `translate(0, ${i * (rectDimensions + extraSpacing)})`);
+    const reversedColorScale = colorScale.slice().reverse();
+const reversedSelectedScale = colorScaleSelected.slice().reverse();
 
-        legendEntry.append("rect")
-            .attr("width", rectDimensions)
-            .attr("class", "legend-box")
-            .attr("height", rectDimensions)
-            .style("shape-rendering", "crispEdges")
-            .attr("fill", interval.color)
-            .attr("stroke", "#000");
+reversedColorScale.forEach((interval, i) => {
+  const defs = svg.select("defs").empty() ? svg.append("defs") : svg.select("defs");
+  const legendEntry = legend.append("g")
+    .attr("transform", `translate(0, ${i * (rectDimensions + extraSpacing)})`);
 
-        legendEntry.append("text")
-            .attr("x", chartWidth * 0.054)
-            .attr("y", rectDimensions * 0.25 -1)
-            .text(`${interval.range[1]}%`)
-            .attr("fill", "#000")
-            .style("font-size", `${legendFontSize}px`)
-            .style("shape-rendering", "crispEdges");
-    });
+  const patternId = `icicle-legend-pattern-${i}`;
+  const selectedColor = reversedSelectedScale[i].color;
+
+  const pattern = defs.append("pattern")
+    .attr("id", patternId)
+    .attr("width", 1)
+    .attr("height", 1)
+    .attr("patternUnits", "objectBoundingBox")
+    .attr("patternContentUnits", "objectBoundingBox");
+
+  pattern.append("path")
+    .attr("d", "M0,0 L1,0 L0,1 Z")
+    .attr("fill", selectedColor);
+
+  pattern.append("path")
+    .attr("d", "M1,0 L1,1 L0,1 Z")
+    .attr("fill", interval.color);
+
+  legendEntry.append("rect")
+    .attr("width", rectDimensions)
+    .attr("height", rectDimensions)
+    .style("shape-rendering", "crispEdges")
+    .attr("fill", `url(#${patternId})`)
+    .style("stroke", "#000") 
+
+  legendEntry.append("text")
+    .attr("x", chartWidth * 0.054)
+    .attr("y", rectDimensions * 0.25 - 1)
+    .text(`${interval.range[1]}%`)
+    .attr("fill", "#000")
+    .style("font-size", `${legendFontSize}px`)
+    .style("shape-rendering", "crispEdges");
+});
+
 
     
 const zeroLabel = legend.append("g")
@@ -907,7 +1150,7 @@ function highlightAllViewsForRect(rectName) {
       name: rectDatum.data.name,
       isGroup: false,
       colorIdentities: new Set([
-        rectDatum.data.name === "Colorless" ? "" : rectDatum.data.name
+        rectDatum.data.name === "Colorless" ? "Colorless" : rectDatum.data.name
       ]),
       numColors: undefined,
       originalities: new Set(rectDatum.data.originalities || []),
@@ -924,6 +1167,7 @@ function highlightAllViewsForRect(rectName) {
     });
   }
 }
+
 
 
 
@@ -950,7 +1194,25 @@ function highlightIcicleRectHoverOnlyFromAlluvial(category, value) {
 }
 
 
+function highlightIcicleRectHoverOnlyFromAlluvialLink(originality, rarity) {
+  const lowerOrig = originality.toLowerCase();
+  const lowerRarity = rarity.toLowerCase();
 
+  d3.selectAll("rect.icicle-rect")
+    .filter(d => {
+      return (
+        d &&
+        d.depth === 2 &&
+        d.data.originalities?.includes(lowerOrig) &&
+        d.data.rarities?.includes(lowerRarity)
+      );
+    })
+    .each(function(d) {
+      const rect = d3.select(this);
+      rect.attr("fill", d.data.highlightColor);
+      rect.classed("hover-temp", true);
+    });
+}
 
 function clearAllViewsHoverOnly() {
   emitClearRectHover();

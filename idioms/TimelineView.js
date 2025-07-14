@@ -1,14 +1,15 @@
 
 import { updateState, getState } from "../state.js";
 import { updateFilterPanel } from "./FilterPanel.js";
-import { emitSetHover, emitClearHover, onNumColorsHover, onClearNumColorsHover, onAlluvialClick, onAlluvialLinkClick,
-        onHoverCard, onClearHover, emitClearSetHover,emitTimelineSetClick, 
-        emitYearClick, onRectHover, onClearRectHover, onClearLineYearHover, 
-        onLineYearHover, onAlluvialHover, onClearAlluvialHover } from "./Events.js";
+import { emitSetHover, emitClearHover, onNumColorsHover, onClearNumColorsHover, onAlluvialClick, onAlluvialLinkClick, emitSetTypeHover, emitClearSetTypeHover,
+        onHoverCard, onClearHover, emitClearSetHover,emitTimelineSetClick, onAlluvialLinkHover, onClearAlluvialLinkHover,
+        emitYearClick, onRectHover, onClearRectHover, onClearLineYearHover, onLineChartClick, onLineChartBrush, emitLineChartClick, emitTimelineSetTypeClick,
+        onLineYearHover, onAlluvialHover, onClearAlluvialHover, onIcicleClick, onIcicleNumClick, emitTimelineBrush, emitClearTimelineBrush, onClearLineChartBrush} from "./Events.js";
 
 let localSelectedYears = new Set();
 let localSelectedSetNames = new Set();
-
+const yearStats = new Map();     // key: "2020", value: { totalCardCount, rarities, originalities, colorIdentities, setNames }
+const setTypeStats = new Map();
 
 function getDiscreteColor(percentage) {
   if (percentage < 20) return "#ceb397";
@@ -78,6 +79,13 @@ onAlluvialHover(({ category, value }) => {
   highlightTimelineSetsFromAlluvialCategory(category, value);
 });
 
+onAlluvialLinkHover(({ originality, rarity }) => {
+  highlightTimelineSetsFromAlluvialLink(originality, rarity)
+});
+
+onClearAlluvialLinkHover(() => {
+  clearTimelineHoverOnly();
+});
 onClearAlluvialHover(() => {
   clearTimelineHoverOnly();
 });
@@ -140,7 +148,8 @@ export function createTimelineView(data, containerId, isUpdate = false) {
     }
 });
     let setMap = new Map();
-
+ yearStats.clear();      // reuse the existing map
+    setTypeStats.clear();   // reuse instead of redefining
     data.forEach(card => {
         let setName = card.set_name;
         if (!setMap.has(setName)) {
@@ -195,6 +204,7 @@ const dynamicLegendData = Array.from({ length: numBins }, (_, i) => {
     min,
     max,
     color: getDiscreteColor(i * (100 / numBins)),
+    colorSelected: getSelectedColor(i * (100 / numBins)),
     label: `${Math.round(min)}–${Math.round(max-1)}`
   };
 }).reverse();
@@ -216,22 +226,61 @@ const timelineTooltipText = `
 
 
 
-    uniqueSets.forEach(set => {
-        const percent = ((set.cardCount - countRange.min) / (countRange.max - countRange.min)) * 100;
-        set.baseColor = getDiscreteColor(percent)
-        set.highlightColor = getHighlightedColor(percent);
+uniqueSets.forEach(set => {
+  const percent = ((set.cardCount - countRange.min) / (countRange.max - countRange.min)) * 100;
+  set.baseColor = getDiscreteColor(percent);
+  set.highlightColor = getHighlightedColor(percent);
   set.selectedColor = getSelectedColor(percent);
 
-        const year = set.releaseDate.getFullYear().toString();
-        const type = set.setType;
+  const year = set.releaseDate.getFullYear().toString();
+  const type = set.setType;
 
-        if (!yearTypeCounts.has(year)) yearTypeCounts.set(year, new Map());
-        if (!yearTypeCounts.get(year).has(type)) yearTypeCounts.get(year).set(type, 0);
-        yearTypeCounts.get(year).set(type, yearTypeCounts.get(year).get(type) + 1);
+  // ✅ Count sets by type per year
+  if (!yearTypeCounts.has(year)) yearTypeCounts.set(year, new Map());
+  if (!yearTypeCounts.get(year).has(type)) yearTypeCounts.get(year).set(type, 0);
+  yearTypeCounts.get(year).set(type, yearTypeCounts.get(year).get(type) + 1);
 
-        if (!typeCounts.has(type)) typeCounts.set(type, 0);
-        typeCounts.set(type, typeCounts.get(type) + 1);
+  // ✅ Count total sets per type
+  if (!typeCounts.has(type)) typeCounts.set(type, 0);
+  typeCounts.set(type, typeCounts.get(type) + 1);
+
+  // ✅ Full aggregation per year
+  if (!yearStats.has(year)) {
+    yearStats.set(year, {
+      totalCardCount: 0,
+      rarities: new Set(),
+      originalities: new Set(),
+      colorIdentities: new Set(),
+      setNames: new Set()
     });
+  }
+  const y = yearStats.get(year);
+  y.totalCardCount += set.cardCount;
+  set.rarities.forEach(r => y.rarities.add(r));
+  set.originalities.forEach(o => y.originalities.add(o));
+  set.colorIdentities.forEach(c => y.colorIdentities.add(c));
+  y.setNames.add(set.name);
+
+  // ✅ Full aggregation per set type
+  if (!setTypeStats.has(type)) {
+    setTypeStats.set(type, {
+      totalCardCount: 0,
+      rarities: new Set(),
+      originalities: new Set(),
+      colorIdentities: new Set(),
+      setNames: new Set(),
+      releaseDates: new Set(),
+    });
+  }
+  const t = setTypeStats.get(type);
+  t.totalCardCount += set.cardCount;
+  set.rarities.forEach(r => t.rarities.add(r));
+  set.originalities.forEach(o => t.originalities.add(o));
+  set.colorIdentities.forEach(c => t.colorIdentities.add(c));
+  
+  t.setNames.add(set.name);
+  t.releaseDates.add(set.releaseDate);
+});
 
 
   
@@ -280,8 +329,8 @@ const infoTextSize = Math.min(containerBounds.width * 0.485 * 0.0187, 15);
 const infoGroup = container.append("div")
   .attr("class", "timeline-info-icon")
   .style("position", "absolute")
-  .style("top", "12px")
-  .style("left", "12px")
+  .style("top", "5px")
+  .style("left", "5px")
   .style("width", `${iconSize}px`)
   .style("height", `${iconSize}px`)
   .style("background", "#8A9CE4")
@@ -375,22 +424,21 @@ const xScale = d3.scaleTime()
             .classed("year-tick-timeline", true)
             .style("text-anchor", "middle")
             .style("cursor", "pointer")
-            .on("click", function (event, d) {
-                const year = d.getFullYear().toString();
+.on("click", function (event, d) {
+    const year = d.getFullYear().toString();
+    const yearInfo = yearStats.get(year);
+
+    const isSelected = activeTimelineSelections.fromYears.has(year); // ✅ both are strings
 
 
-                const isSelected = localSelectedYears.has(year);
 
-                if (isSelected) {
-                    localSelectedYears.delete(year);
-                } else {
-                    localSelectedYears.add(year);
-                }
+    emitLineChartClick({
+        year: year,
+        originalities: yearInfo.originalities,
+        rarities: yearInfo.rarities
+    });
+})
 
-                updateYearTickStyles();
-                updateSetRectOpacity();  
-                emitYearClick({year});
-            })
             .on("contextmenu", function (event, d) {
     event.preventDefault();
     const year = d.getFullYear().toString();
@@ -415,8 +463,9 @@ const xScale = d3.scaleTime()
     });
     })
             .on("mouseover", function (event, d) {
-
+              d3.select(this).classed("hovered", true);
     const year = d.getFullYear().toString();
+     const yearInfo = yearStats.get(year);
     const types = yearTypeCounts.get(year);
     let totalSets = 0;
     if (types) {
@@ -449,8 +498,9 @@ tooltip.style("left", `${left}px`)
        .style("top", `${top}px`);
 
 })
-.on("mouseout", () => {
-    d3.select("#tooltip").style("display", "none");
+.on("mouseout", function () {
+  d3.select(this).classed("hovered", false);
+  d3.select("#tooltip").style("display", "none");
 });
 
 
@@ -502,13 +552,13 @@ const extraSpacing = 0;
 const svgWidth = containerWidth;  // you already use this for sizing
 const legendFontSize = Math.min(0.1*chartHeight, 12);
 
-const legendContainer =scrollContainer.append("div")
+const legendContainer =wrapper.append("div")
   .attr("class", "timeline-color-legend")
   .style("position", "absolute")
-  .style("top", "10px") // Adjust as needed
+  .style("top", "15px") // Adjust as needed
   .style("left", "-10px") // Adjust as needed
   .style("padding", "6px 10px")
-    .style("overflow", "hidden")
+  .style("overflow", "hidden")
   .style("box-sizing", "border-box")
   .style("border-radius", "6px")
   .style("font-size", `${legendFontSize}px`)
@@ -520,6 +570,8 @@ const legendContainer =scrollContainer.append("div")
 
 
 dynamicLegendData.forEach((interval, i) => {
+
+
   const row = legendContainer.append("div")
     .style("display", "flex")
     .style("align-items", "flex-start")
@@ -528,7 +580,8 @@ dynamicLegendData.forEach((interval, i) => {
   row.append("div")
     .style("width", `${rectDimensions}px`)
     .style("height", `${rectDimensions}px`)
-    .style("background-color", interval.color)
+    .style("background", `linear-gradient(135deg, ${interval.colorSelected} 50%, ${interval.color} 50%)`)
+
     .style("border", "1px solid #000")
 
 if (i === dynamicLegendData.length - 1) {
@@ -644,14 +697,12 @@ chartGroup.append("g")
             })
              .on("click", function (event, d) {
 
-                const isSelected = localSelectedSetNames.has(d.name);
+                const isSelected = activeTimelineSelections.sets.has(d.name);
             
                 if (isSelected) {
-                    localSelectedSetNames.delete(d.name);
-                    d3.select(this).attr("fill", d.baseColor);
+                    activeTimelineSelections.sets.delete(d.name);
                 } else {
-                    localSelectedSetNames.add(d.name);
-                    d3.select(this).attr("fill", d.selectedColor);
+                    activeTimelineSelections.sets.add(d.name);
                 }
                 emitTimelineSetClick({
             name: d.name,
@@ -662,7 +713,9 @@ chartGroup.append("g")
             rarities: new Set(d.rarities),
             colorIdentities: new Set(d.colorIdentities)
         });
+                          updateTimelineSelections();
             })
+
 .on("contextmenu", function (event, d) {
     event.preventDefault();
 
@@ -713,8 +766,45 @@ chartGroup.append("g")
             .attr("font-size", "12px")
             .attr("fill", "black")
             .text(d => d)
-            .on("click", function (event, type) {
-                const updatedFilters = getClonedFilters();
+.on("click", function (event, type) {
+    const isAlreadySelected = [...activeTimelineSelections.sets]
+        .every(name => {
+            const set = uniqueSets.find(s => s.name === name);
+            return set?.setType !== type;
+        });
+
+    if (isAlreadySelected) {
+        activeTimelineSelections.setTypes.add(type);
+        uniqueSets.forEach(set => {
+            if (set.setType === type) {
+                activeTimelineSelections.sets.add(set.name);
+            }
+        });
+    } else {
+        // ❌ Remove all sets of this type
+        activeTimelineSelections.setTypes.delete(type);
+        uniqueSets.forEach(set => {
+            if (set.setType === type) {
+                activeTimelineSelections.sets.delete(set.name);
+            }
+        });
+    }
+
+    emitTimelineSetTypeClick({
+        type,
+        releaseDates: setTypeStats.get(type)?.releaseDates || new Set(),
+        originalities: setTypeStats.get(type)?.originalities || new Set(),
+        rarities: setTypeStats.get(type)?.rarities || new Set(),
+        colorIdentities: setTypeStats.get(type)?.colorIdentities || new Set()
+    });
+
+    updateTimelineSelections();
+})
+
+            .on("contextmenu", function (event, type) {
+              event.preventDefault();
+
+              const updatedFilters = getClonedFilters();
 
 
                 if (!updatedFilters["Set Types"]) {
@@ -731,9 +821,13 @@ chartGroup.append("g")
                     selectedFilters: updatedFilters,
                     updateContext: "TimelineFilter"
                 });
-            })
+
+})
             .on("mouseover", function (event, type) {
+                d3.select(this).classed("hovered", true);
+                 const setInfo = setTypeStats.get(type);
                 const count = typeCounts.get(type) || 0;
+                highlightAllViewsForSetType(type);
                 tooltip
                 .style("display", "block")
                 .html(`<strong>${type}</strong><br>${count} sets`);
@@ -757,10 +851,15 @@ chartGroup.append("g")
 
                 tooltip.style("left", `${left}px`)
                     .style("top", `${top}px`);
-
+                
 
             })
-            .on("mouseout", () => { d3.select("#tooltip").style("display", "none"); }),
+            .on("mouseout", function () {
+              d3.select(this).classed("hovered", false);
+              clearAllViewsHoverOnly(); // Clear highlights in all views
+              
+              
+              d3.select("#tooltip").style("display", "none"); }),
         update => update,
         exit => exit.remove()
     )
@@ -815,73 +914,59 @@ function zoomed(event) {
 
 
 function brushed(event) {
-    if (!event.selection) return; // Let brushing happen first
+  if (!event.selection) return;
 
-    const [[x0, y0], [x1, y1]] = event.selection;
+  const [[x0, y0], [x1, y1]] = event.selection;
+  const selected = [];
+  const brushedSets = [];
+d3.selectAll(".set-rect").each(function (d) {
+    const rect = d3.select(this);
+    const x = +rect.attr("x");
+    const y = +rect.attr("y");
+    const width = +rect.attr("width");
+    const height = +rect.attr("height");
 
-    const selected = [];
-    d3.selectAll(".set-rect").each(function (d) {
-        const rect = d3.select(this);
-        const x = +rect.attr("x");
-        const y = +rect.attr("y");
-        const width = +rect.attr("width");
-        const height = +rect.attr("height");
+    if (
+      x + width >= x0 &&
+      x <= x1 &&
+      y + height >= y0 &&
+      y <= y1
+    ) {
+      brushedSets.push({
+        name: d.name,
+        originalities: new Set(d.originalities),
+        rarities: new Set(d.rarities),
+        colorIdentities: new Set(d.colorIdentities),
+        releaseDate : d.releaseDate
 
-        if (
-            x + width >= x0 &&
-            x <= x1 &&
-            y + height >= y0 &&
-            y <= y1
-        ) {
-            selected.push(d.name);
-        }
-    });
-
-    const updatedFilters = getClonedFilters();
-    if (!updatedFilters["Set Names"]) {
-        updatedFilters["Set Names"] = new Set();
+      });
     }
+  });
 
-    if (selected.length === 0) {
-        // 💨 No sets in brush: clear all Set Name filters
-        updatedFilters["Set Names"].clear();
 
-        updateState({
-            selectedFilters: updatedFilters,
-            updateContext: "TimelineFilter"
-        });
+  if (brushedSets.length === 0) {
+    activeTimelineSelections.sets.clear();
+    emitClearTimelineBrush();
+    updateTimelineSelections();
+    chartGroup.select(".brush").call(brush.move, null);
+    return;
+  }
 
-        // Reset brush
-        d3.select(chartGroup.select(".brush").node()).call(brush.move, null);
-        chartGroup.select(".brush").remove();
-        chartGroup.call(brush);
-        return;
+brushedSets.forEach(set => {
+    if (activeTimelineSelections.sets.has(set.name)) {
+      activeTimelineSelections.sets.delete(set.name);
+    } else {
+      activeTimelineSelections.sets.add(set.name);
     }
+  });
 
-    // 🔁 Toggle each selected set
-    let changed = false;
-    selected.forEach(name => {
-        if (updatedFilters["Set Names"].has(name)) {
-            updatedFilters["Set Names"].delete(name);
-            changed = true;
-        } else {
-            updatedFilters["Set Names"].add(name);
-            changed = true;
-        }
-    });
-
-    if (changed) {
-        updateState({
-            selectedFilters: updatedFilters,
-            updateContext: "TimelineFilter"
-        });
-    }
-
-    // Reset brush
-    d3.select(chartGroup.select(".brush").node()).call(brush.move, null);
-    chartGroup.select(".brush").remove();
-    chartGroup.call(brush);
+  updateTimelineSelections();
+  emitTimelineBrush(brushedSets);
+  // ✅ Clear brush selection but KEEP the brush UI
+  chartGroup.select(".brush").call(brush.move, null);
 }
+
+
 
 
 }
@@ -976,6 +1061,21 @@ function highlightAllViewsForSet(setName) {
 });
 }
 
+function highlightAllViewsForSetType(setType) {
+  const setInfo = setTypeStats.get(setType);
+  console.log(setInfo)
+  if (!setInfo) return;
+
+  emitSetTypeHover({
+    name: setType,
+    releaseDates: setInfo.releaseDates,
+    originalities: new Set(setInfo.originalities),
+    rarities: new Set(setInfo.rarities),
+    colorIdentities: new Set(setInfo.colorIdentities)
+});
+}
+
+
 function clearAllViewsHoverOnly() {
   emitClearSetHover();
 
@@ -992,59 +1092,208 @@ export function highlightTimelineSetsFromYearInfo(yearInfo) {
 }
 
 const activeTimelineSelections = {
-  fromAlluvial: new Set(),
-  // optionally later: fromIcicle, fromLineChart, etc.
+  fromAlluvialOriginality: new Set(),
+  fromAlluvialRarity: new Set(),
+  fromAlluvialLinkPairs: new Set(),
+  fromIcicleIdentity: new Set(),
+  fromIcicleColors: new Set(),
+  fromYears: new Set(),
+  sets: new Set(),
+  setTypes: new Set(),
 };
 
 onAlluvialClick(({ category, value }) => {
   if (!category || !value) return;
 
-  const key = `${category}|${value.toLowerCase()}`;
-  const selectionSet = activeTimelineSelections.fromAlluvial;
+  const key = value.toLowerCase();
+  let selections;
 
-  if (selectionSet.has(key)) {
-    selectionSet.delete(key);
+  if (category === "Originality") {
+    selections = activeTimelineSelections.fromAlluvialOriginality;
+  } else if (category === "Rarity") {
+    selections = activeTimelineSelections.fromAlluvialRarity;
   } else {
-    selectionSet.add(key);
+    return; // unsupported category
+  }
+
+  if (selections.has(key)) {
+    selections.delete(key);
+  } else {
+    selections.add(key);
   }
 
   updateTimelineSelections();
 });
 
+onAlluvialLinkClick(({ originality, rarity }) => {
+  const pairKey = `${originality}|${rarity}`;
+  const set = activeTimelineSelections.fromAlluvialLinkPairs;
+
+  if (set.has(pairKey)) {
+    set.delete(pairKey);
+  } else {
+    set.add(pairKey);
+  }
+
+  updateTimelineSelections();
+});
+
+onLineChartClick(({ year }) => {
+  if (!year) return;
+
+  const yearStr = year.toString(); // 🔒 ensure it's a string
+  const selections = activeTimelineSelections.fromYears;
+
+  if (selections.has(yearStr)) {
+    selections.delete(yearStr);
+  } else {
+    selections.add(yearStr);
+  }
+  console.log(selections)
+  updateTimelineSelections();
+});
+
+
+onLineChartBrush((entries) => {
+  const set = activeTimelineSelections.fromYears;
+  entries.forEach(({ year}) => {
+    if (!year) return;
+
+
+  if (set.has(year)) {
+    set.delete(year);
+  } else {
+    set.add(year);
+  }
+  });
+
+ updateTimelineSelections();
+});
+
+
+onClearLineChartBrush(() => {
+  activeTimelineSelections.fromYears.clear();
+
+ updateTimelineSelections();
+});
+
+onIcicleClick(({ colorIdentity }) => {
+  if (!colorIdentity) return;
+
+  const selections = activeTimelineSelections.fromIcicleIdentity;
+
+  if (selections.has(colorIdentity)) {
+    selections.delete(colorIdentity);
+  } else {
+    selections.add(colorIdentity);
+  }
+
+  updateTimelineSelections();
+});
+
+onIcicleNumClick(({ numColors }) => {
+  if (!numColors) return;
+
+  const selections = activeTimelineSelections.fromIcicleColors;
+
+  if (selections.has(numColors)) {
+    selections.delete(numColors);
+  } else {
+    selections.add(numColors);
+  }
+
+  updateTimelineSelections();
+});
+
+
 function updateTimelineSelections() {
   const rects = d3.selectAll(".set-rect");
 
-  // Gather all active selection keys
-  const allKeys = new Set();
-  for (const set of Object.values(activeTimelineSelections)) {
-    for (const key of set) allKeys.add(key);
-  }
-
   rects.each(function(d) {
     const rect = d3.select(this);
-
     let isMatched = false;
-    for (const key of allKeys) {
-      const [cat, val] = key.split("|");
 
-      if (cat === "Originality") {
-        if ([...(d.originalities || [])].some(o => o === val)) {
-          isMatched = true;
-          break;
-        }
-      } else if (cat === "Rarity") {
+    for (const val of activeTimelineSelections.fromAlluvialOriginality) {
+      if ([...(d.originalities || [])].some(o => o === val)) {
+        isMatched = true;
+        break;
+      }
+    }
+
+    if (!isMatched) {
+      for (const val of activeTimelineSelections.fromAlluvialRarity) {
         if ([...(d.rarities || [])].some(r => r === val)) {
           isMatched = true;
           break;
         }
       }
-      // add more category checks if needed
     }
+
+    if (!isMatched) {
+      for (const val of activeTimelineSelections.fromIcicleIdentity) {
+        if ([...(d.colorIdentities || [])].some(ci => ci === val)) {
+          isMatched = true;
+          break;
+        }
+      }
+    }
+
+    if (!isMatched) {
+      for (const val of activeTimelineSelections.fromIcicleColors) {
+        if ([...(d.numColorsPresent || [])].some(nc => nc === +val)) {
+          isMatched = true;
+          break;
+        }
+      }
+    }
+if (!isMatched) {
+  for (const val of activeTimelineSelections.fromYears) {
+    const setYear = d.releaseDate.getFullYear();
+    if (setYear === +val) {
+      isMatched = true;
+      break;
+    }
+  }
+}
+    if (!isMatched) {
+  for (const val of activeTimelineSelections.sets) {
+    if (d.name === val) {
+      isMatched = true;
+      break;
+    }
+  }
+}
+    if (!isMatched) {
+  for (const pair of activeTimelineSelections.fromAlluvialLinkPairs) {
+    const [orig, rare] = pair.split("|");
+    const origMatch = [...(d.originalities || [])].includes(orig);
+    const rareMatch = [...(d.rarities || [])].includes(rare);
+
+    if (origMatch && rareMatch) {
+      isMatched = true;
+      break;
+    }
+  }
+}
 
     rect.classed("selectedHovered", isMatched)
         .attr("fill", isMatched ? d.selectedColor : d.baseColor);
+    // Highlight year labels based on selected years
+
+
+  });
+
+  d3.selectAll(".year-tick-timeline")
+  .classed("selected", function(d) {
+    const yearStr = d.getFullYear().toString();
+    return activeTimelineSelections.fromYears.has(yearStr);
+  });
+  d3.selectAll(".set-type-label")
+  .classed("selected", function(d) {
+    return activeTimelineSelections.setTypes.has(d);
   });
 }
+
 
 
 
@@ -1063,4 +1312,19 @@ function highlightTimelineSetsFromAlluvialCategory(category, value) {
       return false;
     })
     .attr("fill",d => d.highlightColor);
+}
+
+function highlightTimelineSetsFromAlluvialLink(originality, rarity) {
+  if (!originality || !rarity) return;
+
+  const lowerOrig = originality.toLowerCase();
+  const lowerRarity = rarity.toLowerCase();
+
+  d3.selectAll(".set-rect")
+    .filter(d => {
+      const origMatch = [...(d.originalities || [])].includes(lowerOrig);
+      const rarityMatch = [...(d.rarities || [])].includes(lowerRarity);
+      return origMatch && rarityMatch;
+    })
+    .attr("fill", d => d.highlightColor);
 }

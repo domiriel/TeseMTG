@@ -36,6 +36,22 @@ export function onClearSetHover(callback) {
   emitter.addEventListener("set-hover-clear", callback);
 }
 
+export function emitSetTypeHover(setTypeInfo) {
+  console.log(setTypeInfo)
+  emitter.dispatchEvent(new CustomEvent("set-type-hover", { detail: setTypeInfo }));
+}
+
+export function onSetTypeHover(callback) {
+  emitter.addEventListener("set-type-hover", e => callback(e.detail));
+}
+
+export function emitClearSetTypeHover() {
+  emitter.dispatchEvent(new Event("set-type-hover-clear"));
+}
+
+export function onClearSetTypeHover(callback) {
+  emitter.addEventListener("set-type-hover-clear", callback);
+}
 
 
 let yearClickHandlers = [];
@@ -54,6 +70,15 @@ export function onTimelineSetClick(handler) {
 export function emitTimelineSetClick(payload) {
   setClickHandlers.forEach(fn => fn(payload));
 }
+
+let setTypeClickHandlers = [];
+export function onTimelineSetTypeClick(handler) {
+  setTypeClickHandlers.push(handler);
+}
+export function emitTimelineSetTypeClick(payload) {
+  setTypeClickHandlers.forEach(fn => fn(payload));
+}
+
 
 
 let icicleClickHandlers = [];
@@ -133,6 +158,45 @@ export function emitLineChartClick(payload) {
   lineChartClickHandlers.forEach(fn => fn(payload));
 }
 
+let lineChartBrushHandlers = [];
+
+export function onLineChartBrush(handler) {
+  lineChartBrushHandlers.push(handler);
+}
+export function emitLineChartBrush(payload) {
+  lineChartBrushHandlers.forEach(fn => fn(payload));
+}
+
+let clearLineChartBrushHandlers = [];
+
+export function onClearLineChartBrush(handler) {
+  clearLineChartBrushHandlers.push(handler);
+}
+
+export function emitClearLineChartBrush() {
+  clearLineChartBrushHandlers.forEach(fn => fn());
+}
+
+
+let timelineBrushHandlers = [];
+
+export function onTimelineBrush(handler) {
+  timelineBrushHandlers.push(handler);
+}
+export function emitTimelineBrush(payload) {
+  timelineBrushHandlers.forEach(fn => fn(payload));
+}
+
+let clearTimelineBrushHandlers = [];
+
+export function onClearTimelineBrush(handler) {
+  clearTimelineBrushHandlers.push(handler);
+}
+
+export function emitClearTimelineBrush() {
+  clearTimelineBrushHandlers.forEach(fn => fn());
+}
+
 // Alluvial Events
 
 export function emitAlluvialHover(category, value) {
@@ -152,6 +216,23 @@ export function emitClearAlluvialHover() {
 export function onClearAlluvialHover(callback) {
   emitter.addEventListener("alluvial-hover-clear", callback);
 }
+
+export function emitAlluvialLinkHover(payload) {
+  emitter.dispatchEvent(new CustomEvent("alluvial-link-hover", { detail: payload }));
+}
+
+export function onAlluvialLinkHover(callback) {
+  emitter.addEventListener("alluvial-link-hover", e => callback(e.detail));
+}
+
+export function emitClearAlluvialLinkHover() {
+  emitter.dispatchEvent(new Event("alluvial-link-hover-clear"));
+}
+
+export function onClearAlluvialLinkHover(callback) {
+  emitter.addEventListener("alluvial-link-hover-clear", callback);
+}
+
 
 let alluvialClickHandlers = [];
 export function onAlluvialClick(handler) {
