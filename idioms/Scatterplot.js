@@ -19,7 +19,7 @@ function getSymbolFromAttribute(attr) {
 }
 
 
-
+let ignoreNextBrushEnd = false;
 function getXMetricTooltipText() {
   if (xMetric === "release_date") {
     return "Cards are positioned along the X-axis by their first <b>release date</b>.";
@@ -533,6 +533,14 @@ let lastPriceAttribute = null;
 let xMetric = "avg_price";
 
 
+function getZoomedScales() {
+  const svg = d3.select(".Scatterplot svg").node();
+  const { logXScale, timeXScale, originalYScale } = svg.__scales__;
+  const baseXScale = xMetric === "avg_price" ? logXScale : timeXScale;
+  const xScale = currentZoomTransform ? currentZoomTransform.rescaleX(baseXScale) : baseXScale;
+  const yScale = currentZoomTransform ? currentZoomTransform.rescaleY(originalYScale) : originalYScale;
+  return { xScale, yScale };
+}
 
 
 
@@ -566,7 +574,6 @@ function mouseoverFn(event, d) {
   const symbol = getSymbolFromAttribute(getEffectivePriceAttribute(getState()));
   const formatDate = d3.timeFormat("%d %b %Y");
   const formattedDate = d.release_date ? formatDate(new Date(d.release_date)) : "Unknown";
-  console.log(d.all_set_types)
   d3.select("#tooltip").style("display", "block")
     .style("background", getColorIdentityBackground(d.color_identity))
     .style("color", "black")
@@ -898,7 +905,7 @@ function updateAxes(symbol, customX = null) {
     xAxisG.call(
       d3.axisBottom(xS)
         .tickValues(ticks)
-        .tickFormat(d => `${symbol}${d.toFixed(3)}`)
+        .tickFormat(d => `${symbol}${d.toFixed(2)}`)
     );
   } else if (xMetric === "release_date") {
     xAxisG.call(
@@ -1046,81 +1053,87 @@ dropdown.addEventListener("mouseover", (event) => {
 const brush = d3.brush()
     .extent([[0, -10], [chartWidth + 10, chartHeight]])
     .on("start", () => svg.on(".zoom", null))
-.on("end", function(event) {
-  const t0 = performance.now();
-
-  svg.call(zoom); // Re-enable zoom
-if (!event.selection) {
+    .on("end", function(event) {
+    const t0 = performance.now();
+    svg.call(zoom); // Re-enable zoom
+      if (ignoreNextBrushEnd) {
+    ignoreNextBrushEnd = false;
     return;
   }
 
-  const [[x0, y0], [x1, y1]] = event.selection;
-
-  const t1 = performance.now();
-  // Collect brushed cards by name
-  const xScale = getActiveXScale();
-  const brushedNames = new Set();
-  for (const d of filteredData) {
-    const cx = xScale(getXValue(d));
-    const cy = yScale(d.complexity);
-    if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) {
-      brushedNames.add(d.name);
-    }
-  }
-
-    if (brushedNames.size === 0) {
+  if (!event.selection) {
+    console.log("djdkjd")
     updateState({ hoveredCards: [], isHoverUpdate: true });
     d3.selectAll(".dots circle").classed("selected-hover", false);
-    brushOverlay.call(brush.move, null);
     return;
   }
-  const t2 = performance.now();
-  const hoveredCards = getState().hoveredCards || [];
-  const hoveredNames = new Set(hoveredCards.map(c => c.name));
-  const hoveredMap = new Map(hoveredCards.map(c => [c.name, c]));
 
-  const actualCardMap = new Map(actualFIlteredData.map(c => [c.name, c]));
+    const [[x0, y0], [x1, y1]] = event.selection;
 
-for (const name of brushedNames) {
-  if (hoveredMap.has(name)) {
-    hoveredMap.delete(name);
-  } else {
-    const match = actualCardMap.get(name);
-    if (match) hoveredMap.set(name, match);
-  }
-}
+    const t1 = performance.now();
+    const { xScale, yScale } = getZoomedScales();
+    const brushedNames = new Set();
+    for (const d of filteredData) {
+      const cx = xScale(getXValue(d));
+      const cy = yScale(d.complexity);
+      if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) {
+        brushedNames.add(d.name);
+      }
+    }
 
-  const t3 = performance.now();
-  const newHoveredCards = Array.from(hoveredMap.values());
-  updateState({ hoveredCards: newHoveredCards, isHoverUpdate: true });
+      if (brushedNames.size === 0) {
+      updateState({ hoveredCards: [], isHoverUpdate: true });
+      d3.selectAll(".dots circle").classed("selected-hover", false);
+      ignoreNextBrushEnd = true;
+      brushOverlay.call(brush.move, null);
+      return;
+    }
+    const t2 = performance.now();
+    const hoveredCards = getState().hoveredCards || [];
+    const hoveredNames = new Set(hoveredCards.map(c => c.name));
+    const hoveredMap = new Map(hoveredCards.map(c => [c.name, c]));
 
-  const t4 = performance.now();
-  const updatedNames = new Set([...brushedNames, ...hoveredNames]);
-  applySelectedHoverClass(hoveredMap, updatedNames);
+    const actualCardMap = new Map(actualFIlteredData.map(c => [c.name, c]));
 
-  const t5 = performance.now();
+    for (const name of brushedNames) {
+    if (hoveredMap.has(name)) {
+      hoveredMap.delete(name);
+    } else {
+      const match = actualCardMap.get(name);
+      if (match) hoveredMap.set(name, match);
+    }
+    }
 
-  brushOverlay.call(brush.move, null); // Clear brush selection
+    const t3 = performance.now();
+    const newHoveredCards = Array.from(hoveredMap.values());
+    updateState({ hoveredCards: newHoveredCards, isHoverUpdate: true });
 
-  const t6 = performance.now();
+    const t4 = performance.now();
+    const updatedNames = new Set([...brushedNames, ...hoveredNames]);
+    applySelectedHoverClass(hoveredMap, updatedNames);
 
-  // console.log(`Brush Interaction Timing:
-  //   • Extract selection bounds:       ${(t1 - t0).toFixed(2)} ms
-  //   • Collect brushed names:          ${(t2 - t1).toFixed(2)} ms
-  //   • Toggle brushed cards:           ${(t3 - t2).toFixed(2)} ms
-  //   • Update state:                   ${(t4 - t3).toFixed(2)} ms
-  //   • Apply selected hover class:     ${(t5 - t4).toFixed(2)} ms
-  //   • Clear brush selection:          ${(t6 - t5).toFixed(2)} ms
-  //   • TOTAL:                          ${(t6 - t0).toFixed(2)} ms
-  // `);
-})
+    const t5 = performance.now();
+    ignoreNextBrushEnd = true;
+    brushOverlay.call(brush.move, null); // Clear brush selection
+
+    const t6 = performance.now();
+
+    // console.log(`Brush Interaction Timing:
+    //   • Extract selection bounds:       ${(t1 - t0).toFixed(2)} ms
+    //   • Collect brushed names:          ${(t2 - t1).toFixed(2)} ms
+    //   • Toggle brushed cards:           ${(t3 - t2).toFixed(2)} ms
+    //   • Update state:                   ${(t4 - t3).toFixed(2)} ms
+    //   • Apply selected hover class:     ${(t5 - t4).toFixed(2)} ms
+    //   • Clear brush selection:          ${(t6 - t5).toFixed(2)} ms
+    //   • TOTAL:                          ${(t6 - t0).toFixed(2)} ms
+    // `);
+    })
 
 
 
 
 
-    brushOverlay.call(brush).lower();
-    let fullData = filteredData;
+brushOverlay.call(brush).lower();
 
 const infoGroup = svg.append("g")
   .attr("class", "info-icon")
@@ -1142,7 +1155,7 @@ infoGroup.append("text")
 
 
 
-  infoGroup
+infoGroup
   .on("mouseover", function(event) {
     d3.select("#tooltip")
       .style("display", "block")
@@ -1170,9 +1183,10 @@ infoGroup.append("text")
   .on("mouseout", function() {
     d3.select("#tooltip").style("display", "none");
   });
+
 const visibleData = filteredData
-    const dots = gClip.selectAll("circle")
-    .data(visibleData, d => d.name)
+const dots = gClip.selectAll("circle")
+  .data(visibleData, d => d.name)
   .join("circle")
   .attr("cx", d => xScale(getXValue(d)))
   .attr("cy", d => yScale(d.complexity))
@@ -1191,10 +1205,10 @@ const visibleData = filteredData
   .attr("opacity", 0.8)
   .style("display", d =>(currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey ) ? null : "none");
 
-    filteredData.forEach((d, i) => {
-        if (isNaN(d.avg_price) || d.avg_price <= 0 || typeof d.avg_price !== 'number') {
-        }
-    });
+filteredData.forEach((d, i) => {
+  if (isNaN(d.avg_price) || d.avg_price <= 0 || typeof d.avg_price !== 'number') {
+  }
+  });
 
 
     
@@ -1323,9 +1337,6 @@ function applyZoomTransform(transform) {
   const newY = transform.rescaleY(originalYScale);
 
 
-  console.log("[Zoom] Transform:", transform.toString());
-console.log("[Zoom] New X domain:", newX.domain());
-console.log("[Zoom] New Y domain:", newY.domain());
   // ✨ DON'T mutate base scale
   yScale.domain(newY.domain());
 
@@ -1505,7 +1516,6 @@ export function highlightScatterDotsFromSet(setName) {
 }
 
 function highlightScatterDotsFromSetType(setType) {
-  console.log("Highlighting dots for set type:", setType);
   const lowerType = setType.toLowerCase();
   d3.select(".Scatterplot").selectAll(".dots circle")
     .each(function(d) {

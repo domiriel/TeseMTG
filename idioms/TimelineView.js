@@ -189,25 +189,34 @@ export function createTimelineView(data, containerId, isUpdate = false) {
  
     uniqueSets = Array.from(setMap.values()).sort((a, b) => a.releaseDate - b.releaseDate);
 
-    const allCardCounts = uniqueSets.map(set => set.cardCount);
-const countRange = {
-  min: d3.min(allCardCounts),
-  max: d3.max(allCardCounts)
-};
+const allCardCounts = uniqueSets.map(set => set.cardCount);
+const sortedCounts = allCardCounts.slice().sort(d3.ascending);
 
-    const numBins = 5;
-const countStep = (countRange.max - countRange.min) / numBins;
-const dynamicLegendData = Array.from({ length: numBins }, (_, i) => {
-  const min = countRange.min + i * countStep;
-  const max = countRange.min + (i + 1) * countStep;
+// Compute quintile thresholds
+const thresholds = [
+  d3.quantileSorted(sortedCounts, 0.2),
+  d3.quantileSorted(sortedCounts, 0.4),
+  d3.quantileSorted(sortedCounts, 0.6),
+  d3.quantileSorted(sortedCounts, 0.8),
+  d3.max(sortedCounts)
+];
+
+// Add 0 as the first lower bound
+const bounds = [0, ...thresholds];
+
+// Build legend data based on quintile ranges
+const dynamicLegendData = bounds.slice(0, -1).map((min, i) => {
+  const max = bounds[i + 1];
+  const quintilePercent = i * 20;
   return {
     min,
     max,
-    color: getDiscreteColor(i * (100 / numBins)),
-    colorSelected: getSelectedColor(i * (100 / numBins)),
-    label: `${Math.round(min)}–${Math.round(max-1)}`
+    color: getDiscreteColor(quintilePercent),
+    colorSelected: getSelectedColor(quintilePercent),
+    label: `${Math.round(min)}–${Math.round(max)}`
   };
 }).reverse();
+
 
 
 
@@ -227,10 +236,18 @@ const timelineTooltipText = `
 
 
 uniqueSets.forEach(set => {
-  const percent = ((set.cardCount - countRange.min) / (countRange.max - countRange.min)) * 100;
-  set.baseColor = getDiscreteColor(percent);
-  set.highlightColor = getHighlightedColor(percent);
-  set.selectedColor = getSelectedColor(percent);
+  let quintileIndex = 0;
+for (let i = 0; i < thresholds.length; i++) {
+  if (set.cardCount <= thresholds[i]) {
+    quintileIndex = i;
+    break;
+  }
+}
+const quintilePercent = quintileIndex * 20; // 0, 20, 40, 60, 80
+
+set.baseColor = getDiscreteColor(quintilePercent);
+set.highlightColor = getHighlightedColor(quintilePercent);
+set.selectedColor = getSelectedColor(quintilePercent);
 
   const year = set.releaseDate.getFullYear().toString();
   const type = set.setType;

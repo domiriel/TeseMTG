@@ -190,12 +190,15 @@ body {
 
 
 .LineChart circle.hover-temp:not(.selected) {
-  fill: #f2c46e
+  fill: #f2c46e;
+  stroke: #000 !important;
+  stroke-width: 2px !important;
+  
 }
 
-.Scatterplot circle.hover-temp:not(.selected-hover) {
+.Scatterplot circle.hover-temp{
   stroke: #d89313 !important;
-  stroke-width: 2px !important;
+  stroke-width: 1.5px !important;
 }
 
 .year-tick-timeline.hovered,
@@ -296,12 +299,12 @@ body {
 #illegalDrawer.visible {
   transform: translateX(0);
 }
-#illegalDrawer.visible + #toggleIllegalDrawerButton {
+#illegalDrawer.visible ~ #toggleIllegalDrawerButton {
   right: 300px; /* shifts with drawer */
   transition: right 0.3s ease-in-out;
 }
 
-#illegalDrawer + #toggleIllegalDrawerButton {
+#illegalDrawer ~ #toggleIllegalDrawerButton {
   right: 0px;
   transition: right 0.3s ease-in-out;
 }

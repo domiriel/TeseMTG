@@ -38,6 +38,8 @@ const lineChartTooltipText = `
 
 const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };
 let localSelectedYears = new Set();
+
+let currentZoomTransform = d3.zoomIdentity;
 onHoverCard((card) => {
   highlightLineChartHoverOnly(card);
 });
@@ -532,9 +534,12 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
     function brushed(event) {
       if (!event.selection) return;
 
+
       const [x0, x1] = event.selection;
-      const startDate = xScale.invert(x0);
-      const endDate = xScale.invert(x1);
+      const zoomedX = currentZoomTransform.rescaleX(xScale);
+
+  const startDate = zoomedX.invert(x0);
+  const endDate = zoomedX.invert(x1);
 
       const brushedEntries = groupedData
         .filter((d) => d.year >= startDate && d.year <= endDate)
@@ -614,6 +619,7 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
 
   function zoomed(event) {
     const transform = event.transform;
+    currentZoomTransform = event.transform;
     const newXScale = transform.rescaleX(xScale);
 
     linePaths.forEach(({ line, path }) => {
@@ -629,6 +635,15 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
         .attr("cx", (d) => newXScale(d.year))
         .attr("cy", (d) => yScale(d[metric.key]));
     });
+
+    // ✅ Update selection lines to move with zoom
+svg.selectAll(".highlight-hover-line").each(function () {
+  const line = d3.select(this);
+  const time = +line.attr("data-timestamp"); // stored below
+  const x = transform.applyX(xScale(new Date(time))) + margin.left;
+
+  line.attr("x1", x).attr("x2", x);
+});
 
     xAxisGroups.forEach(({ g, isBottom }) => {
       g.call(
@@ -689,6 +704,40 @@ export function highlightLineChart(hoveredCards) {
   });
 }
 
+function drawVerticalLinesForYears(years) {
+  const svg = d3.select(".LineChart svg");
+  if (svg.empty()) return;
+
+  svg.selectAll(".highlight-hover-line").remove(); // clear existing lines
+
+  const y1 = +svg.select(".hover-line").attr("y1");
+  const y2 = +svg.select(".hover-line").attr("y2");
+  const marginLeft =
+    +svg
+      .select(".stacked-line-wrapper svg g")
+      .attr("transform")
+      ?.match(/translate\(([\d.]+)/)?.[1] || 0;
+
+  years.forEach((time) => {
+    const date = new Date(+time); // assumes UNIX time
+    const x = currentZoomTransform.applyX(window._lineChartXScale(date)) + marginLeft;
+
+    svg
+      .append("line")
+      .attr("class", "highlight-hover-line")
+      .attr("data-timestamp", time)
+      .attr("x1", x)
+      .attr("x2", x)
+      .attr("y1", y1)
+      .attr("y2", y2)
+      .attr("stroke", "#f2c46e")
+      .attr("stroke-width", 1.5)
+      .attr("stroke-dasharray", "4 2")
+      .lower();
+  });
+}
+
+
 function getXCoordFromYear(date, svg) {
   if (!window._lineChartXScale) return 0;
   const marginLeft =
@@ -706,6 +755,9 @@ export function highlightLineChartHoverOnly(card) {
   d3.select(".LineChart")
     .selectAll(`circle.data-point[data-year='${year}']`)
     .classed("hover-temp", true);
+
+  const timestamp = new Date(+year, 0, 1).getTime();
+  drawVerticalLinesForYears([timestamp]);
 }
 
 function highlightLineChartFromIcicle(rectInfo) {
@@ -718,11 +770,17 @@ function highlightLineChartFromIcicle(rectInfo) {
       const year = this.getAttribute("data-year");
       return years.has(year);
     });
+
+  const timestamps = Array.from(years).map((y) =>
+    new Date(+y, 0, 1).getTime()
+  );
+  drawVerticalLinesForYears([...new Set(timestamps)]);
 }
 export function clearLineChartHoverOnly() {
   d3.select(".LineChart")
     .selectAll("circle.data-point")
     .classed("hover-temp", false);
+  d3.select(".LineChart svg").selectAll(".highlight-hover-line").remove();
 }
 
 export function highlightLineChartHoverOnlyFromSet(setReleaseDate) {
@@ -733,6 +791,10 @@ export function highlightLineChartHoverOnlyFromSet(setReleaseDate) {
   d3.select(".LineChart")
     .selectAll(`circle.data-point[data-year='${year}']`)
     .classed("hover-temp", true);
+
+  const timestamp = new Date(+year, 0, 1).getTime();
+  drawVerticalLinesForYears([timestamp]);
+  
 }
 export function highlightLineChartHoverOnlyFromSetType(setTypeReleaseDates) {
   if (!setTypeReleaseDates) return;
@@ -750,6 +812,9 @@ export function highlightLineChartHoverOnlyFromSetType(setTypeReleaseDates) {
       circle.classed("hover-temp", true);
     }
   });
+
+   const yearTimestamps = years.map((y) => new Date(+y, 0, 1).getTime());
+  drawVerticalLinesForYears([...new Set(yearTimestamps)]);
 }
 
 export function highlightAllViewsForYear(entry) {
@@ -978,11 +1043,13 @@ function updateLineChartSelections() {
 
   matchingYears.forEach((t) => {
     const date = new Date(+t);
-    const x = window._lineChartXScale(date) + marginLeft;
+    const x = currentZoomTransform.applyX(window._lineChartXScale(date)) + marginLeft;
+
 
     svg
       .append("line")
       .attr("class", "highlight-hover-line")
+      .attr("data-timestamp", t)
       .attr("x1", x)
       .attr("x2", x)
       .attr("y1", y1)
@@ -998,44 +1065,69 @@ function highlightLineChartFromAlluvialCategory(category, value) {
   if (!category || !value) return;
 
   const lowerValue = value.toLowerCase();
+  const matchedYears = [];
 
   d3.select(".LineChart")
     .selectAll("circle.data-point")
     .classed("hover-temp", function () {
       const d = d3.select(this).datum();
-      if (!d) return false;
+      let match = false;
 
       if (category === "Originality") {
-        return d.originalities?.has(lowerValue);
+        match = d?.originalities?.has(lowerValue);
       } else if (category === "Rarity") {
-        return d.rarities?.has(lowerValue);
+        match = d?.rarities?.has(lowerValue);
       }
-      return false;
+
+      if (match) {
+        matchedYears.push(d.year.getTime());
+      }
+      return match;
     });
+
+  drawVerticalLinesForYears([...new Set(matchedYears)]);
 }
+
 function highlightLineChartFromAlluvialLink(originality, rarity) {
   if (!originality || !rarity) return;
 
   const lowerOrig = originality.toLowerCase();
   const lowerRarity = rarity.toLowerCase();
 
+  const matchedYears = [];
+
   d3.select(".LineChart")
     .selectAll("circle.data-point")
     .classed("hover-temp", function () {
       const d = d3.select(this).datum();
-      if (!d) return false;
-
-      return d.originalities?.has(lowerOrig) && d.rarities?.has(lowerRarity);
+      const match = d?.originalities?.has(lowerOrig) && d?.rarities?.has(lowerRarity);
+      if (match) {
+        matchedYears.push(d.year.getTime());
+      }
+      return match;
     });
+
+  drawVerticalLinesForYears([...new Set(matchedYears)]);
 }
+
 
 function highlightLineChartFromNumColors(numColors) {
   if (numColors === undefined || numColors === null) return;
 
+  const matchedYears = [];
+
   d3.select(".LineChart")
     .selectAll("circle.data-point")
     .classed("hover-temp", function () {
       const d = d3.select(this).datum();
-      return d?.numColorsPresent?.has(numColors);
+      const match = d?.numColorsPresent?.has(numColors);
+      if (match) {
+        matchedYears.push(d.year.getTime());
+      }
+      return match;
     });
+
+
+  drawVerticalLinesForYears([...new Set(matchedYears)]);
 }
+

@@ -333,24 +333,44 @@ export function createIllegalDrawer(cards, containerSelector = "body") {
   container.append("datalist").attr("id", "illegalCardNamesList");
 
   d3.select("#illegalSearchInput").on("keydown", (event) => {
-    if (event.key === "Enter") {
-      const query = event.target.value.trim().toLowerCase();
-      if (!query) return;
+  if (event.key === "Enter") {
+    const query = event.target.value.trim().toLowerCase();
+    if (!query) return;
 
-      const index = illegalCardsInDrawer.findIndex((card) =>
-        card.name.toLowerCase().includes(query)
-      );
-      if (index !== -1) {
-        illegalCurrentPage = Math.floor(index / pageSize);
-        updateIllegalDrawer(illegalCardsInDrawer);
-      } else {
-        d3.select("#illegalSearchInput").style("border", "1px solid red");
-        setTimeout(() => {
-          d3.select("#illegalSearchInput").style("border", "1px solid #ccc");
-        }, 1500);
-      }
+    const index = illegalCardsInDrawer.findIndex((card) =>
+      card.name.toLowerCase().includes(query)
+    );
+    if (index !== -1) {
+      illegalCurrentPage = Math.floor(index / pageSize);
+      updateIllegalDrawer(illegalCardsInDrawer);
+
+      // Scroll to the card after drawer updates (use setTimeout to wait for DOM update)
+const matchingCard = illegalCardsInDrawer[index];
+const cardSel = d3
+  .select("#illegalCardImages")
+  .selectAll(".card-wrapper")
+  .filter((d) => d.name === matchingCard.name);
+
+const cardEl = cardSel.node();
+const imgEl = cardSel.select("img").node();
+
+if (imgEl && !imgEl.complete) {
+  imgEl.onload = () => {
+    cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+} else if (cardEl) {
+  cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+this.value = "";
+    } else {
+      d3.select("#illegalSearchInput").style("border", "1px solid red");
+      setTimeout(() => {
+        d3.select("#illegalSearchInput").style("border", "1px solid #ccc");
+      }, 1500);
     }
-  });
+  }
+});
+
 
   // Append button after the drawer
   const illegalButton = container
