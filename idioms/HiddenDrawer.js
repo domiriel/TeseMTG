@@ -69,7 +69,6 @@ let cardsInDrawer = []; // store current list
 
 export function updateDrawer(cards = []) {
   const filters = getState().selectedFilters;
-  console.log(filters);
   if (!drawerContainer) return;
 
   const t0 = performance.now();

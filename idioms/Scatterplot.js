@@ -1,8 +1,8 @@
 
 import { updateState, getState } from "../state.js";
 import { emitHoverCard, emitClearHover,
-          onSetHover, onClearSetHover, onRectHover, onClearRectHover,onClearLineYearHover, onLineYearHover, onNumColorsHover, onClearNumColorsHover,
-          onAlluvialHover, onClearAlluvialHover, onAlluvialClick, onAlluvialLinkClick, onIcicleClick, onLineChartClick, onIcicleNumClick,
+          onSetHover, onClearSetHover, onRectHover, onClearRectHover,onClearLineYearHover, onLineYearHover, onNumColorsHover, onClearNumColorsHover, emitScatterplotCards, emitScatterplotBrush, emitClearScatterplotBrush, 
+          onAlluvialHover, onClearAlluvialHover, onAlluvialClick, onAlluvialLinkClick, onIcicleClick, onLineChartClick, onIcicleNumClick,onCardSearch,
           onTimelineSetClick, onYearClick, onAlluvialLinkHover, onClearAlluvialLinkHover, onLineChartBrush, onClearLineChartBrush, onSetTypeHover, onTimelineSetTypeClick, onTimelineBrush, onClearTimelineBrush} from "./Events.js";
 import { getEffectivePriceAttribute } from "../script.js"; 
 const colorGroups = [
@@ -12,6 +12,113 @@ const colorGroups = [
     { range: [17075, 22765], color: "#b8997a"},
     { range: [22766, 28456], color: "#ceb397" }  
 ];
+
+const activeSelections = {
+  originalities: new Set(),
+  rarities: new Set(),
+  colorIdentities: new Set(),
+  numColors: new Set(),
+  years: new Set(),
+  sets: new Set(),
+  setTypes: new Set(),
+  cards: new Map()
+};
+
+function getCardsMatchingActiveSelections(data) {
+  let result = data;
+
+  if (activeSelections.originalities.size > 0) {
+    result = result.filter(card =>
+      card.all_originalities?.some(orig =>
+        activeSelections.originalities.has(orig)
+      )
+    );
+  }
+
+  if (activeSelections.rarities.size > 0) {
+    result = result.filter(card =>
+      activeSelections.rarities.has(card.rarity?.toLowerCase())
+    );
+  }
+
+  if (activeSelections.colorIdentities.size > 0) {
+    result = result.filter(card => {
+      const identityKey = card.color_identity?.join("") || "Colorless";
+      return activeSelections.colorIdentities.has(identityKey);
+    });
+  }
+  if (activeSelections.numColors.size > 0) {
+    result = result.filter(card =>
+      activeSelections.numColors.has(card.color_identity?.length || 0)
+    );
+  }
+  if (activeSelections.years.size > 0) {
+    result = result.filter(card => {
+      const year = new Date(card.release_date).getFullYear();
+      return activeSelections.years.has(year);
+    });
+  }
+  if (activeSelections.sets.size > 0) {
+    result = result.filter(card =>
+      card.all_sets?.some(s => activeSelections.sets.has(s.name))
+    );
+  }
+  if (activeSelections.setTypes.size > 0) {
+    result = result.filter(card =>
+      card.all_set_types?.some(type =>
+        activeSelections.setTypes.has(type.toLowerCase())
+      )
+    );
+  }
+  return result;
+}
+
+function applySelectionToScatter() {
+  const hasAnySelection = Object.entries(activeSelections)
+    .filter(([key]) => key !== "cards") // exclude manual card selection
+    .some(([, set]) => set.size > 0);
+
+  let hoveredCards;
+
+  if (!hasAnySelection) {
+    // No filters: use only manually selected cards
+    hoveredCards = Array.from(activeSelections.cards.values());
+  } else {
+    // Filters exist: get matches, then add manual cards
+    const matching = getCardsMatchingActiveSelections(actualFIlteredData);
+    const cardMap = new Map(matching.map(c => [c.name, c]));
+
+    for (const [name, card] of activeSelections.cards) {
+      cardMap.set(name, card);
+    }
+
+    hoveredCards = Array.from(cardMap.values());
+  }
+
+  updateState({
+    hoveredCards,
+    isHoverUpdate: true
+  });
+
+  d3.selectAll(".dots circle").classed("selected-hover", false);
+  updateSelectedHoverClass();
+}
+
+
+
+
+
+function addActiveSelection(category, value) {
+  const set = activeSelections[category];
+  if (!set) return;
+
+  if (set.has(value)) {
+    set.delete(value); // remove if already present
+  } else {
+    set.add(value); // add if not present
+  }
+}
+
 function getSymbolFromAttribute(attr) {
     if (attr.includes("eur")) return "€";
     if (attr.includes("usd")) return "$";
@@ -73,300 +180,76 @@ const scatterTooltipText = `
 `;
 
 onAlluvialClick(({ category, value }) => {
-
-  const dots = d3.selectAll(".dots circle").nodes();
-  const hoveredMap = new Map(getState().hoveredCards?.map(c => [c.name, c]) || []);
-
-  dots.forEach(el => {
-    const d = d3.select(el).datum();
-    const matches =
-      category === "Originality"
-        ? d.all_originalities?.includes(value)
-        : d.rarity?.toLowerCase() === value;
-
-    if (matches) {
-      if (hoveredMap.has(d.name)) {
-        hoveredMap.delete(d.name); // 💨 Toggle off
-      } else {
-        hoveredMap.set(d.name, d); // 💡 Toggle on
-      }
-    }
-  });
-
-  updateState({ hoveredCards: Array.from(hoveredMap.values()), isHoverUpdate: true });
-  d3.selectAll(".dots circle").classed("selected-hover", false);
-  updateSelectedHoverClass();
+  const key = category.toLowerCase() === "originality" ? "originalities" : "rarities";
+  addActiveSelection(key, value);
+  applySelectionToScatter();
 });
 
 onYearClick(({ year }) => {
-  const hoveredCards = getState().hoveredCards || [];
-  const hoveredMap = new Map(hoveredCards.map(c => [c.name, c]));
-
-  const targetYear = parseInt(year, 10); // Ensure it's a number
-  d3.selectAll(".dots circle").each(function(card) {
-    const cardYear = new Date(card.release_date).getFullYear();
-    if (cardYear === targetYear) {
-      if (hoveredMap.has(card.name)) {
-        hoveredMap.delete(card.name); // Toggle off
-      } else {
-        hoveredMap.set(card.name, card); // Toggle on
-      }
-    }
-  });
-
-  updateState({
-    hoveredCards: Array.from(hoveredMap.values()),
-    isHoverUpdate: true
-  });
-  d3.selectAll(".dots circle").classed("selected-hover", false);
-  updateSelectedHoverClass();
+  addActiveSelection("years", year);
+  applySelectionToScatter();
 });
 
 onTimelineSetClick(setInfo => {
-  const setName = setInfo.name;
-  const hoveredCards = getState().hoveredCards || [];
-  const hoveredMap = new Map(hoveredCards.map(c => [c.name, c]));
-
-  d3.selectAll(".dots circle").each(function(d) {
-    const matches = d.all_sets?.some(s => s.name === setName);
-    if (matches) {
-      if (hoveredMap.has(d.name)) {
-        hoveredMap.delete(d.name); // 💨 Toggle off
-      } else {
-        hoveredMap.set(d.name, d); // ✅ Toggle on
-      }
-    }
-  });
-
-  updateState({
-    hoveredCards: Array.from(hoveredMap.values()),
-    isHoverUpdate: true
-  });
-  d3.selectAll(".dots circle").classed("selected-hover", false);
-  updateSelectedHoverClass();
+  addActiveSelection("sets", setName);
+  applySelectionToScatter();
 });
 
 onTimelineSetTypeClick(({ type }) => {
-  const hoveredCards = getState().hoveredCards || [];
-  const hoveredMap = new Map(hoveredCards.map(c => [c.name, c]));
-
-  d3.selectAll(".dots circle").each(function(d) {
-    const matches = d.all_set_types?.includes(type.toLowerCase());
-
-    if (matches) {
-      if (hoveredMap.has(d.name)) {
-        hoveredMap.delete(d.name); // Toggle off
-      } else {
-        hoveredMap.set(d.name, d); // Toggle on
-      }
-    }
-  });
-
-  updateState({
-    hoveredCards: Array.from(hoveredMap.values()),
-    isHoverUpdate: true
-  });
-  d3.selectAll(".dots circle").classed("selected-hover", false);
-  updateSelectedHoverClass();
+  addActiveSelection("setTypes", type.toLowerCase());
+applySelectionToScatter();
 });
 
-
-
 onAlluvialLinkClick(({ originality, rarity }) => {
-  const dots = d3.selectAll(".dots circle").nodes();
-  const hoveredMap = new Map(getState().hoveredCards?.map(c => [c.name, c]) || []);
-
- dots.forEach(el => {
-    const d = d3.select(el).datum();
-    const matches = (
-      d.rarity?.toLowerCase() === rarity &&
-      d.all_originalities?.includes(originality)
-    );
-
-    if (matches) {
-      if (hoveredMap.has(d.name)) {
-        hoveredMap.delete(d.name); // 💨 Toggle off
-      } else {
-        hoveredMap.set(d.name, d); // 💡 Toggle on
-      }
-    }
-
-    
-  });
-
-  updateState({ hoveredCards: Array.from(hoveredMap.values()), isHoverUpdate: true });
-  d3.selectAll(".dots circle").classed("selected-hover", false);
-  updateSelectedHoverClass();
+  addActiveSelection("originalities", originality);
+  addActiveSelection("rarities", rarity);
+  applySelectionToScatter();
 });
 
 onIcicleClick(({ colorIdentity }) => {
-  const hovered = getState().hoveredCards || [];
-  const hoveredMap = new Map(hovered.map(c => [c.name, c]));
 
-  d3.selectAll(`.dots.ci-${colorIdentity}`).each(function(d) {
-    if (hoveredMap.has(d.name)) {
-      hoveredMap.delete(d.name); // 💨 Toggle off
-    } else {
-      hoveredMap.set(d.name, d); // ✅ Toggle on
-    }
-  });
-
-  updateState({ hoveredCards: Array.from(hoveredMap.values()), isHoverUpdate: true });
-  d3.selectAll(".dots circle").classed("selected-hover", false);
-  updateSelectedHoverClass();
+  addActiveSelection("colorIdentities", colorIdentity);
+applySelectionToScatter();
 });
-
-
 
 onIcicleNumClick(({ numColors }) => {
-  const hovered = getState().hoveredCards || [];
-  const hoveredMap = new Map(hovered.map(c => [c.name, c]));
-
-  d3.selectAll(`.dots.nc-${numColors}`).each(function(d) {
-    if (hoveredMap.has(d.name)) {
-      hoveredMap.delete(d.name); // 💨 Toggle off
-    } else {
-      hoveredMap.set(d.name, d); // ✅ Toggle on
-    }
-  });
-
-  updateState({ hoveredCards: Array.from(hoveredMap.values()), isHoverUpdate: true });
-  d3.selectAll(".dots circle").classed("selected-hover", false);
-  updateSelectedHoverClass();
+  addActiveSelection("numColors", numColors);
+applySelectionToScatter();
 });
-
 
 onLineChartClick(({ year }) => {
-const hoveredCards = getState().hoveredCards || [];
-  const hoveredMap = new Map(hoveredCards.map(c => [c.name, c]));
 
   const targetYear = parseInt(year, 10); // Ensure it's a number
-  d3.selectAll(".dots circle").each(function(card) {
-    const cardYear = new Date(card.release_date).getFullYear();
-if (cardYear === targetYear) {
-      if (hoveredMap.has(card.name)) {
-        hoveredMap.delete(card.name); // Toggle off
-      } else {
-        hoveredMap.set(card.name, card); // Toggle on
-      }
-    }
-  });
-
-  updateState({
-    hoveredCards: Array.from(hoveredMap.values()),
-    isHoverUpdate: true
-  });
-  d3.selectAll(".dots circle").classed("selected-hover", false);
-  updateSelectedHoverClass();
+  addActiveSelection("years", targetYear)
+applySelectionToScatter();
 });
 
-
 onLineChartBrush((entries) => {
-  const hoveredCards = getState().hoveredCards || [];
-  const hoveredMap = new Map(hoveredCards.map(c => [c.name, c]));
 
   const brushedYears = new Set(entries.map(e => parseInt(e.year, 10))); // ⬅ convert years to numbers
-
-  // Iterate all scatterplot dots
-  d3.selectAll(".dots circle").each(function(card) {
-    const cardYear = new Date(card.release_date).getFullYear();
-
-    if (brushedYears.has(cardYear)) {
-      if (hoveredMap.has(card.name)) {
-        hoveredMap.delete(card.name); // Toggle off
-      } else {
-        hoveredMap.set(card.name, card); // Toggle on
-      }
-       d3.select(this).classed("brushed-linechart", true);
-    }
-  });
-
-  updateState({
-    hoveredCards: Array.from(hoveredMap.values()),
-    isHoverUpdate: true
-  });
-
-  d3.selectAll(".dots circle").classed("selected-hover", false);
-  updateSelectedHoverClass(); // <- same logic used on click
+  brushedYears.forEach(e => addActiveSelection("years", e));
+applySelectionToScatter();
 });
 
 onTimelineBrush((entries) => {
-  const hoveredCards = getState().hoveredCards || [];
-  const hoveredMap = new Map(hoveredCards.map(c => [c.name, c]));
 
   const brushedSetNames = new Set(entries.map(e => e.name)); // e.g., ["Innistrad", "Zendikar", ...]
-
-  // Iterate all scatterplot dots
-  d3.selectAll(".dots circle")
-  .each(function(card) {
-    const matches = card.all_sets?.some(s => brushedSetNames.has(s.name));
-
-    if (matches) {
-      if (hoveredMap.has(card.name)) {
-        hoveredMap.delete(card.name); // Toggle off
-      } else {
-        hoveredMap.set(card.name, card); // Toggle on
-      }
-      d3.select(this).classed("brushed-timeline", true);
-    }
-  });
-
-  updateState({
-    hoveredCards: Array.from(hoveredMap.values()),
-    isHoverUpdate: true
-  });
-
-  d3.selectAll(".dots circle").classed("selected-hover", false);
-  updateSelectedHoverClass(); // <- same logic used on click
+ brushedSetNames.forEach(e => addActiveSelection("sets", e));
+applySelectionToScatter();
 });
+
+
 
 
 onClearTimelineBrush(() => {
   // Get the current state
-  const hoveredCards = getState().hoveredCards || [];
-  const brushedNames = new Set();
-
-  // Collect names of brushed-timeline cards
-  d3.selectAll(".dots circle.brushed-timeline").each(function(d) {
-    brushedNames.add(d.name);
-  });
-
-  // Remove only brushed-timeline cards from state
-  const filteredCards = hoveredCards.filter(card => !brushedNames.has(card.name));
-
-  // Update state
-  updateState({ hoveredCards: filteredCards, isHoverUpdate: true });
-
-  // Clear visual classes
-  d3.selectAll(".dots circle.brushed-timeline")
-    .classed("brushed-timeline", false)
-    .classed("selected-hover", false);
-
-  updateSelectedHoverClass(); // <- refresh the styling
+activeSelections.sets.clear();
+applySelectionToScatter();
 });
 
 onClearLineChartBrush(() => {
-  // Get the current state
-  const hoveredCards = getState().hoveredCards || [];
-  const brushedNames = new Set();
-
-  // Collect names of brushed-timeline cards
-  d3.selectAll(".dots circle.brushed-linechart").each(function(d) {
-    brushedNames.add(d.name);
-  });
-
-  // Remove only brushed-timeline cards from state
-  const filteredCards = hoveredCards.filter(card => !brushedNames.has(card.name));
-
-  // Update state
-  updateState({ hoveredCards: filteredCards, isHoverUpdate: true });
-
-  // Clear visual classes
-  d3.selectAll(".dots circle.brushed-linechart")
-    .classed("brushed-linechart", false)
-    .classed("selected-hover", false);
-
-  updateSelectedHoverClass(); // <- refresh the styling
+ activeSelections.years.clear();
+applySelectionToScatter();
 });
 
 onSetHover(setInfo => {
@@ -622,22 +505,28 @@ function mouseoutFn(event, d) {
 
 
 function clickFn(event, d) {
-  const hoveredCards = getState().hoveredCards || [];
-  const index = hoveredCards.findIndex(c => c.name === d.name);
-
-  let newHoveredCards;
-  if (index !== -1) {
-    // Remove card
-    newHoveredCards = [...hoveredCards.slice(0, index), ...hoveredCards.slice(index + 1)];
-    d3.select(this).classed("selected-hover", false);
+  if (activeSelections.cards.has(d.name)) {
+    activeSelections.cards.delete(d.name);
   } else {
-    // Add card
-    newHoveredCards = [...hoveredCards, d];
-    d3.select(this).classed("selected-hover", true);
+    activeSelections.cards.set(d.name, d);
   }
 
-  updateState({ hoveredCards: newHoveredCards, isHoverUpdate: true });
+  applySelectionToScatter(); // use updated selections
+  getAggregatedCardAttributesFromManualSelection();
 }
+
+
+onCardSearch(card => {
+  console.log("Card search triggered:", card);
+  if (activeSelections.cards.has(card.name)) {
+    activeSelections.cards.delete(card.name);
+  } else {
+    activeSelections.cards.set(card.name, card);
+  }
+
+  applySelectionToScatter(); // use updated selections
+  getAggregatedCardAttributesFromManualSelection();
+});
 
 
 function updatePointPositions(xScale, yScale) {
@@ -664,6 +553,57 @@ function updatePointPositions(xScale, yScale) {
   });
 }
 
+
+function getAggregatedCardAttributesFromManualSelection() {
+  const originalitySet = new Set();
+  const raritySet = new Set();
+  const colorIdentitySet = new Set();
+  const yearSet = new Set();
+  const setNameSet = new Set();
+
+  for (const card of activeSelections.cards.values()) {
+    // Originalities (array of strings)
+    if (Array.isArray(card.all_originalities)) {
+      for (const orig of card.all_originalities) {
+        originalitySet.add(orig.toLowerCase());
+      }
+    }
+
+    // Rarity (single string)
+    if (card.rarity) {
+      raritySet.add(card.rarity.toLowerCase());
+    }
+
+    // Color Identity (array of single letters like ['W', 'U'])
+    if (Array.isArray(card.color_identity)) {
+      const key = card.color_identity.join("");
+      colorIdentitySet.add(key);
+    }
+
+    // Year (from release_date)
+    if (card.release_date) {
+      const year = new Date(card.release_date).getFullYear();
+      if (!isNaN(year)) {
+        yearSet.add(year);
+      }
+    }
+
+    // All Set Names
+    if (Array.isArray(card.all_sets)) {
+      for (const s of card.all_sets) {
+        if (s.name) setNameSet.add(s.name);
+      }
+    }
+  }
+
+  emitScatterplotCards({
+    originalities: originalitySet,
+    rarities: raritySet,
+    colorIdentities: colorIdentitySet,
+    years: yearSet,
+    setNames: setNameSet
+  });
+}
 
 
 
@@ -1057,14 +997,14 @@ const brush = d3.brush()
     const t0 = performance.now();
     svg.call(zoom); // Re-enable zoom
       if (ignoreNextBrushEnd) {
-    ignoreNextBrushEnd = false;
-    return;
-  }
+          ignoreNextBrushEnd = false;
+      return;
+    }
 
   if (!event.selection) {
-    console.log("djdkjd")
-    updateState({ hoveredCards: [], isHoverUpdate: true });
-    d3.selectAll(".dots circle").classed("selected-hover", false);
+    activeSelections.cards.clear();
+    emitClearScatterplotBrush();
+    applySelectionToScatter();
     return;
   }
 
@@ -1082,41 +1022,40 @@ const brush = d3.brush()
     }
 
       if (brushedNames.size === 0) {
-      updateState({ hoveredCards: [], isHoverUpdate: true });
-      d3.selectAll(".dots circle").classed("selected-hover", false);
+      activeSelections.cards.clear();
+      emitClearScatterplotBrush();
+      applySelectionToScatter();
       ignoreNextBrushEnd = true;
       brushOverlay.call(brush.move, null);
       return;
     }
     const t2 = performance.now();
-    const hoveredCards = getState().hoveredCards || [];
-    const hoveredNames = new Set(hoveredCards.map(c => c.name));
-    const hoveredMap = new Map(hoveredCards.map(c => [c.name, c]));
 
     const actualCardMap = new Map(actualFIlteredData.map(c => [c.name, c]));
-
+    // Add brushed cards to manual selection map
     for (const name of brushedNames) {
-    if (hoveredMap.has(name)) {
-      hoveredMap.delete(name);
-    } else {
       const match = actualCardMap.get(name);
-      if (match) hoveredMap.set(name, match);
-    }
+      if (activeSelections.cards.has(name)) {
+        activeSelections.cards.delete(name); // 💨 deselect
+      } else {
+        if (match) activeSelections.cards.set(name, match); // ✅ select
+      }
     }
 
+    const summary = getAggregatedCardAttributesFromManualSelection();
     const t3 = performance.now();
-    const newHoveredCards = Array.from(hoveredMap.values());
-    updateState({ hoveredCards: newHoveredCards, isHoverUpdate: true });
+
+    // Now recompute hoveredCards based on current filters + manual cards
+    //emitScatterplotBrush(brushedCards);
+    applySelectionToScatter();
 
     const t4 = performance.now();
-    const updatedNames = new Set([...brushedNames, ...hoveredNames]);
-    applySelectedHoverClass(hoveredMap, updatedNames);
 
-    const t5 = performance.now();
     ignoreNextBrushEnd = true;
     brushOverlay.call(brush.move, null); // Clear brush selection
 
-    const t6 = performance.now();
+    const t5 = performance.now();
+
 
     // console.log(`Brush Interaction Timing:
     //   • Extract selection bounds:       ${(t1 - t0).toFixed(2)} ms

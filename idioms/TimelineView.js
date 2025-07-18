@@ -2,7 +2,7 @@
 import { updateState, getState } from "../state.js";
 import { updateFilterPanel } from "./FilterPanel.js";
 import { emitSetHover, emitClearHover, onNumColorsHover, onClearNumColorsHover, onAlluvialClick, onAlluvialLinkClick, emitSetTypeHover, emitClearSetTypeHover,
-        onHoverCard, onClearHover, emitClearSetHover,emitTimelineSetClick, onAlluvialLinkHover, onClearAlluvialLinkHover,
+        onHoverCard, onClearHover, emitClearSetHover,emitTimelineSetClick, onAlluvialLinkHover, onClearAlluvialLinkHover,onScatterplotCards,onClearScatterplotBrush,
         emitYearClick, onRectHover, onClearRectHover, onClearLineYearHover, onLineChartClick, onLineChartBrush, emitLineChartClick, emitTimelineSetTypeClick,
         onLineYearHover, onAlluvialHover, onClearAlluvialHover, onIcicleClick, onIcicleNumClick, emitTimelineBrush, emitClearTimelineBrush, onClearLineChartBrush} from "./Events.js";
 
@@ -1116,7 +1116,16 @@ const activeTimelineSelections = {
   fromYears: new Set(),
   sets: new Set(),
   setTypes: new Set(),
+  setsFromScatterplot: new Set(),
 };
+
+
+onScatterplotCards(({ setNames }) => {
+
+  activeTimelineSelections.setsFromScatterplot = new Set(setNames);
+  updateTimelineSelections();
+});
+
 
 onAlluvialClick(({ category, value }) => {
   if (!category || !value) return;
@@ -1190,6 +1199,11 @@ onClearLineChartBrush(() => {
   activeTimelineSelections.fromYears.clear();
 
  updateTimelineSelections();
+});
+
+onClearScatterplotBrush(() => {
+  activeTimelineSelections.setsFromScatterplot.clear();
+  updateTimelineSelections();
 });
 
 onIcicleClick(({ colorIdentity }) => {
@@ -1289,6 +1303,13 @@ if (!isMatched) {
       break;
     }
   }
+}
+
+if (
+  !isMatched &&
+  activeTimelineSelections.setsFromScatterplot?.has(d.name)
+) {
+  isMatched = true;
 }
 
     rect.classed("selectedHovered", isMatched)

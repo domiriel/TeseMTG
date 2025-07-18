@@ -24,6 +24,8 @@ import {
   onClearAlluvialLinkHover,
   onTimelineSetClick,
   onTimelineBrush,
+  onScatterplotCards,
+  onClearScatterplotBrush,
   onClearTimelineBrush,
   onTimelineSetTypeClick,
 } from "./Events.js";
@@ -637,7 +639,7 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
     });
 
     // ✅ Update selection lines to move with zoom
-svg.selectAll(".highlight-hover-line").each(function () {
+svg.selectAll(".selected-hover-line").each(function () {
   const line = d3.select(this);
   const time = +line.attr("data-timestamp"); // stored below
   const x = transform.applyX(xScale(new Date(time))) + margin.left;
@@ -844,6 +846,7 @@ const activeLineSelections = {
   fromYears: new Set(), // 👈 ADD THIS
   yearsFromTimelineSets: new Map(),
   yearsFromSetTypes: new Map(), // 👈 NEW
+  yearsFromScatterplotCards: new Set(),
 };
 
 onAlluvialClick(({ category, value }) => {
@@ -868,6 +871,12 @@ onAlluvialClick(({ category, value }) => {
 
   updateLineChartSelections();
 });
+onScatterplotCards(({ years }) => {
+  const stringYears = new Set([...years].map(y => y.toString()));
+  activeLineSelections.yearsFromScatterplotCards = stringYears;
+  updateLineChartSelections();
+});
+
 
 onAlluvialLinkClick(({ originality, rarity }) => {
   const pairKey = `${originality}|${rarity}`;
@@ -900,10 +909,17 @@ onTimelineBrush((entries) => {
   updateLineChartSelections();
 });
 
+onClearScatterplotBrush(() => {
+  activeLineSelections.yearsFromScatterplotCards.clear();
+  updateLineChartSelections();
+});
+
 onClearTimelineBrush(() => {
   activeLineSelections.yearsFromTimelineSets.clear();
   updateLineChartSelections();
 });
+
+
 
 onTimelineSetClick((setInfo) => {
   const { name, releaseDate } = setInfo;
@@ -972,7 +988,7 @@ function updateLineChartSelections() {
   const svg = d3.select(".LineChart svg");
   if (svg.empty()) return;
 
-  svg.selectAll(".highlight-hover-line").remove();
+  svg.selectAll(".selected-hover-line").remove();
 
   const matchingYears = new Set();
 
@@ -981,7 +997,6 @@ function updateLineChartSelections() {
     if (!d) return;
 
     const yearStr = d.year.getFullYear().toString();
-
     let match =
       [...activeLineSelections.fromAlluvialOriginality].some((val) =>
         d.originalities?.has(val)
@@ -1028,6 +1043,11 @@ function updateLineChartSelections() {
       }
     }
 
+    if (!match) {
+  if (activeLineSelections.yearsFromScatterplotCards?.has(yearStr)) {
+    match = true;
+  }
+}
     if (match) {
       matchingYears.add(d.year.getTime());
     }
@@ -1048,7 +1068,7 @@ function updateLineChartSelections() {
 
     svg
       .append("line")
-      .attr("class", "highlight-hover-line")
+      .attr("class", "selected-hover-line")
       .attr("data-timestamp", t)
       .attr("x1", x)
       .attr("x2", x)

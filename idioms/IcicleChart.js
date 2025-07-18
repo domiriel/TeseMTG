@@ -10,6 +10,8 @@ import {
   emitIcicleNumClick,
   onLineChartClick,
   onHoverCard,
+  onScatterplotCards,
+  onClearScatterplotBrush,
   onClearHover,
   onSetHover,
   onSetTypeHover,
@@ -74,6 +76,7 @@ const activeSelections = {
   fromYears: new Set(),
   colorIdentitiesFromTimelineSets: new Map(),
   colorIdentitiesFromTimelineSetsTypes: new Map(),
+  colorIdentitiesFromScatterplot: new Set(),
 };
 
 onLineChartClick(({ year }) => {
@@ -120,6 +123,11 @@ onTimelineBrush((entries) => {
 
 onClearTimelineBrush(() => {
   activeSelections.colorIdentitiesFromTimelineSets.clear();
+  updateIcicleSelections();
+});
+
+onClearScatterplotBrush(() => {
+  activeSelections.colorIdentitiesFromScatterplot.clear();
   updateIcicleSelections();
 });
 
@@ -199,6 +207,13 @@ onAlluvialLinkClick(({ originality, rarity }) => {
   updateIcicleSelections();
 });
 
+onScatterplotCards(({ colorIdentities }) => {
+  // Replace the set completely
+  activeSelections.colorIdentitiesFromScatterplot = new Set(colorIdentities);
+
+  updateIcicleSelections(); // Apply to rects
+});
+
 function updateIcicleSelections() {
   d3.selectAll("rect.icicle-rect").each(function (d) {
     const rect = d3.select(this);
@@ -256,24 +271,45 @@ function updateIcicleSelections() {
     }
 
     if (!shouldSelect) {
-      const identity = d.data.name;
-      for (const identitySet of activeSelections.colorIdentitiesFromTimelineSets.values()) {
-        if (identitySet.has(identity)) {
-          shouldSelect = true;
-          break;
-        }
-      }
+  const identity = d.data.name;
+  for (const identitySet of activeSelections.colorIdentitiesFromTimelineSets.values()) {
+    if (
+      identitySet.has(identity) ||
+      (identity === "Colorless" && identitySet.has(""))
+    ) {
+      shouldSelect = true;
+      break;
     }
+  }
+}
 
-    if (!shouldSelect) {
-      const identity = d.data.name;
-      for (const identitySet of activeSelections.colorIdentitiesFromTimelineSetsTypes.values()) {
-        if (identitySet.has(identity)) {
-          shouldSelect = true;
-          break;
-        }
-      }
+if (!shouldSelect) {
+  const identity = d.data.name;
+  for (const identitySet of activeSelections.colorIdentitiesFromTimelineSetsTypes.values()) {
+    if (
+      identitySet.has(identity) ||
+      (identity === "Colorless" && identitySet.has(""))
+    ) {
+      shouldSelect = true;
+      break;
     }
+  }
+}
+
+
+if (!shouldSelect) {
+  const identity = d.data.name;
+
+  if (activeSelections.colorIdentitiesFromScatterplot.has(identity)) {
+    shouldSelect = true;
+  }
+
+  // ✅ Special case: empty string means "Colorless"
+  if (!shouldSelect && identity === "Colorless" && activeSelections.colorIdentitiesFromScatterplot.has("")) {
+    shouldSelect = true;
+  }
+}
+
 
     rect
       .classed("selectedHovered", shouldSelect)

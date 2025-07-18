@@ -177,6 +177,42 @@ export function emitClearLineChartBrush() {
 }
 
 
+let ScatterplotCardsHandlers = [];
+export function onScatterplotCards(handler) {
+  ScatterplotCardsHandlers.push(handler); 
+}
+export function emitScatterplotCards(payload) { 
+  console.log(payload);
+  ScatterplotCardsHandlers.forEach(fn => fn(payload));
+}
+
+let scatterplotBrushHandlers = [];
+export function onScatterplotBrush(handler) {
+  scatterplotBrushHandlers.push(handler);
+}     
+export function emitScatterplotBrush(payload) {
+  console.log(payload)
+  scatterplotBrushHandlers.forEach(fn => fn(payload));
+}
+
+let clearScatterplotBrushHandlers = [];
+export function onClearScatterplotBrush(handler) {
+  clearScatterplotBrushHandlers.push(handler);
+}
+export function emitClearScatterplotBrush() {
+  clearScatterplotBrushHandlers.forEach(fn => fn());
+}
+
+const cardSearchListeners = [];
+
+export function emitCardSearch(card) {
+  for (const fn of cardSearchListeners) fn(card);
+}
+
+export function onCardSearch(fn) {
+  cardSearchListeners.push(fn);
+}
+
 let timelineBrushHandlers = [];
 
 export function onTimelineBrush(handler) {

@@ -12,6 +12,8 @@ import {
   getEffectivePriceAttribute,
   isFilterEmpty,
 } from "../script.js";
+
+import { emitCardSearch } from "./Events.js";
 import { showLoader, hideLoader } from "./LoadingAnimation.js";
 const EXCLUDED_SET_TYPES = new Set(["alchemy", "minigame"]);
 const optionMap = new Map();
@@ -458,18 +460,8 @@ export function createFilterPanel(
 
     const card = d3.select(circle).datum();
 
-    const { hoveredCards } = getState();
-    const isAlreadySelected = hoveredCards.some((c) => c.name === card.name);
-
-    let newHoveredCards = isAlreadySelected
-      ? hoveredCards
-      : [...hoveredCards, card];
-
-    updateState({ hoveredCards: newHoveredCards, isHoverUpdate: true });
-
-    d3.selectAll(".dots circle")
-      .filter((d) => d.name === card.name)
-      .classed("selected-hover", !isAlreadySelected);
+    emitCardSearch(card);
+    this.value = "";
   });
 
   const priceFields = new Set();

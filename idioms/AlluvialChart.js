@@ -23,6 +23,9 @@ import {
   onClearTimelineBrush,
   onClearLineChartBrush,
   onClearSetTypeHover,
+  onClearScatterplotBrush,
+  onScatterplotBrush,
+  onScatterplotCards,
   onSetTypeHover,
   onTimelineSetTypeClick,
   onClearLineYearHover,
@@ -201,6 +204,25 @@ onLineChartBrush((entries) => {
   updateAlluvialFromSelections();
 });
 
+onScatterplotCards(({ originalities, rarities }) => {
+  console.log("Scatterplot Cards:", originalities, rarities);
+  if (!activeAlluvialSelections.has("cards")) {
+    activeAlluvialSelections.set("cards", {
+      source: "scatterplot",
+      originalities: new Set(originalities),
+      rarities: new Set(rarities),
+    });
+  } else {
+    const entry = activeAlluvialSelections.get("cards");
+    entry.originalities = new Set(originalities);
+    entry.rarities = new Set(rarities);
+  }
+
+  updateAlluvialFromSelections();
+});
+
+
+
 onTimelineBrush((entries) => {
   entries.forEach(({ name, originalities, rarities }) => {
     if (!name) return;
@@ -230,6 +252,12 @@ onClearTimelineBrush(() => {
 
   updateAlluvialFromSelections(); // to re-render Alluvial visuals
 });
+
+onClearScatterplotBrush(() => {
+
+  activeAlluvialSelections.delete("cards");
+   updateAlluvialFromSelections();
+})
 
 onClearLineChartBrush(() => {
   for (const [key, value] of activeAlluvialSelections.entries()) {
