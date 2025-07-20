@@ -2,7 +2,7 @@
 import { updateState, getState } from "../state.js";
 import { emitHoverCard, emitClearHover,
           onSetHover, onClearSetHover, onRectHover, onClearRectHover,onClearLineYearHover, onLineYearHover, onNumColorsHover, onClearNumColorsHover, emitScatterplotCards, emitScatterplotBrush, emitClearScatterplotBrush, 
-          onAlluvialHover, onClearAlluvialHover, onAlluvialClick, onAlluvialLinkClick, onIcicleClick, onLineChartClick, onIcicleNumClick,onCardSearch,
+          onAlluvialHover, onClearAlluvialHover, onAlluvialClick, onAlluvialLinkClick, onIcicleClick, onLineChartClick, onIcicleNumClick,onCardSearch, onClearAlluvialSelections,onClearIcicleSelections,
           onTimelineSetClick, onYearClick, onAlluvialLinkHover, onClearAlluvialLinkHover, onLineChartBrush, onClearLineChartBrush, onSetTypeHover, onTimelineSetTypeClick, onTimelineBrush, onClearTimelineBrush} from "./Events.js";
 import { getEffectivePriceAttribute } from "../script.js"; 
 const colorGroups = [
@@ -23,6 +23,18 @@ const activeSelections = {
   setTypes: new Set(),
   cards: new Map()
 };
+
+onClearAlluvialSelections(() => {
+  activeSelections.originalities.clear();
+  activeSelections.rarities.clear();
+  applySelectionToScatter();
+});
+
+onClearIcicleSelections(() => {
+  activeSelections.colorIdentities.clear();
+  activeSelections.numColors.clear();
+  applySelectionToScatter();
+});
 
 function getCardsMatchingActiveSelections(data) {
   let result = data;
@@ -1248,15 +1260,20 @@ noRankEntry.append("text")
   .scaleExtent([1, 24])
   .translateExtent([[0, 0], [chartWidth + buffer, chartHeight + buffer]])
   .extent([[0, 0], [chartWidth, chartHeight]])
-  .filter(event => {
-    
-    if (event.type === "wheel") return true;
+.filter(event => {
+  // Allow wheel events
+  if (event.type === "wheel") return true;
 
-    
-    if (event.type === "mousedown" && event.button === 2) return true;
+  // Allow right-click
+  if (event.type === "mousedown" && event.button === 2) return true;
 
-    return false;
-  })
+  // Allow if Ctrl key is pressed during any event
+  if (event.ctrlKey) return true;
+
+  // Otherwise, ignore the event
+  return false;
+})
+
   .on("zoom", event => {
     applyZoomTransform(event.transform);
   });
@@ -1302,6 +1319,25 @@ function applyZoomTransform(transform) {
             svg.call(zoom.transform, savedTransform);
         }
         
+svg.on("dblclick", function (event) {
+  const target = d3.select(event.target);
+  const tag = event.target.tagName?.toLowerCase();
+
+  const isDot = target.classed("dots")
+  const isCircleDot = tag === "circle" && target.classed("ci-")
+
+  const isAxis = target.classed("x-axis") || target.classed("y-axis");
+  const isLegend = target.node().closest(".edhrec-legend");
+  const isInfoIcon = target.node().closest(".info-icon");
+
+  const isInteractiveScatterElement = isDot || isCircleDot || isAxis || isLegend || isInfoIcon;
+
+  if (!isInteractiveScatterElement) {
+    activeSelections.cards.clear();
+    emitClearScatterplotBrush();
+    applySelectionToScatter();
+  }
+});
 
 
         
@@ -1332,7 +1368,9 @@ svg.node().__scatterMeta__ = {
     d3.select("#reset-button").on("click", resetZoom);
 }
 
+let interactionsOn = true;
 export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_eur") {
+  interactionsOn = false;
   const t0 = performance.now();
   lastPriceAttribute = selectedPriceAttribute;
   const hoveredCards = getState().hoveredCards || [];
@@ -1405,6 +1443,7 @@ const dots = gClip.selectAll("circle")
         return `dots ci-${identityKey} nc-${numColors}`;
       })
       .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
+      
       .attr("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
       .attr("stroke-width", d => (+d.edhrec_rank > 0) ? 0 : 1.2),
     update => update,
@@ -1413,6 +1452,7 @@ const dots = gClip.selectAll("circle")
 
 dots
   .attr("cx", d => newX(getXValue(d)))
+  .style("display", d =>(currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey ) ? null : "none")
   .attr("cy", d => newY(d.complexity));
 
 
@@ -1437,109 +1477,170 @@ dots
   // • Dot repositioning:    ${(t6 - t5).toFixed(2)} ms
   // • Hover sync:           ${(t7 - t6).toFixed(2)} ms
   // • TOTAL:                ${(t7 - t0).toFixed(2)} ms`);
+  interactionsOn = true;
 }
+
+function shouldShowHoverTemp(d, cx, cy, chartWidth, chartHeight) {
+  const zoomedOut = currentZoomLevel < ZOOM_THRESHOLD;
+  const inBounds = cx >= 0 && cx <= chartWidth && cy >= 0 && cy <= chartHeight;
+  return inBounds && (!zoomedOut || d.isZoomKey);
+}
+
 
 
 export function highlightScatterDotsFromSet(setName) {
+  const svg = d3.select(".Scatterplot svg");
+  const { logXScale, timeXScale, yScale } = svg.node().__scales__;
+  const { chartWidth, chartHeight } = svg.node().__scatterMeta__;
+  const xScale = xMetric === "avg_price" ? logXScale : timeXScale;
 
-  d3.select(".Scatterplot").selectAll(".dots circle")
+  d3.selectAll(".dots circle")
     .each(function(d) {
-  if (d.all_sets?.some(s => s.name === setName)) {
-    
-    d3.select(this).classed("hover-temp", true);
-  }
-});
-// const svg = d3.select(".Scatterplot svg");
-// const { xScale, yScale } = svg.node().__scales__;
-// updatePointPositions(xScale, yScale);
+      if (d.all_sets?.some(s => s.name === setName)) {
+        const cx = xScale(getXValue(d));
+        const cy = yScale(d.complexity);
+        if (shouldShowHoverTemp(d, cx, cy, chartWidth, chartHeight)) {
+          d3.select(this).classed("hover-temp", true);
+        }
+      }
+    });
 }
+
 
 function highlightScatterDotsFromSetType(setType) {
   const lowerType = setType.toLowerCase();
-  d3.select(".Scatterplot").selectAll(".dots circle")
+  const svg = d3.select(".Scatterplot svg");
+  const { logXScale, timeXScale, yScale } = svg.node().__scales__;
+  const { chartWidth, chartHeight } = svg.node().__scatterMeta__;
+  const xScale = xMetric === "avg_price" ? logXScale : timeXScale;
+
+  d3.selectAll(".dots circle")
     .each(function(d) {
       if (d.all_set_types?.includes(lowerType)) {
+        const cx = xScale(getXValue(d));
+        const cy = yScale(d.complexity);
+        if (shouldShowHoverTemp(d, cx, cy, chartWidth, chartHeight)) {
+          d3.select(this).classed("hover-temp", true);
+        }
+      }
+    });
+}
+
+
+
+function highlightScatterDotsFromIcicle(rectInfo) {
+  if (!interactionsOn) return;
+
+  const [targetIdentity] = [...rectInfo.colorIdentities];
+   const svg = d3.select(".Scatterplot svg");
+  const { logXScale, timeXScale, yScale } = svg.node().__scales__;
+  const { chartWidth, chartHeight } = svg.node().__scatterMeta__;
+  const xScale = xMetric === "avg_price" ? logXScale : timeXScale;
+
+  d3.selectAll(`.dots.ci-${targetIdentity}`)
+    .each(function(d) {
+      const cx = xScale(getXValue(d));
+      const cy = yScale(d.complexity);
+      if (shouldShowHoverTemp(d, cx, cy, chartWidth, chartHeight)) {
         d3.select(this).classed("hover-temp", true);
       }
     });
 }
 
 
-function highlightScatterDotsFromIcicle(rectInfo) {
-const [targetIdentity] = [...rectInfo.colorIdentities];
-
-  d3.selectAll(`.dots.ci-${targetIdentity}`).classed("hover-temp", true);
-
-  // const svg = d3.select(".Scatterplot svg");
-  // const { xScale, yScale } = svg.node().__scales__ || {};
-  // if (xScale && yScale) updatePointPositions(xScale, yScale);
-}
-
 function highlightScatterDotsFromNumColors(numColors) {
   if (numColors === undefined || numColors === null) return;
 
-  d3.select(".Scatterplot").selectAll(`.dots.nc-${numColors}`)
-    .classed("hover-temp", true);
+  const svg = d3.select(".Scatterplot svg");
+  const { logXScale, timeXScale, yScale } = svg.node().__scales__;
+  const { chartWidth, chartHeight } = svg.node().__scatterMeta__;
+  const xScale = xMetric === "avg_price" ? logXScale : timeXScale;
 
-  // const svg = d3.select(".Scatterplot svg");
-  // const { xScale, yScale } = svg.node().__scales__;
-  // if (xScale && yScale) updatePointPositions(xScale, yScale);
+  d3.selectAll(`.dots.nc-${numColors}`)
+    .each(function(d) {
+      const cx = xScale(getXValue(d));
+      const cy = yScale(d.complexity);
+      if (shouldShowHoverTemp(d, cx, cy, chartWidth, chartHeight)) {
+        d3.select(this).classed("hover-temp", true);
+      }
+    });
 }
+
 
 
 
 export function highlightScatterDotsFromYear(year) {
   const targetYear = year.getFullYear();
-  d3.select(".Scatterplot").selectAll(".dots circle")
+  const svg = d3.select(".Scatterplot svg");
+  const { logXScale, timeXScale, yScale } = svg.node().__scales__;
+  const { chartWidth, chartHeight } = svg.node().__scatterMeta__;
+  const xScale = xMetric === "avg_price" ? logXScale : timeXScale;
+
+  d3.selectAll(".dots circle")
     .each(function(d) {
       const cardYear = new Date(d.release_date).getFullYear();
-if (cardYear === targetYear) {
-        d3.select(this).classed("hover-temp", true);
+      if (cardYear === targetYear) {
+        const cx = xScale(getXValue(d));
+        const cy = yScale(d.complexity);
+        if (shouldShowHoverTemp(d, cx, cy, chartWidth, chartHeight)) {
+          d3.select(this).classed("hover-temp", true);
+        }
       }
     });
-
-  // const svg = d3.select(".Scatterplot svg");
-  // const { xScale, yScale } = svg.node().__scales__ || {};
-  // if (xScale && yScale) updatePointPositions(xScale, yScale);
 }
+
 
 
 function highlightScatterDotsFromAlluvial(category, value) {
   const lowerVal = value.toLowerCase();
+  const svg = d3.select(".Scatterplot svg");
+  const { logXScale, timeXScale, yScale } = svg.node().__scales__;
+  const { chartWidth, chartHeight } = svg.node().__scatterMeta__;
+  const xScale = xMetric === "avg_price" ? logXScale : timeXScale;
 
-  d3.select(".Scatterplot").selectAll(".dots circle")
+  d3.selectAll(".dots circle")
     .each(function(d) {
+      let match = false;
       if (category === "Originality" && d.all_originalities?.includes(lowerVal)) {
-        d3.select(this).classed("hover-temp", true);
+        match = true;
       } else if (category === "Rarity" && d.rarity?.toLowerCase() === lowerVal) {
-        d3.select(this).classed("hover-temp", true);
+        match = true;
+      }
+
+      if (match) {
+        const cx = xScale(getXValue(d));
+        const cy = yScale(d.complexity);
+        if (shouldShowHoverTemp(d, cx, cy, chartWidth, chartHeight)) {
+          d3.select(this).classed("hover-temp", true);
+        }
       }
     });
-
-  // const svg = d3.select(".Scatterplot svg");
-  // const { xScale, yScale } = svg.node().__scales__ || {};
-  // if (xScale && yScale) updatePointPositions(xScale, yScale);
 }
+
 
 function highlightScatterDotsFromAlluvialLink(originality, rarity) {
   const lowerOrig = originality.toLowerCase();
   const lowerRarity = rarity.toLowerCase();
+  const svg = d3.select(".Scatterplot svg");
+  const { logXScale, timeXScale, yScale } = svg.node().__scales__;
+  const { chartWidth, chartHeight } = svg.node().__scatterMeta__;
+  const xScale = xMetric === "avg_price" ? logXScale : timeXScale;
 
-  d3.select(".Scatterplot").selectAll(".dots circle")
+  d3.selectAll(".dots circle")
     .each(function(d) {
       const origMatch = d.all_originalities?.includes(lowerOrig);
       const rarityMatch = d.rarity?.toLowerCase() === lowerRarity;
 
       if (origMatch && rarityMatch) {
-        d3.select(this).classed("hover-temp", true);
+        const cx = xScale(getXValue(d));
+        const cy = yScale(d.complexity);
+        if (shouldShowHoverTemp(d, cx, cy, chartWidth, chartHeight)) {
+          d3.select(this).classed("hover-temp", true);
+        }
       }
     });
-
-  // Optional: If you reposition dots based on hover state
-  // const svg = d3.select(".Scatterplot svg");
-  // const { xScale, yScale } = svg.node().__scales__ || {};
-  // if (xScale && yScale) updatePointPositions(xScale, yScale);
 }
+
 
 export function clearScatterHoverOnly(Updateflag = "false") {
   d3.selectAll(".dots circle").classed("hover-temp", false);

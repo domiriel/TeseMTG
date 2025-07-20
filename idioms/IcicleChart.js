@@ -27,9 +27,12 @@ import {
   onLineChartBrush,
   onTimelineSetClick,
   onTimelineBrush,
+  onClearAlluvialSelections,
+  onClearTimelineSelections,
   onClearTimelineBrush,
   onClearLineChartBrush,
   onTimelineSetTypeClick,
+  emitClearIcicleSelections,
 } from "./Events.js";
 let globalRects = null;
 let clickTimer = null;
@@ -78,6 +81,19 @@ const activeSelections = {
   colorIdentitiesFromTimelineSetsTypes: new Map(),
   colorIdentitiesFromScatterplot: new Set(),
 };
+onClearAlluvialSelections(() => {
+  activeSelections.fromAlluvialOriginality.clear();
+  activeSelections.fromAlluvialRarity.clear();
+  activeSelections.fromAlluvialLinkPairs.clear();
+  updateIcicleSelections();
+});
+
+
+onClearTimelineSelections(() => {
+  activeSelections.colorIdentitiesFromTimelineSetsTypes.clear();
+  activeSelections.colorIdentitiesFromTimelineSets.clear();
+  updateIcicleSelections();
+});
 
 onLineChartClick(({ year }) => {
   const set = activeSelections.fromYears;
@@ -207,6 +223,22 @@ onAlluvialLinkClick(({ originality, rarity }) => {
   updateIcicleSelections();
 });
 
+function hasActiveIcicleSelections() {
+  return (
+    activeSelections.fromAlluvialOriginality.size > 0 ||
+    activeSelections.fromAlluvialRarity.size > 0 ||
+    activeSelections.fromAlluvialLinkPairs.size > 0 ||
+    activeSelections.fromIcicleIdentity.size > 0 ||
+    activeSelections.fromIcicleColors.size > 0 ||
+    activeSelections.fromYears.size > 0 ||
+    activeSelections.colorIdentitiesFromTimelineSets.size > 0 ||
+    activeSelections.colorIdentitiesFromTimelineSetsTypes.size > 0 ||
+    activeSelections.colorIdentitiesFromScatterplot.size > 0
+  );
+}
+
+
+
 onScatterplotCards(({ colorIdentities }) => {
   // Replace the set completely
   activeSelections.colorIdentitiesFromScatterplot = new Set(colorIdentities);
@@ -219,8 +251,12 @@ function updateIcicleSelections() {
     const rect = d3.select(this);
     let shouldSelect = false;
 
-    if (d.depth !== 2) return;
-
+    if (d.depth === 1) {
+    if (activeSelections.fromIcicleColors.has(d.data.numColors)) {
+      shouldSelect = true;
+    }
+  }
+    if (d.depth === 2) {
     for (const val of activeSelections.fromAlluvialOriginality) {
       if (d.data.originalities?.includes(val)) {
         shouldSelect = true;
@@ -310,11 +346,29 @@ if (!shouldSelect) {
   }
 }
 
-
+    }
     rect
       .classed("selectedHovered", shouldSelect)
       .attr("fill", shouldSelect ? d.data.selectedColor : d.data.color);
   });
+
+
+  const svg = d3.select(".IcicleChart").select("svg");
+if (!svg.empty()) {
+  const containerRect = svg.node().getBoundingClientRect();
+  const chartWidth = containerRect.width * 0.85;
+  const containerHeight = containerRect.height;
+  const rectDimensions = Math.min(containerHeight * 0.097, 22);
+  const legendFontSize = Math.min(containerRect.width * 0.0187, 13);
+  const margin = {
+    top: (containerHeight - containerHeight * 0.8) / 2 + 1,
+    right: 26,
+    bottom: 20,
+    left: containerRect.width * 0.015,
+  };
+  renderLegend(svg, chartWidth, margin, containerHeight, rectDimensions, legendFontSize);
+}
+
 }
 
 onClearLineYearHover(() => {
@@ -418,6 +472,118 @@ function validateFilterCombination(filters) {
 
   return false;
 }
+
+function renderLegend(svg, chartWidth, margin, containerHeight, rectDimensions, legendFontSize) {
+  svg.select(".legend").remove(); // remove old legend
+
+  const legendX = chartWidth + margin.right;
+  const legendY = margin.top + 5;
+
+  const legend = svg
+    .append("g")
+    .attr("class", "legend")
+    .attr("transform", `translate(${legendX}, ${legendY})`);
+
+  const showPatterns = hasActiveIcicleSelections();
+  const reversedColorScale = colorScale.slice().reverse();
+  const reversedSelectedScale = colorScaleSelected.slice().reverse();
+
+  const extraSpacing = 0;
+
+  legend
+    .append("text")
+    .attr("x", 0)
+    .attr("y", Math.min(rectDimensions * 6, 132))
+    .text("Original")
+    .attr("fill", "#000")
+    .style("font-size", `${legendFontSize}px`)
+    .style("shape-rendering", "crispEdges")
+    .style("font-weight", "bold");
+
+  legend
+    .append("text")
+    .attr("x", 0)
+    .attr("y", Math.min(rectDimensions * 6.75, 149))
+    .text("Cards (%)")
+    .attr("fill", "#000")
+    .style("font-size", `${legendFontSize}px`)
+    .style("shape-rendering", "crispEdges")
+    .style("font-weight", "bold");
+
+  reversedColorScale.forEach((interval, i) => {
+    const defs = svg.select("defs").empty()
+      ? svg.append("defs")
+      : svg.select("defs");
+
+    const legendEntry = legend
+      .append("g")
+      .attr("transform", `translate(0, ${i * (rectDimensions + extraSpacing)})`);
+
+    const baseColor = interval.color;
+    const selectedColor = reversedSelectedScale[i].color;
+
+    if (showPatterns) {
+      const patternId = `icicle-legend-pattern-${i}`;
+      const pattern = defs
+        .append("pattern")
+        .attr("id", patternId)
+        .attr("width", 1)
+        .attr("height", 1)
+        .attr("patternUnits", "objectBoundingBox")
+        .attr("patternContentUnits", "objectBoundingBox");
+
+      pattern
+        .append("path")
+        .attr("d", "M0,0 L1,0 L0,1 Z")
+        .attr("fill", selectedColor);
+
+      pattern
+        .append("path")
+        .attr("d", "M1,0 L1,1 L0,1 Z")
+        .attr("fill", baseColor);
+
+      legendEntry
+        .append("rect")
+        .attr("width", rectDimensions)
+        .attr("height", rectDimensions)
+        .style("shape-rendering", "crispEdges")
+        .attr("fill", `url(#${patternId})`)
+        .style("stroke", "#000");
+    } else {
+      legendEntry
+        .append("rect")
+        .attr("width", rectDimensions)
+        .attr("height", rectDimensions)
+        .style("shape-rendering", "crispEdges")
+        .attr("fill", baseColor)
+        .style("stroke", "#000");
+    }
+
+    legendEntry
+      .append("text")
+      .attr("x", chartWidth * 0.054)
+      .attr("y", rectDimensions * 0.25 - 1)
+      .text(`${interval.range[1]}%`)
+      .attr("fill", "#000")
+      .style("font-size", `${legendFontSize}px`)
+      .style("shape-rendering", "crispEdges");
+  });
+
+  const zeroLabel = legend
+    .append("g")
+    .attr("transform", `translate(0, ${reversedColorScale.length * rectDimensions})`);
+
+  zeroLabel
+    .append("text")
+    .attr("x", chartWidth * 0.054)
+    .attr("y", rectDimensions * 0.25 - 1)
+    .text(`0%`)
+    .attr("fill", "#000")
+    .style("font-size", `${legendFontSize}px`)
+    .style("shape-rendering", "crispEdges");
+}
+
+
 
 export function createIcicleChart(data, containerId, isUpdate = false) {
   d3.select(containerId).selectAll("*").remove();
@@ -736,31 +902,22 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
 
             clickTimer = setTimeout(() => {
               if (d.depth === 1) {
-                const children = d.children || [];
-                const identities = children.map((child) => child.data.name);
+  const set = activeSelections.fromIcicleColors;
+  if (set.has(d.data.numColors)) {
+    set.delete(d.data.numColors);
+  } else {
+    set.add(d.data.numColors);
+  }
 
-                const allAlreadySelected = identities.every((id) =>
-                  activeSelections.fromIcicleIdentity.has(id)
-                );
+  updateIcicleSelections();
 
-                if (allAlreadySelected) {
-                  identities.forEach((id) =>
-                    activeSelections.fromIcicleIdentity.delete(id)
-                  );
-                } else {
-                  identities.forEach((id) =>
-                    activeSelections.fromIcicleIdentity.add(id)
-                  );
-                }
-
-                updateIcicleSelections();
-
-                emitIcicleNumClick({
-                  numColors: d.data.numColors,
-                  originalities: d.data.originalities,
-                  rarities: d.data.rarities,
-                });
-              } else if (d.depth === 2) {
+  emitIcicleNumClick({
+    numColors: d.data.numColors,
+    originalities: d.data.originalities,
+    rarities: d.data.rarities,
+  });
+}
+else if (d.depth === 2) {
                 // Identity-level click (e.g., "W", "UB", "Colorless", etc.)
 
                 const identity = d.data.name;
@@ -999,103 +1156,29 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
     updateState({ selectedFilters: newFilters, updateContext: "IcicleFilter" });
   }
 
+
+  svg.on("dblclick", function (event) {
+  const target = d3.select(event.target);
+
+  const isRect = target.classed("icicle-rect");
+  const isText = target.node().tagName === "text";
+  const isInfoIcon = target.classed(".info-icon");
+
+  if (!isRect && !isText && !isInfoIcon) {
+    activeSelections.fromIcicleIdentity.clear();
+    activeSelections.fromIcicleColors.clear();
+    emitClearIcicleSelections();
+    updateIcicleSelections();
+  }
+});
+
   const legendX = chartWidth + margin.right;
   const legendY = margin.top + 5;
   const rectDimensions = Math.min(chartHeight * 0.097, 22);
   const legendFontSize = Math.min(containerWidth * 0.0187, 13);
 
-  const legend = svg
-    .append("g")
-    .attr("class", "legend")
-    .attr("transform", `translate(${legendX}, ${legendY})`);
+  renderLegend(svg, chartWidth, margin, containerHeight, rectDimensions, legendFontSize);
 
-  const extraSpacing = 0;
-
-  legend
-    .append("text")
-    .attr("x", 0)
-    .attr("y", Math.min(rectDimensions * 6, 132))
-    .text("Original")
-    .attr("fill", "#000")
-    .style("font-size", `${legendFontSize}px`)
-    .style("shape-rendering", "crispEdges")
-    .style("font-weight", "bold");
-
-  legend
-    .append("text")
-    .attr("x", 0)
-    .attr("y", Math.min(rectDimensions * 6.75, 149))
-    .text("Cards (%)")
-    .attr("fill", "#000")
-    .style("font-size", `${legendFontSize}px`)
-    .style("shape-rendering", "crispEdges")
-    .style("font-weight", "bold");
-
-  const reversedColorScale = colorScale.slice().reverse();
-  const reversedSelectedScale = colorScaleSelected.slice().reverse();
-
-  reversedColorScale.forEach((interval, i) => {
-    const defs = svg.select("defs").empty()
-      ? svg.append("defs")
-      : svg.select("defs");
-    const legendEntry = legend
-      .append("g")
-      .attr(
-        "transform",
-        `translate(0, ${i * (rectDimensions + extraSpacing)})`
-      );
-
-    const patternId = `icicle-legend-pattern-${i}`;
-    const selectedColor = reversedSelectedScale[i].color;
-
-    const pattern = defs
-      .append("pattern")
-      .attr("id", patternId)
-      .attr("width", 1)
-      .attr("height", 1)
-      .attr("patternUnits", "objectBoundingBox")
-      .attr("patternContentUnits", "objectBoundingBox");
-
-    pattern
-      .append("path")
-      .attr("d", "M0,0 L1,0 L0,1 Z")
-      .attr("fill", selectedColor);
-
-    pattern
-      .append("path")
-      .attr("d", "M1,0 L1,1 L0,1 Z")
-      .attr("fill", interval.color);
-
-    legendEntry
-      .append("rect")
-      .attr("width", rectDimensions)
-      .attr("height", rectDimensions)
-      .style("shape-rendering", "crispEdges")
-      .attr("fill", `url(#${patternId})`)
-      .style("stroke", "#000");
-
-    legendEntry
-      .append("text")
-      .attr("x", chartWidth * 0.054)
-      .attr("y", rectDimensions * 0.25 - 1)
-      .text(`${interval.range[1]}%`)
-      .attr("fill", "#000")
-      .style("font-size", `${legendFontSize}px`)
-      .style("shape-rendering", "crispEdges");
-  });
-
-  const zeroLabel = legend
-    .append("g")
-    .attr("transform", `translate(0, ${colorScale.length * rectDimensions})`);
-
-  zeroLabel
-    .append("text")
-    .attr("x", chartWidth * 0.054)
-    .attr("y", rectDimensions * 0.25 - 1)
-    .text(`0%`)
-    .attr("fill", "#000")
-    .style("font-size", `${legendFontSize}px`)
-    .style("shape-rendering", "crispEdges");
 }
 export function highlightIcicleRect(hoveredCards) {
   if (!globalRects) return;

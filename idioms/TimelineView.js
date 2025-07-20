@@ -1,9 +1,9 @@
 
 import { updateState, getState } from "../state.js";
 import { updateFilterPanel } from "./FilterPanel.js";
-import { emitSetHover, emitClearHover, onNumColorsHover, onClearNumColorsHover, onAlluvialClick, onAlluvialLinkClick, emitSetTypeHover, emitClearSetTypeHover,
-        onHoverCard, onClearHover, emitClearSetHover,emitTimelineSetClick, onAlluvialLinkHover, onClearAlluvialLinkHover,onScatterplotCards,onClearScatterplotBrush,
-        emitYearClick, onRectHover, onClearRectHover, onClearLineYearHover, onLineChartClick, onLineChartBrush, emitLineChartClick, emitTimelineSetTypeClick,
+import { emitSetHover, emitClearHover, onNumColorsHover, onClearNumColorsHover, onAlluvialClick, onAlluvialLinkClick, emitSetTypeHover, emitClearSetTypeHover, onClearAlluvialSelections,
+        onHoverCard, onClearHover, emitClearSetHover,emitTimelineSetClick, onAlluvialLinkHover, onClearAlluvialLinkHover,onScatterplotCards,onClearScatterplotBrush, emitClearTimelineSelections,
+        emitYearClick, onRectHover, onClearRectHover, onClearLineYearHover, onLineChartClick, onLineChartBrush, emitLineChartClick, emitTimelineSetTypeClick, onClearIcicleSelections,
         onLineYearHover, onAlluvialHover, onClearAlluvialHover, onIcicleClick, onIcicleNumClick, emitTimelineBrush, emitClearTimelineBrush, onClearLineChartBrush} from "./Events.js";
 
 let localSelectedYears = new Set();
@@ -234,7 +234,8 @@ const timelineTooltipText = `
     const typeCounts = new Map();
 
 
-
+d3.select(containerId)
+  .on("contextmenu", event => event.preventDefault());
 uniqueSets.forEach(set => {
   let quintileIndex = 0;
 for (let i = 0; i < thresholds.length; i++) {
@@ -546,7 +547,19 @@ tooltip.style("left", `${left}px`)
     
 
     const zoom = d3.zoom()
-        .filter(event => event.type === "wheel") // 👈 allow zooming ONLY via scroll
+        .filter(event => {
+  // Allow wheel events
+  if (event.type === "wheel") return true;
+
+  // Allow right-click
+  if (event.type === "mousedown" && event.button === 2) return true;
+
+  // Allow if Ctrl key is pressed during any event
+  if (event.ctrlKey) return true;
+
+  // Otherwise, ignore the event
+  return false;
+}) // 👈 allow zooming ONLY via scroll
         .scaleExtent([1, 10]) 
         .translateExtent([[0, 0], [chartWidth, adjustedChartHeight]])
         .on("zoom", zoomed);
@@ -983,6 +996,24 @@ brushedSets.forEach(set => {
   chartGroup.select(".brush").call(brush.move, null);
 }
 
+// Double-click anywhere outside meaningful elements to clear Timeline selections
+wrapper.on("dblclick", function(event) {
+  const target = d3.select(event.target);
+
+  const isSetRect = target.classed("set-rect");
+  const isYearLabel = target.classed("year-tick-timeline");
+  const isTypeLabel = target.classed("set-type-label");
+  const isInfoIcon = target.classed("timeline-info-icon");
+
+  // Only clear if clicked outside interactive elements
+  if (!isSetRect && !isYearLabel && !isTypeLabel && !isInfoIcon) {
+    activeTimelineSelections.fromYears.clear();
+    activeTimelineSelections.sets.clear();
+    activeTimelineSelections.setTypes.clear();
+    emitClearTimelineSelections();
+    updateTimelineSelections();
+  }
+});
 
 
 
@@ -1025,7 +1056,8 @@ export function highlightTimelineSetsHoverOnly(card) {
 
     d3.selectAll(".set-rect")
       .filter(d => hoveredSetNames.has(d.name.toLowerCase()))
-      .attr("fill",d => d.highlightColor);
+      .attr("fill",d => d.highlightColor)
+      .classed("hover-temp", true);
 }
 
 export function clearTimelineHoverOnly() {
@@ -1050,6 +1082,7 @@ function highlightTimelineSetsFromIcicle(rectInfo) {
       const ids = d.colorIdentities || new Set();
       return ids.has(actualIdentity);
     })
+    .classed("hover-temp", true)
     .attr("fill",d => d.highlightColor);
 }
 
@@ -1059,7 +1092,9 @@ function highlightTimelineSetsFromNumColors(numColors) {
 
   d3.selectAll(".set-rect")
     .filter(d => d.numColorsPresent?.has(numColors))
+    .classed("hover-temp", true)
     .attr("fill", d => d.highlightColor);
+
 }
 
 
@@ -1104,6 +1139,7 @@ export function highlightTimelineSetsFromYearInfo(yearInfo) {
 
   d3.selectAll(".set-rect")
     .filter(d => d.releaseDate.getFullYear() === targetYear)
+    .classed("hover-temp", true)
     .attr("fill",d => d.highlightColor);
 }
 
@@ -1119,6 +1155,18 @@ const activeTimelineSelections = {
   setsFromScatterplot: new Set(),
 };
 
+onClearAlluvialSelections(() => {
+  activeTimelineSelections.fromAlluvialOriginality.clear();
+  activeTimelineSelections.fromAlluvialRarity.clear();
+  activeTimelineSelections.fromAlluvialLinkPairs.clear();
+  updateTimelineSelections();
+});
+
+onClearIcicleSelections(() => {
+  activeTimelineSelections.fromIcicleIdentity.clear();
+  activeTimelineSelections.fromIcicleColors.clear();
+  updateTimelineSelections();
+});
 
 onScatterplotCards(({ setNames }) => {
 
@@ -1347,6 +1395,7 @@ function highlightTimelineSetsFromAlluvialCategory(category, value) {
       }
       return false;
     })
+    .classed("hover-temp", true)
     .attr("fill",d => d.highlightColor);
 }
 
@@ -1362,5 +1411,6 @@ function highlightTimelineSetsFromAlluvialLink(originality, rarity) {
       const rarityMatch = [...(d.rarities || [])].includes(lowerRarity);
       return origMatch && rarityMatch;
     })
+    .classed("hover-temp", true)
     .attr("fill", d => d.highlightColor);
 }

@@ -196,6 +196,12 @@ body {
   
 }
 
+.TimelineView .set-rect.hover-temp {
+  stroke: #d89313 !important;
+  stroke-width: 2px !important;
+}
+
+
 .Scatterplot circle.hover-temp{
   stroke: #d89313 !important;
   stroke-width: 1.5px !important;

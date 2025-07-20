@@ -9,6 +9,9 @@ import {
   onHoverCard,
   onClearHover,
   onSetHover,
+  onClearAlluvialSelections,
+  onClearIcicleSelections,
+  onClearTimelineSelections,
   onSetTypeHover,
   onClearSetHover,
   onRectHover,
@@ -106,7 +109,8 @@ function getClonedFilters() {
 }
 export function createStackedLineChart(data, containerId, isUpdate = false) {
   d3.select(containerId).selectAll("*").remove();
-
+  d3.select(containerId)
+  .on("contextmenu", event => event.preventDefault());  
   data = data.filter((card) => card.name !== "Gleemax");
 
   const groupedData = d3
@@ -211,7 +215,19 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
 
   const zoom = d3
     .zoom()
-    .filter((event) => event.type === "wheel") // 👈 allow zooming ONLY via scroll
+            .filter(event => {
+  // Allow wheel events
+  if (event.type === "wheel") return true;
+
+  // Allow right-click
+  if (event.type === "mousedown" && event.button === 2) return true;
+
+  // Allow if Ctrl key is pressed during any event
+  if (event.ctrlKey) return true;
+
+  // Otherwise, ignore the event
+  return false;
+}) // 👈 allow zooming ONLY via scroll
     .scaleExtent([1, 20])
     .translateExtent([
       [0, 0],
@@ -670,6 +686,22 @@ svg.selectAll(".selected-hover-line").each(function () {
       }
     });
   }
+svg.on("dblclick", function (event) {
+  const target = d3.select(event.target);
+
+  const isCircle = target.classed("data-point");
+  const isText = target.node().tagName === "text";
+  const isInfoIcon = target.classed("info-icon") || target.node().closest(".info-icon");
+
+  if (!isCircle && !isText && !isInfoIcon) {
+    // Clear all timeline-related selections
+    activeLineSelections.fromYears.clear();
+
+    emitClearLineChartBrush(); // optional: emit a global clear
+    updateLineChartSelections(); // re-render
+  }
+});
+
 }
 
 export function highlightLineChart(hoveredCards) {
@@ -735,7 +767,6 @@ function drawVerticalLinesForYears(years) {
       .attr("stroke", "#f2c46e")
       .attr("stroke-width", 1.5)
       .attr("stroke-dasharray", "4 2")
-      .lower();
   });
 }
 
@@ -848,6 +879,25 @@ const activeLineSelections = {
   yearsFromSetTypes: new Map(), // 👈 NEW
   yearsFromScatterplotCards: new Set(),
 };
+
+onClearAlluvialSelections(() => {
+  activeLineSelections.fromAlluvialOriginality.clear();
+  activeLineSelections.fromAlluvialRarity.clear();
+  activeLineSelections.fromAlluvialLinkPairs.clear();
+  updateLineChartSelections();
+});
+
+onClearIcicleSelections(() => {
+  activeLineSelections.fromIcicleColors.clear();
+  activeLineSelections.fromIcicleIdentity.clear();
+  updateLineChartSelections();
+});
+
+onClearTimelineSelections(() => {
+  activeLineSelections.yearsFromTimelineSets.clear();
+  activeLineSelections.yearsFromSetTypes.clear();
+  updateLineChartSelections();
+});
 
 onAlluvialClick(({ category, value }) => {
   if (!category || !value) return;

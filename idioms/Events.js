@@ -176,6 +176,31 @@ export function emitClearLineChartBrush() {
   clearLineChartBrushHandlers.forEach(fn => fn());
 }
 
+let clearAlluvialSelectionsHandlers = [];
+export function onClearAlluvialSelections(handler) {
+  clearAlluvialSelectionsHandlers.push(handler);
+}
+export function emitClearAlluvialSelections() {
+  clearAlluvialSelectionsHandlers.forEach(fn => fn());
+}
+
+let clearIcicleSelectionsHandlers = [];
+export function onClearIcicleSelections(handler) {
+  clearIcicleSelectionsHandlers.push(handler);
+}
+export function emitClearIcicleSelections() {
+  clearIcicleSelectionsHandlers.forEach(fn => fn());
+}
+
+let clearTimelineSelectionsHandlers = [];
+export function onClearTimelineSelections(handler) {
+  clearTimelineSelectionsHandlers.push(handler);
+}
+export function emitClearTimelineSelections() {
+  clearTimelineSelectionsHandlers.forEach(fn => fn());
+}
+
+
 
 let ScatterplotCardsHandlers = [];
 export function onScatterplotCards(handler) {

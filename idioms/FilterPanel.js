@@ -632,9 +632,16 @@ export function createFilterPanel(
       .attr("data-category", category)
       .attr("data-value", (d) => d.value)
       .on("click", function (event, d) {
-        const isSelected = selectedSet.has(d.value);
-        isSelected ? selectedSet.delete(d.value) : selectedSet.add(d.value);
-        const updatedFilters = structuredClone(selectedFilters);
+        let currentFilters = getState().selectedFilters;
+        const updatedFilters = cloneFilters(currentFilters); 
+        const isSelected = updatedFilters[category].has(d.value);
+        if(isSelected){
+          updatedFilters[category].delete(d.value)
+          selectedSet.delete(d.value);
+        } else {
+          updatedFilters[category].add(d.value);
+          selectedSet.add(d.value); 
+        }
         updateState({ selectedFilters: updatedFilters });
         updatePills();
         updateFilterStyles();

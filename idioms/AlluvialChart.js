@@ -25,6 +25,9 @@ import {
   onClearSetTypeHover,
   onClearScatterplotBrush,
   onScatterplotBrush,
+  emitClearAlluvialSelections,
+  onClearIcicleSelections,
+  onClearTimelineSelections,
   onScatterplotCards,
   onSetTypeHover,
   onTimelineSetTypeClick,
@@ -91,7 +94,142 @@ onSetTypeHover((setInfo) => {
   );
 });
 
+function hasActiveAlluvialSelections() {
+  return activeAlluvialSelections.size > 0;
+}
+function renderAlluvialLegend(svg, chartWidth, margin, chartHeight, svgWidth, priceRange, priceAttr, showPatterns = true) {
+  const numBins = 5;
+  const priceStep = (priceRange.max - priceRange.min) / numBins;
+  const symbol = formatPriceSymbol(priceAttr);
+
+  const dynamicLegendData = Array.from({ length: numBins }, (_, i) => ({
+    label: `${symbol ? symbol + " " : ""}${(
+      priceRange.min +
+      (i + 1) * priceStep
+    ).toFixed(2)}`,
+    color: getDiscreteColor(i * (100 / numBins)),
+  })).reverse();
+
+  const legendX = chartWidth + margin.right;
+  const legendY = margin.top;
+  const rectDimensions = Math.min(chartHeight * 0.097, 22);
+  const legendFontSize = Math.min(svgWidth * 0.0187, 13);
+
+  svg.select(".legend").remove(); // Clear old
+
+  const legend = svg
+    .append("g")
+    .attr("class", "legend")
+    .attr("transform", `translate(${legendX}, ${legendY})`);
+
+  legend
+    .append("text")
+    .attr("x", 0)
+    .attr("y", Math.min(rectDimensions * 6, 132))
+    .text("Avg Price")
+    .attr("fill", "#000")
+    .style("font-size", `${legendFontSize}px`)
+    .style("shape-rendering", "crispEdges")
+    .style("font-weight", "bold");
+
+  legend
+    .append("text")
+    .attr("x", 0)
+    .attr("y", Math.min(rectDimensions * 6.75, 149))
+    .text("(" + formatPriceLabel(priceAttr) + ")")
+    .attr("fill", "#000")
+    .style("font-size", `${legendFontSize}px`)
+    .style("shape-rendering", "crispEdges")
+    .style("font-weight", "bold");
+
+  dynamicLegendData.forEach((interval, i) => {
+    const legendEntry = legend
+      .append("g")
+      .attr("transform", `translate(0, ${i * rectDimensions})`);
+
+    const baseColor = interval.color;
+    const reversedIndex = numBins - 1 - i;
+    const selectedColor = getSelectedColor(reversedIndex * (100 / numBins));
+    const patternId = `legend-pattern-${i}`;
+
+    const defs = svg.select("defs").empty()
+      ? svg.append("defs")
+      : svg.select("defs");
+
+    if (showPatterns) {
+      const pattern = defs
+        .append("pattern")
+        .attr("id", patternId)
+        .attr("width", 1)
+        .attr("height", 1)
+        .attr("patternUnits", "objectBoundingBox")
+        .attr("patternContentUnits", "objectBoundingBox");
+
+      pattern
+        .append("path")
+        .attr("d", "M0,0 L1,0 L0,1 Z")
+        .attr("fill", selectedColor);
+
+      pattern
+        .append("path")
+        .attr("d", "M1,0 L1,1 L0,1 Z")
+        .attr("fill", baseColor);
+    }
+
+    legendEntry
+      .append("rect")
+      .attr("width", rectDimensions)
+      .attr("height", rectDimensions)
+      .style("shape-rendering", "crispEdges")
+      .attr("fill", showPatterns ? `url(#${patternId})` : baseColor)
+      .attr("stroke", "#000");
+
+    legendEntry
+      .append("text")
+      .attr("x", chartWidth * 0.054)
+      .attr("y", rectDimensions * 0.25 - 1)
+      .text(interval.label)
+      .attr("fill", "#000")
+      .style("font-size", `${legendFontSize}px`)
+      .style("shape-rendering", "crispEdges");
+  });
+
+  const zeroEntry = legend
+    .append("g")
+    .attr("transform", `translate(0, ${numBins * rectDimensions})`);
+
+  zeroEntry
+    .append("text")
+    .attr("x", chartWidth * 0.054)
+    .attr("y", rectDimensions * 0.25 - 1)
+    .text(`${symbol} 0.00`)
+    .attr("fill", "#000")
+    .style("font-size", `${legendFontSize}px`)
+    .style("shape-rendering", "crispEdges");
+}
+
+
+
 const activeAlluvialSelections = new Map();
+
+onClearIcicleSelections(() => {
+    for (const [key, value] of activeAlluvialSelections.entries()) {
+    if (value.source === "icicleColors" || value.source === "icicleNumColors" ) {
+      activeAlluvialSelections.delete(key);
+    }
+  }
+  updateAlluvialFromSelections(); // to re-render Alluvial visuals
+});
+
+onClearTimelineSelections(() => {
+  console.log("Clearing Timeline selections");
+    for (const [key, value] of activeAlluvialSelections.entries()) {
+    if (value.source === "timeline" || value.source === "timelineSetsType") {
+      activeAlluvialSelections.delete(key);
+    }
+  }
+  updateAlluvialFromSelections(); // to re-render Alluvial visuals
+});
 
 onIcicleClick(({ colorIdentity, originalities, rarities }) => {
   if (!colorIdentity) return;
@@ -289,6 +427,35 @@ function updateAlluvialFromSelections() {
       .classed("selectedHovered", match)
       .attr("fill", match ? d.selectedColor : d.baseColor);
   });
+
+
+  const svg = d3.select(".AlluvialChart").select("svg");
+if (!svg.empty()) {
+  const containerRect = svg.node().getBoundingClientRect();
+  const chartWidth = containerRect.width * 0.85;
+  const chartHeight = containerRect.height * 0.75;
+  const margin = {
+    top: containerRect.height * 0.17,
+    right: 26,
+    bottom: 40,
+    left: containerRect.width * 0.015,
+  };
+
+  renderAlluvialLegend(
+    svg,
+    chartWidth,
+    margin,
+    chartHeight,
+    containerRect.width,
+    {
+      min: d3.min(d3.selectAll("g.node").data(), (d) => d.avgPrice),
+      max: d3.max(d3.selectAll("g.node").data(), (d) => d.avgPrice),
+    },
+    getState().selectedPriceAttribute || "price_eur", // fallback
+    hasActiveAlluvialSelections()
+  );
+}
+
 }
 onClearSetHover(() => {
   clearAlluvialHoverOnly();
@@ -640,6 +807,14 @@ export function createAlluvialChart(
             emitClearAlluvialLinkHover();
           })
           .on("click", function (event, d) {
+            const key = `${d.source.name}|${d.target.name}`;
+            activeAlluvialSelections.set(key, {
+                source: "alluvial",
+                originalities:
+                new  Set([d.source.name]) ,
+                rarities: new Set([d.target.name]),
+              });
+              updateAlluvialFromSelections(); // handles all fill + class logic
             emitAlluvialLinkClick({
               originality: d.source.name.toLowerCase(),
               rarity: d.target.name.toLowerCase(),
@@ -808,6 +983,7 @@ export function createAlluvialChart(
               activeAlluvialSelections.delete(value);
             } else {
               activeAlluvialSelections.set(value, {
+                source: "alluvial",
                 originalities:
                   category === "Originality" ? new Set([value]) : new Set(),
                 rarities: category === "Rarity" ? new Set([value]) : new Set(),
@@ -925,128 +1101,35 @@ export function createAlluvialChart(
     });
   }
 
-  const numBins = 5;
 
-  const priceStep = (priceRange.max - priceRange.min) / numBins;
+  svg.on("dblclick", function(event) {
+  // Check if the double-click target is NOT a node or a link
+  const target = d3.select(event.target);
+  const isNode = target.classed("node");
+  const isLink = target.classed("link");
+  if (!isNode && !isLink) {
+    for (const [key, value] of activeAlluvialSelections.entries()) {
+    if (value.source === "alluvial") {
+      activeAlluvialSelections.delete(key);
+    }
+    emitClearAlluvialSelections();
+  }
+  }
+  updateAlluvialFromSelections(); // re-render Alluvial visuals
+});
+  
 
-  const symbol = formatPriceSymbol(priceAttr);
+  renderAlluvialLegend(
+  svg,
+  chartWidth,
+  margin,
+  chartHeight,
+  svgWidth,
+  priceRange,
+  selectedPriceAttribute,
+  hasActiveAlluvialSelections()
+);
 
-  const dynamicLegendData = Array.from({ length: numBins }, (_, i) => ({
-    label: `${symbol ? symbol + " " : ""}${(
-      priceRange.min +
-      (i + 1) * priceStep
-    ).toFixed(2)}`,
-    color: getDiscreteColor(i * (100 / numBins)),
-  })).reverse();
-
-  const legendX = chartWidth + margin.right; // slight adjustment inward
-  const legendY = margin.top;
-  const rectDimensions = Math.min(chartHeight * 0.097, 22);
-
-  const extraSpacing = 0;
-
-  const legendFontSize = Math.min(svgWidth * 0.0187, 13);
-  const legend = svg
-    .append("g")
-    .attr("class", "legend")
-    .attr("transform", `translate(${legendX}, ${legendY})`);
-
-  legend
-    .append("text")
-    .attr("x", 0)
-    .attr("y", Math.min(rectDimensions * 6, 132))
-    .text("Avg Price")
-    .attr("fill", "#000")
-    .style("font-size", `${legendFontSize}px`)
-    .style("shape-rendering", "crispEdges")
-    .style("font-weight", "bold");
-
-  legend
-    .append("text")
-    .attr("x", 0)
-    .attr("y", Math.min(rectDimensions * 6.75, 149))
-    .text("(" + formatPriceLabel(priceAttr) + ")")
-    .attr("fill", "#000")
-    .style("font-size", `${legendFontSize}px`)
-    .style("shape-rendering", "crispEdges")
-    .style("font-weight", "bold");
-
-  dynamicLegendData.forEach((interval, i) => {
-    const legendEntry = legend
-      .append("g")
-      .attr(
-        "transform",
-        `translate(0, ${i * (rectDimensions + extraSpacing)})`
-      );
-
-    const patternId = `legend-pattern-${i}`;
-
-    // Reverse the selectedColor scale so it matches base color order
-    const reversedIndex = numBins - 1 - i;
-
-    const baseColor = interval.color;
-    const selectedColor = getSelectedColor(reversedIndex * (100 / numBins));
-
-    // Append pattern to defs
-    const defs = svg.select("defs").empty()
-      ? svg.append("defs")
-      : svg.select("defs");
-
-    const pattern = defs
-      .append("pattern")
-      .attr("id", patternId)
-      .attr("width", 1)
-      .attr("height", 1)
-      .attr("patternUnits", "objectBoundingBox")
-      .attr("patternContentUnits", "objectBoundingBox");
-
-    // Top-left triangle: selectedColor
-    pattern
-      .append("path")
-      .attr("d", "M0,0 L1,0 L0,1 Z")
-      .attr("fill", selectedColor);
-
-    // Bottom-right triangle: baseColor
-    pattern
-      .append("path")
-      .attr("d", "M1,0 L1,1 L0,1 Z")
-      .attr("fill", baseColor);
-
-    // Use pattern as fill
-    legendEntry
-      .append("rect")
-      .attr("width", rectDimensions)
-      .attr("height", rectDimensions)
-      .style("shape-rendering", "crispEdges")
-      .attr("fill", `url(#${patternId})`)
-      .attr("stroke", "#000");
-
-    // Add label
-    legendEntry
-      .append("text")
-      .attr("x", chartWidth * 0.054)
-      .attr("y", rectDimensions * 0.25 - 1)
-      .text(interval.label)
-      .attr("fill", "#000")
-      .style("font-size", `${legendFontSize}px`)
-      .style("shape-rendering", "crispEdges");
-  });
-
-  const zeroEntry = legend
-    .append("g")
-    .attr(
-      "transform",
-      `translate(0, ${numBins * (rectDimensions + extraSpacing)})`
-    );
-
-  zeroEntry
-    .append("text")
-    .attr("x", chartWidth * 0.054)
-    .attr("y", rectDimensions * 0.25 - 1)
-    .text(`${symbol} 0.00`)
-    .attr("fill", "#000")
-    .style("font-size", `${legendFontSize}px`)
-    .style("shape-rendering", "crispEdges");
 }
 
 export function highlightAlluvialElements(hoveredCards) {
