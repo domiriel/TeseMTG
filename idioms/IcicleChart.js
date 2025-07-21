@@ -522,7 +522,6 @@ function renderLegend(svg, chartWidth, margin, containerHeight, rectDimensions, 
     const baseColor = interval.color;
     const selectedColor = reversedSelectedScale[i].color;
 
-    if (showPatterns) {
       const patternId = `icicle-legend-pattern-${i}`;
       const pattern = defs
         .append("pattern")
@@ -549,15 +548,7 @@ function renderLegend(svg, chartWidth, margin, containerHeight, rectDimensions, 
         .style("shape-rendering", "crispEdges")
         .attr("fill", `url(#${patternId})`)
         .style("stroke", "#000");
-    } else {
-      legendEntry
-        .append("rect")
-        .attr("width", rectDimensions)
-        .attr("height", rectDimensions)
-        .style("shape-rendering", "crispEdges")
-        .attr("fill", baseColor)
-        .style("stroke", "#000");
-    }
+  
 
     legendEntry
       .append("text")

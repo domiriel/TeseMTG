@@ -12,7 +12,7 @@ const colorGroups = [
     { range: [17075, 22765], color: "#b8997a"},
     { range: [22766, 28456], color: "#ceb397" }  
 ];
-
+const ZOOM_RESET_EPSILON = 0.001;
 const activeSelections = {
   originalities: new Set(),
   rarities: new Set(),
@@ -23,6 +23,22 @@ const activeSelections = {
   setTypes: new Set(),
   cards: new Map()
 };
+
+const dotSizeByZoom = [
+  { threshold: 1, radius: 2.5 },     // zoom < 1 — never happens since min is 1
+  { threshold: 2, radius: 3.5 },     // 1 ≤ zoom < 4
+  { threshold: 4, radius: 4.5 },     // 4 ≤ zoom < 8
+  { threshold: 8, radius: 4.5 },    // 8 ≤ zoom < 14
+  { threshold: Infinity, radius: 4.5 }  // 14 ≤ zoom
+];
+
+function getDotRadiusForZoom(zoomLevel) {
+  for (const { threshold, radius } of dotSizeByZoom) {
+    if (zoomLevel <= threshold) return radius;
+  }
+  return 2.5; // fallback
+}
+
 
 onClearAlluvialSelections(() => {
   activeSelections.originalities.clear();
@@ -1136,6 +1152,8 @@ infoGroup
   });
 
 const visibleData = filteredData
+const initialRadius = getDotRadiusForZoom(currentZoomLevel);
+console.log("Initial radius for zoom level", currentZoomLevel, "is", initialRadius);
 const dots = gClip.selectAll("circle")
   .data(visibleData, d => d.name)
   .join("circle")
@@ -1148,7 +1166,7 @@ const dots = gClip.selectAll("circle")
     : "Colorless";
   return `dots ci-${identityKey} nc-${numColors}`;
 })
-  .attr("r", 2.5)
+  .attr("r",initialRadius)
   .style("cursor", "pointer")
   .attr("fill", d => (+d.edhrec_rank > 0) ? getGroupColor(+d.edhrec_rank) : "transparent")
   .attr("stroke", d => (+d.edhrec_rank > 0) ? "none" : "black")
@@ -1282,8 +1300,12 @@ noRankEntry.append("text")
 
 
 function applyZoomTransform(transform) {
-  currentZoomTransform = transform; // 🌟 Save it
-  currentZoomLevel = transform.k;
+  if (Math.abs(transform.k - 1) < ZOOM_RESET_EPSILON) {
+  transform = d3.zoomIdentity;  // 🔥 Reset to exact origin
+}
+
+currentZoomTransform = transform;
+currentZoomLevel = transform.k;
 
   const svg = d3.select(".Scatterplot svg");
   const { logXScale, timeXScale, yScale, originalYScale, updateAxes } = svg.node().__scales__;
@@ -1298,10 +1320,12 @@ function applyZoomTransform(transform) {
 
   updateAxes(getSymbolFromAttribute(lastPriceAttribute), newX);
 
-
+  const newRadius = getDotRadiusForZoom(currentZoomLevel);
+  console.log("New radius for zoom level", currentZoomLevel, "is", newRadius);
   const gClip = d3.select(".clip-group");
 
   gClip.selectAll("circle")
+    .attr("r", newRadius)
     .attr("cx", d => newX(getXValue(d)))
     .attr("cy", d => yScale(d.complexity))
     .style("display", d => (currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey) ? null : "none");
@@ -1426,11 +1450,13 @@ export function updateScatterPlot(filteredData, selectedPriceAttribute = "price_
   const t4 = performance.now();
 
   // JOIN and update circles
+
+const initialRadius = getDotRadiusForZoom(currentZoomLevel);
 const dots = gClip.selectAll("circle")
   .data(filteredData, d => d.name)
   .join(
     enter => enter.append("circle")
-      .attr("r", 2.5)
+      .attr("r", initialRadius)
       .style("cursor", "pointer")
       .attr("opacity", 0.8)
       .on("mouseover", mouseoverFn)

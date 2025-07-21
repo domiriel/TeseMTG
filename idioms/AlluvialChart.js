@@ -452,7 +452,7 @@ if (!svg.empty()) {
       max: d3.max(d3.selectAll("g.node").data(), (d) => d.avgPrice),
     },
     getState().selectedPriceAttribute || "price_eur", // fallback
-    hasActiveAlluvialSelections()
+    true
   );
 }
 
@@ -1127,7 +1127,7 @@ export function createAlluvialChart(
   svgWidth,
   priceRange,
   selectedPriceAttribute,
-  hasActiveAlluvialSelections()
+  true
 );
 
 }
