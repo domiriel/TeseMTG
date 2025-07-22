@@ -13,6 +13,7 @@ import {
   onScatterplotCards,
   onClearScatterplotBrush,
   onClearHover,
+  onClearSelection,
   onSetHover,
   onSetTypeHover,
   onClearSetHover,
@@ -46,11 +47,11 @@ onClearHover(() => {
 });
 
 onSetHover((setInfo) => {
-  highlightIcicleRectHoverOnlyFromSet(setInfo.colorIdentities);
+  highlightIcicleRectHoverOnlyFromSet(setInfo.colorIdentities, setInfo.numColorsPresent);
 });
 
 onSetTypeHover((setInfo) => {
-  highlightIcicleRectHoverOnlyFromSet(setInfo.colorIdentities);
+  highlightIcicleRectHoverOnlyFromSet(setInfo.colorIdentities, setInfo.numColorsPresent);
 });
 
 onClearSetHover(() => {
@@ -58,7 +59,7 @@ onClearSetHover(() => {
 });
 
 onLineYearHover((yearInfo) => {
-  highlightIcicleRectHoverOnlyFromYear(yearInfo.colorIdentities);
+  highlightIcicleRectHoverOnlyFromYear(yearInfo.colorIdentities, yearInfo.numColorsPresent);
 });
 
 onAlluvialLinkHover(({ originality, rarity }) => {
@@ -81,6 +82,19 @@ const activeSelections = {
   colorIdentitiesFromTimelineSetsTypes: new Map(),
   colorIdentitiesFromScatterplot: new Set(),
 };
+
+onClearSelection(() => {
+  activeSelections.fromAlluvialOriginality.clear();
+  activeSelections.fromAlluvialRarity.clear();
+  activeSelections.fromAlluvialLinkPairs.clear();
+  activeSelections.fromIcicleIdentity.clear();
+  activeSelections.fromIcicleColors.clear();
+  activeSelections.fromYears.clear();
+  activeSelections.colorIdentitiesFromTimelineSets.clear();
+  activeSelections.colorIdentitiesFromTimelineSetsTypes.clear();
+  activeSelections.colorIdentitiesFromScatterplot.clear();
+  updateIcicleSelections();
+});
 onClearAlluvialSelections(() => {
   activeSelections.fromAlluvialOriginality.clear();
   activeSelections.fromAlluvialRarity.clear();
@@ -139,6 +153,7 @@ onTimelineBrush((entries) => {
 
 onClearTimelineBrush(() => {
   activeSelections.colorIdentitiesFromTimelineSets.clear();
+  activeSelections.colorIdentitiesFromTimelineSetsTypes.clear();
   updateIcicleSelections();
 });
 
@@ -247,129 +262,180 @@ onScatterplotCards(({ colorIdentities }) => {
 });
 
 function updateIcicleSelections() {
-  d3.selectAll("rect.icicle-rect").each(function (d) {
-    const rect = d3.select(this);
-    let shouldSelect = false;
+  const allRects = d3.selectAll("rect.icicle-rect").nodes();
 
-    if (d.depth === 1) {
-    if (activeSelections.fromIcicleColors.has(d.data.numColors)) {
-      shouldSelect = true;
-    }
+  const onlyScatterplotActive =
+    activeSelections.fromAlluvialOriginality.size === 0 &&
+    activeSelections.fromAlluvialRarity.size === 0 &&
+    activeSelections.fromAlluvialLinkPairs.size === 0 &&
+    activeSelections.fromIcicleIdentity.size === 0 &&
+    activeSelections.fromIcicleColors.size === 0 &&
+    activeSelections.colorIdentitiesFromTimelineSets.size === 0 &&
+    activeSelections.colorIdentitiesFromTimelineSetsTypes.size === 0 &&
+    activeSelections.fromYears.size === 0 &&
+    activeSelections.colorIdentitiesFromScatterplot.size > 0;
+
+  // === Nothing selected
+  if (
+    !hasActiveIcicleSelections() &&
+    activeSelections.colorIdentitiesFromScatterplot.size === 0
+  ) {
+    d3.selectAll("rect.icicle-rect")
+      .classed("selectedHovered", false)
+      .attr("fill", d => d.data.color);
+    return;
   }
-    if (d.depth === 2) {
-    for (const val of activeSelections.fromAlluvialOriginality) {
-      if (d.data.originalities?.includes(val)) {
-        shouldSelect = true;
-        break;
-      }
-    }
 
-    if (!shouldSelect) {
-      for (const val of activeSelections.fromAlluvialRarity) {
-        if (d.data.rarities?.includes(val)) {
-          shouldSelect = true;
-          break;
-        }
-      }
-    }
+  // === SPECIAL CASE: Only scatterplot active
+  if (onlyScatterplotActive) {
+    for (const rect of allRects) {
+      const d = d3.select(rect).datum();
+      const identity = d.data.name;
+      const isColorless = identity === "Colorless";
+      const isSelected =
+        activeSelections.colorIdentitiesFromScatterplot.has(identity) ||
+        (isColorless && activeSelections.colorIdentitiesFromScatterplot.has(""));
 
-    for (const pair of activeSelections.fromAlluvialLinkPairs) {
+      d3.select(rect)
+        .classed("selectedHovered", isSelected)
+        .attr("fill", isSelected ? d.data.selectedColor : d.data.color);
+    }
+    return;
+  }
+
+  const alluvialMatches = new Set();
+  const icicleMatches = new Set();
+  const timelineMatches = new Set();
+  const yearMatches = new Set();
+  const scatterMatches = new Set();
+
+  for (const rect of allRects) {
+    const d = d3.select(rect).datum();
+    const identity = d.data.name;
+    const numColors = d.data.numColors;
+    const isColorless = identity === "Colorless";
+    const groupColorIdentities = new Set(d.data.colorIdentities || []);
+    const depth = d.depth;
+
+    // === ALLUVIAL GROUP ===
+    const hasOriginalityMatch = [...activeSelections.fromAlluvialOriginality].some(orig =>
+      d.data.originalities?.includes(orig)
+    );
+    const hasRarityMatch = [...activeSelections.fromAlluvialRarity].some(r =>
+      d.data.rarities?.includes(r)
+    );
+    const hasLinkMatch = [...activeSelections.fromAlluvialLinkPairs].some(pair => {
       const [orig, rare] = pair.split("|");
+      return d.data.originalities?.includes(orig) && d.data.rarities?.includes(rare);
+    });
 
+    const isAlluvialMatch = hasOriginalityMatch || hasRarityMatch || hasLinkMatch ||
+      (
+        activeSelections.fromAlluvialOriginality.size === 0 &&
+        activeSelections.fromAlluvialRarity.size === 0 &&
+        activeSelections.fromAlluvialLinkPairs.size === 0
+      );
+
+    if (isAlluvialMatch) alluvialMatches.add(rect);
+
+    // === ICICLE GROUP ===
+// === ICICLE GROUP ===
+const groupMatch = activeSelections.fromIcicleColors.has(numColors);
+const identityMatch =
+  depth === 2
+    ? activeSelections.fromIcicleIdentity.has(identity)
+    : [...activeSelections.fromIcicleIdentity].some(id =>
+        groupColorIdentities.has(id));
+
+const isIcicleMatch =
+  activeSelections.fromIcicleColors.size === 0 &&
+  activeSelections.fromIcicleIdentity.size === 0
+    ? true
+    : groupMatch || identityMatch;
+
+if (isIcicleMatch) icicleMatches.add(rect);
+
+
+    // === TIMELINE GROUP ===
+    let isTimelineMatch = false;
+
+    if (activeSelections.colorIdentitiesFromTimelineSets.size > 0) {
+      const matches = depth === 2
+        ? [...activeSelections.colorIdentitiesFromTimelineSets.values()].some(set =>
+            set.has(identity) || (isColorless && set.has("")))
+        : [...activeSelections.colorIdentitiesFromTimelineSets.values()].some(set =>
+            [...groupColorIdentities].some(id => set.has(id) || (id === "Colorless" && set.has(""))));
+      if (matches) isTimelineMatch = true;
+    }
+
+    if (activeSelections.colorIdentitiesFromTimelineSetsTypes.size > 0) {
+      const matches = depth === 2
+        ? [...activeSelections.colorIdentitiesFromTimelineSetsTypes.values()].some(set =>
+            set.has(identity) || (isColorless && set.has("")))
+        : [...activeSelections.colorIdentitiesFromTimelineSetsTypes.values()].some(set =>
+            [...groupColorIdentities].some(id => set.has(id) || (id === "Colorless" && set.has(""))));
+      if (matches) isTimelineMatch = true;
+    }
+
+    if (
+      activeSelections.colorIdentitiesFromTimelineSets.size === 0 &&
+      activeSelections.colorIdentitiesFromTimelineSetsTypes.size === 0
+    ) {
+      isTimelineMatch = true;
+    }
+
+    if (isTimelineMatch) timelineMatches.add(rect);
+
+    // === YEAR GROUP ===
+    let isYearMatch = true;
+    if (depth === 2 && activeSelections.fromYears.size > 0) {
+      const hasYearMatch = [...activeSelections.fromYears].some(y =>
+        d.data.years?.includes(y)
+      );
+      isYearMatch = hasYearMatch;
+    }
+
+    if (isYearMatch) yearMatches.add(rect);
+
+    // === SCATTERPLOT GROUP ===
+    if (depth === 2) {
       if (
-        d.data.originalities?.includes(orig) &&
-        d.data.rarities?.includes(rare)
+        activeSelections.colorIdentitiesFromScatterplot.has(identity) ||
+        (isColorless && activeSelections.colorIdentitiesFromScatterplot.has(""))
       ) {
-        shouldSelect = true;
-        break;
+        scatterMatches.add(rect);
       }
-    }
-
-    for (const val of activeSelections.fromIcicleIdentity) {
-      if (val === d.data.name) {
-        shouldSelect = true;
-        break;
-      }
-    }
-
-    for (const val of activeSelections.fromIcicleColors) {
-      if (d.data.colorIdentity?.includes(val)) {
-        shouldSelect = true;
-        break;
-      }
-    }
-
-    for (const val of activeSelections.fromYears) {
-      if (d.data.years?.includes(val)) {
-        shouldSelect = true;
-        break;
-      }
-    }
-
-    if (!shouldSelect) {
-  const identity = d.data.name;
-  for (const identitySet of activeSelections.colorIdentitiesFromTimelineSets.values()) {
-    if (
-      identitySet.has(identity) ||
-      (identity === "Colorless" && identitySet.has(""))
-    ) {
-      shouldSelect = true;
-      break;
     }
   }
-}
 
-if (!shouldSelect) {
-  const identity = d.data.name;
-  for (const identitySet of activeSelections.colorIdentitiesFromTimelineSetsTypes.values()) {
-    if (
-      identitySet.has(identity) ||
-      (identity === "Colorless" && identitySet.has(""))
-    ) {
-      shouldSelect = true;
-      break;
-    }
+  // === FINAL INTERSECTION
+  const finalSet = new Set(
+    [...alluvialMatches].filter(
+      (rect) =>
+        icicleMatches.has(rect) &&
+        timelineMatches.has(rect) &&
+        yearMatches.has(rect)
+    )
+  );
+
+  // === UNION WITH SCATTERPLOT
+  const totalSelected = new Set([...finalSet, ...scatterMatches]);
+
+  for (const rect of allRects) {
+    const isSelected = totalSelected.has(rect);
+    const d = d3.select(rect).datum();
+    d3.select(rect)
+      .classed("selectedHovered", isSelected)
+      .attr("fill", isSelected ? d.data.selectedColor : d.data.color);
   }
 }
 
 
-if (!shouldSelect) {
-  const identity = d.data.name;
-
-  if (activeSelections.colorIdentitiesFromScatterplot.has(identity)) {
-    shouldSelect = true;
-  }
-
-  // ✅ Special case: empty string means "Colorless"
-  if (!shouldSelect && identity === "Colorless" && activeSelections.colorIdentitiesFromScatterplot.has("")) {
-    shouldSelect = true;
-  }
-}
-
-    }
-    rect
-      .classed("selectedHovered", shouldSelect)
-      .attr("fill", shouldSelect ? d.data.selectedColor : d.data.color);
-  });
 
 
-  const svg = d3.select(".IcicleChart").select("svg");
-if (!svg.empty()) {
-  const containerRect = svg.node().getBoundingClientRect();
-  const chartWidth = containerRect.width * 0.85;
-  const containerHeight = containerRect.height;
-  const rectDimensions = Math.min(containerHeight * 0.097, 22);
-  const legendFontSize = Math.min(containerRect.width * 0.0187, 13);
-  const margin = {
-    top: (containerHeight - containerHeight * 0.8) / 2 + 1,
-    right: 26,
-    bottom: 20,
-    left: containerRect.width * 0.015,
-  };
-  renderLegend(svg, chartWidth, margin, containerHeight, rectDimensions, legendFontSize);
-}
 
-}
+
+
 
 onClearLineYearHover(() => {
   clearIcicleHoverOnly();
@@ -385,10 +451,13 @@ onClearAlluvialHover(() => {
 
 const infoTooltipText = `
 <strong>Icicle Chart Interactions:</strong><br>
-• <strong>Click</strong> on a rectangle:<br>&nbsp;&nbsp;&nbsp;• Color group: selects/diselects dots with matching Nº of colors.<br>&nbsp;&nbsp;&nbsp;• Color identity: selects/diselects dots with matching identity.<br>
-• <strong>Double-click</strong>: zoom into or out of that section.<br>
-• <strong>Right-click</strong> on a rectangle: toggles global filter for that color group or identity.<br>
-• <strong>Hover</strong>: shows tooltip and highlights other visualizations (for identities and groups).<br>
+• <strong>Click</strong> on a rectangle:<br>
+&nbsp;&nbsp;&nbsp;• Color Group: selects or deselects cards by number of colors.<br>
+&nbsp;&nbsp;&nbsp;• Color Identity: selects or deselects cards by specific identity.<br>
+• <strong>Right-click</strong>: toggles global filter for that color group or identity.<br>
+• <strong>Double-click</strong>: zoom into or out of a group.<br>
+• <strong>Hover</strong>: shows tooltip and highlights other visualizations.<br>
+• <strong>Double-Click</strong> background: Clears selections made within the Icicle chart.<br>
 `;
 const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };
 
@@ -632,6 +701,7 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
       colorEntry = {
         name: colorKey,
         value: 1,
+        numColors,
         originalCount: card.originality === "original" ? 1 : 0,
         reprintCount: card.originality === "reprint" ? 1 : 0,
         functionalReprintCount:
@@ -752,11 +822,19 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
     group.rarities = Array.from(group.rarities);
     group.years = Array.from(group.years);
 
-    group.children.forEach((c) => {
-      c.originalities = Array.from(c.originalities);
-      c.rarities = Array.from(c.rarities);
-      c.years = Array.from(c.years);
-    });
+group.colorIdentities = new Set();
+
+group.children.forEach((c) => {
+  c.originalities = Array.from(c.originalities);
+  c.rarities = Array.from(c.rarities);
+  c.years = Array.from(c.years);
+
+  // Add this line to collect all child identities into the parent group
+  group.colorIdentities.add(c.name);
+});
+
+group.colorIdentities = Array.from(group.colorIdentities);
+
   });
 
   const hierarchy = { children: groupedData };
@@ -1223,7 +1301,6 @@ export function highlightIcicleRectHoverOnly(card) {
 function clearIcicleHoverOnly() {
   d3.select(".IcicleChart")
     .selectAll("rect.icicle-rect")
-    .filter((d) => d.depth === 2)
     .classed("hover-temp", false)
     .attr("fill", function (d) {
       const rect = d3.select(this);
@@ -1233,18 +1310,18 @@ function clearIcicleHoverOnly() {
     });
 }
 
-export function highlightIcicleRectHoverOnlyFromSet(colorIdentities) {
+export function highlightIcicleRectHoverOnlyFromSet(colorIdentities, numColors) {
   d3.selectAll("rect.icicle-rect")
-    .filter((d) => d.depth === 2 && colorIdentities.has(d.data.name))
+    .filter((d) => d.depth === 2 && colorIdentities.has(d.data.name)|| (d.depth === 1 && numColors.has(d.data.numColors)))
     .each(function (d) {
       const rect = d3.select(this);
       rect.attr("fill", d.data.highlightColor);
       rect.classed("hover-temp", true);
     });
 }
-export function highlightIcicleRectHoverOnlyFromYear(colorIdentities) {
+export function highlightIcicleRectHoverOnlyFromYear(colorIdentities, numColors) {
   d3.selectAll("rect.icicle-rect")
-    .filter((d) => d.depth === 2 && colorIdentities.has(d.data.name))
+    .filter((d) => (d.depth === 2 && colorIdentities.has(d.data.name)) || (d.depth === 1 && numColors.has(d.data.numColors)))
     .each(function (d) {
       const rect = d3.select(this);
       rect.attr("fill", d.data.highlightColor);
@@ -1287,7 +1364,7 @@ function highlightIcicleRectHoverOnlyFromAlluvial(category, value) {
 
   d3.selectAll("rect.icicle-rect")
     .filter((d) => {
-      if (!d || d.depth !== 2) return false;
+      if (!d) return false;
       if (category === "Originality") {
         return d.data.originalities?.includes(lowerValue);
       } else if (category === "Rarity") {
@@ -1310,7 +1387,6 @@ function highlightIcicleRectHoverOnlyFromAlluvialLink(originality, rarity) {
     .filter((d) => {
       return (
         d &&
-        d.depth === 2 &&
         d.data.originalities?.includes(lowerOrig) &&
         d.data.rarities?.includes(lowerRarity)
       );

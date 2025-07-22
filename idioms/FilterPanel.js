@@ -13,7 +13,7 @@ import {
   isFilterEmpty,
 } from "../script.js";
 
-import { emitCardSearch } from "./Events.js";
+import { emitCardSearch , emitClearSelection} from "./Events.js";
 import { showLoader, hideLoader } from "./LoadingAnimation.js";
 const EXCLUDED_SET_TYPES = new Set(["alchemy", "minigame"]);
 const optionMap = new Map();
@@ -483,7 +483,7 @@ export function createFilterPanel(
   resetWrapper
     .append("button")
     .text("Clear Filters")
-    .style("padding", "6px 12px")
+    .style("padding", "6px 9px")
     .style("font-size", "14px")
     .style("background-color", "#dc3545")
     .style("color", "#fff")
@@ -495,6 +495,23 @@ export function createFilterPanel(
       for (const key in selectedFilters) clearedFilters[key] = new Set();
       updateState({ selectedFilters: clearedFilters });
     });
+
+    resetWrapper
+  .append("button")
+  .text("Clear Selections")
+  .style("padding", "6px 9px")
+  .style("font-size", "14px")
+  .style("background-color", "#6c757d")
+  .style("color", "#fff")
+  .style("border", "none")
+  .style("border-radius", "4px")
+  .style("margin-top", "6px")
+  .style("width", "95%")
+  .style("cursor", "pointer")
+  .on("click", () => {
+    emitClearSelection();
+  });
+
 
   Object.entries(filters).forEach(([category, values]) => {
     const section = wrapper
@@ -508,7 +525,7 @@ export function createFilterPanel(
       .attr("class", "dropdown-header")
       .text(category)
       .style("background", "#B69677")
-      .style("padding", "6px 10px")
+      .style("padding", "6px 9px")
       .style("border", "1px solid #ccc")
       .style("border-radius", "6px")
       .style("cursor", "pointer")
@@ -667,7 +684,7 @@ export function createFilterPanel(
     .append("div")
     .attr("class", "filter-section")
     .style("margin-top", "20px")
-    .style("width", "80%");
+    .style("width", "95%");
 
   const settingsHeader = settingsSection
     .append("div")
@@ -675,7 +692,7 @@ export function createFilterPanel(
     .html('Settings <span style="margin-right:10px;">&#9881;</span>')
     .style("background", "#4681f4")
     .style("color", "#fff")
-    .style("padding", "6px 10px")
+    .style("padding", "6px 9px")
     .style("border", "1px solid #ccc")
     .style("border-radius", "6px")
     .style("cursor", "pointer")
@@ -784,7 +801,7 @@ export function createFilterPanel(
   settingsContent
     .append("button")
     .text("Save Filters")
-    .style("padding", "6px 12px")
+    .style("padding", "6px 9px")
     .style("font-size", "14px")
     .style("background-color", "#f0f0f0")
     .style("border", "none")
@@ -803,7 +820,7 @@ export function createFilterPanel(
   settingsContent
     .append("button")
     .text("Load Filters")
-    .style("padding", "6px 12px")
+    .style("padding", "6px 9px")
     .style("font-size", "14px")
     .style("background-color", "#f0f0f0")
     .style("color", "#000")
@@ -835,7 +852,7 @@ export function createFilterPanel(
   settingsContent
     .append("button")
     .text("Share Filters")
-    .style("padding", "6px 12px")
+    .style("padding", "6px 9px")
     .style("font-size", "14px")
     .style("background-color", "#f0f0f0")
     .style("color", "#000")

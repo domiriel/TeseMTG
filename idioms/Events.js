@@ -207,7 +207,6 @@ export function onScatterplotCards(handler) {
   ScatterplotCardsHandlers.push(handler); 
 }
 export function emitScatterplotCards(payload) { 
-  console.log(payload);
   ScatterplotCardsHandlers.forEach(fn => fn(payload));
 }
 
@@ -216,7 +215,6 @@ export function onScatterplotBrush(handler) {
   scatterplotBrushHandlers.push(handler);
 }     
 export function emitScatterplotBrush(payload) {
-  console.log(payload)
   scatterplotBrushHandlers.forEach(fn => fn(payload));
 }
 
@@ -246,6 +244,17 @@ export function onTimelineBrush(handler) {
 export function emitTimelineBrush(payload) {
   timelineBrushHandlers.forEach(fn => fn(payload));
 }
+
+
+let ClearSelectionHandlers = []; 
+
+export function onClearSelection(handler) {
+  ClearSelectionHandlers.push(handler);
+}
+export function emitClearSelection() {
+  ClearSelectionHandlers.forEach(fn => fn());
+}
+
 
 let clearTimelineBrushHandlers = [];
 

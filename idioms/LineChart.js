@@ -6,9 +6,12 @@ import {
   onNumColorsHover,
   onClearNumColorsHover,
   emitLineChartBrush,
+  onLineChartClick,
   onHoverCard,
+  onClearLineYearHover,
   onClearHover,
   onSetHover,
+  onClearSelection,
   onClearAlluvialSelections,
   onClearIcicleSelections,
   onClearTimelineSelections,
@@ -26,6 +29,7 @@ import {
   onAlluvialLinkHover,
   onClearAlluvialLinkHover,
   onTimelineSetClick,
+  onLineYearHover,
   onTimelineBrush,
   onScatterplotCards,
   onClearScatterplotBrush,
@@ -35,15 +39,17 @@ import {
 const lineChartTooltipText = `
 <strong>Timeline Interactions:</strong><br>
 • <strong>Hover</strong> a circle: View metrics for that year and highlight related elements across views.<br>
-• <strong>Click</strong> a circle: Selects/deselects dots in the scatterplot that match the printed year.<br>
+• <strong>Click</strong> a circle: Selects/deselects a year, affecting the cards highlighted in other views.<br>
 • <strong>Right-click</strong> a circle: Toggles a global Year filter for that year.<br>
-• <strong>Brush</strong> the timeline: Adds/removes multiple years from the global Year filter.<br>
-• <strong>Scroll</strong>: Zoom in/out on the timeline.<br>
+• <strong>Brush</strong> the timeline: Selects/Diselects multiple years .<br>
+• <strong>Scroll</strong>: Zoom in/out on the Line chart.<br>
+• <strong>Right-click drag</strong> or <strong>Ctrl + left-click drag</strong>: Pan the Line chart<br>
+• <strong>Double-Click</strong> background: Clears selections made within the Line chart.<br>
 `;
 
 const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };
 let localSelectedYears = new Set();
-
+let ignoreNextBrushEnd = false;
 let currentZoomTransform = d3.zoomIdentity;
 onHoverCard((card) => {
   highlightLineChartHoverOnly(card);
@@ -69,6 +75,16 @@ onRectHover((rectInfo) => {
   highlightLineChartFromIcicle(rectInfo);
 });
 
+onLineYearHover((payload) => {
+  if (payload.source === "line-chart") return; // ignore self-emitted
+  highlightLineChartHoverOnlyFromExternal(payload);
+});
+
+onClearLineYearHover(() => {
+  clearLineChartHoverOnly();
+});
+
+
 onClearRectHover(() => {
   clearLineChartHoverOnly();
 });
@@ -88,6 +104,8 @@ onAlluvialHover(({ category, value }) => {
 onClearAlluvialHover(() => {
   clearLineChartHoverOnly();
 });
+
+
 
 onAlluvialLinkHover(({ originality, rarity }) => {
   highlightLineChartFromAlluvialLink(originality, rarity);
@@ -460,11 +478,12 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
         }
 
         updateLineChartSelections(); // 👈 highlight matching years
-
+        
         emitLineChartClick({
           year: selectedYear,
           originalities: d.originalities,
           rarities: d.rarities,
+          source: "line-chart",
         });
       })
       .on("contextmenu", function (event, d) {
@@ -549,56 +568,70 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
         sharedHoverLine.style("display", "none");
       });
 
-    function brushed(event) {
-      if (!event.selection) return;
+function brushed(event) {
+  // 🛑 Prevent duplicate triggers
+  if (ignoreNextBrushEnd) {
+    ignoreNextBrushEnd = false;
+    return;
+  }
 
+  if (!event.selection) {
+    activeLineSelections.fromYears.clear();
+    emitClearLineChartBrush();
+    updateLineChartSelections();
+    ignoreNextBrushEnd = true;
+        brushGroup.call(brush.move, null);
+    brushGroup.selectAll("*").remove();
+    brushGroup.call(brush);
+    return;
+  }
 
-      const [x0, x1] = event.selection;
-      const zoomedX = currentZoomTransform.rescaleX(xScale);
+  const [x0, x1] = event.selection;
+  const zoomedX = currentZoomTransform.rescaleX(xScale);
 
   const startDate = zoomedX.invert(x0);
   const endDate = zoomedX.invert(x1);
 
-      const brushedEntries = groupedData
-        .filter((d) => d.year >= startDate && d.year <= endDate)
-        .map((d) => {
-          const yearStr = d.year.getFullYear().toString();
-          return {
-            year: yearStr,
-            originalities: new Set(d.originalities),
-            rarities: new Set(d.rarities),
-            colorIdentities: new Set(d.colorIdentities),
-          };
-        });
+  const brushedEntries = groupedData
+    .filter((d) => d.year >= startDate && d.year <= endDate)
+    .map((d) => {
+      const yearStr = d.year.getFullYear().toString();
+      return {
+        year: yearStr,
+        originalities: new Set(d.originalities),
+        rarities: new Set(d.rarities),
+        colorIdentities: new Set(d.colorIdentities),
+      };
+    });
 
-      if (brushedEntries.length === 0) {
-        activeLineSelections.fromYears.clear();
-        emitClearLineChartBrush();
-        updateLineChartSelections();
-        brushGroup.call(brush.move, null);
-        brushGroup.selectAll("*").remove();
-        brushGroup.call(brush);
-        return;
-      }
+  if (brushedEntries.length === 0) {
+    activeLineSelections.fromYears.clear();
+    emitClearLineChartBrush();
+    updateLineChartSelections();
+    ignoreNextBrushEnd = true;
+    brushGroup.call(brush.move, null);
+    brushGroup.selectAll("*").remove();
+    brushGroup.call(brush);
+    return;
+  }
 
-      // Toggle brushed years in selection
-      brushedEntries.forEach((entry) => {
-        if (activeLineSelections.fromYears.has(entry.year)) {
-          activeLineSelections.fromYears.delete(entry.year);
-        } else {
-          activeLineSelections.fromYears.add(entry.year);
-        }
-      });
-
-      updateLineChartSelections();
-
-      emitLineChartBrush(brushedEntries); // ✅ Emit enriched payload
-
-      // Reset brush UI
-      brushGroup.call(brush.move, null);
-      brushGroup.selectAll("*").remove();
-      brushGroup.call(brush);
+  brushedEntries.forEach((entry) => {
+    if (activeLineSelections.fromYears.has(entry.year)) {
+      activeLineSelections.fromYears.delete(entry.year);
+    } else {
+      activeLineSelections.fromYears.add(entry.year);
     }
+  });
+
+  updateLineChartSelections();
+  emitLineChartBrush(brushedEntries);
+
+  ignoreNextBrushEnd = true;
+  brushGroup.call(brush.move, null);
+  brushGroup.selectAll("*").remove();
+  brushGroup.call(brush);
+}
+
 
     circleGroups.push({ group: g, yScale: y, metric });
 
@@ -852,7 +885,6 @@ export function highlightLineChartHoverOnlyFromSetType(setTypeReleaseDates) {
 
 export function highlightAllViewsForYear(entry) {
   if (!entry) return;
-
   emitLineYearHover({
     year: entry.year,
     reprints: entry.reprints,
@@ -861,6 +893,8 @@ export function highlightAllViewsForYear(entry) {
     originalities: new Set(entry.originalities),
     rarities: new Set(entry.rarities),
     colorIdentities: new Set(entry.colorIdentities),
+    numColorsPresent: new Set(entry.numColorsPresent),
+    source: "line-chart",
   });
 }
 
@@ -874,11 +908,25 @@ const activeLineSelections = {
   fromAlluvialLinkPairs: new Set(),
   fromIcicleIdentity: new Set(),
   fromIcicleColors: new Set(),
-  fromYears: new Set(), // 👈 ADD THIS
+  fromYears: new Set(), 
   yearsFromTimelineSets: new Map(),
-  yearsFromSetTypes: new Map(), // 👈 NEW
+  yearsFromSetTypes: new Map(),
   yearsFromScatterplotCards: new Set(),
 };
+
+
+onClearSelection(() => {
+  activeLineSelections.fromAlluvialOriginality.clear();
+  activeLineSelections.fromAlluvialRarity.clear();
+  activeLineSelections.fromAlluvialLinkPairs.clear();
+  activeLineSelections.fromIcicleIdentity.clear();
+  activeLineSelections.fromIcicleColors.clear();
+  activeLineSelections.fromYears.clear();
+  activeLineSelections.yearsFromTimelineSets.clear();
+  activeLineSelections.yearsFromSetTypes.clear();
+  activeLineSelections.yearsFromScatterplotCards.clear();
+  updateLineChartSelections();
+});
 
 onClearAlluvialSelections(() => {
   activeLineSelections.fromAlluvialOriginality.clear();
@@ -966,6 +1014,7 @@ onClearScatterplotBrush(() => {
 
 onClearTimelineBrush(() => {
   activeLineSelections.yearsFromTimelineSets.clear();
+  activeLineSelections.yearsFromSetTypes.clear();
   updateLineChartSelections();
 });
 
@@ -1020,6 +1069,18 @@ onIcicleClick(({ colorIdentity }) => {
   updateLineChartSelections();
 });
 
+onLineChartClick(({ year, source}) => {
+  if (source === "line-chart") return;
+  const set = activeLineSelections.fromYears;
+  if (set.has(year)) {
+  set.delete(year);
+  } else {
+    set.add(year);
+    }
+      
+        updateLineChartSelections();
+      });
+
 onIcicleNumClick(({ numColors }) => {
   if (!numColors) return;
 
@@ -1035,74 +1096,111 @@ onIcicleNumClick(({ numColors }) => {
 });
 
 function updateLineChartSelections() {
+
   const svg = d3.select(".LineChart svg");
   if (svg.empty()) return;
 
   svg.selectAll(".selected-hover-line").remove();
 
+  const noSelections =
+    activeLineSelections.fromAlluvialOriginality.size === 0 &&
+    activeLineSelections.fromAlluvialRarity.size === 0 &&
+    activeLineSelections.fromAlluvialLinkPairs.size === 0 &&
+    activeLineSelections.fromIcicleIdentity.size === 0 &&
+    activeLineSelections.fromIcicleColors.size === 0 &&
+    activeLineSelections.yearsFromTimelineSets.size === 0 &&
+    activeLineSelections.yearsFromSetTypes.size === 0 &&
+    activeLineSelections.fromYears.size === 0 &&
+    activeLineSelections.yearsFromScatterplotCards.size === 0;
+  if (noSelections) {
+    return;}
+
   const matchingYears = new Set();
+
+  const onlyScatterplotActive =
+    activeLineSelections.fromAlluvialOriginality.size === 0 &&
+    activeLineSelections.fromAlluvialRarity.size === 0 &&
+    activeLineSelections.fromAlluvialLinkPairs.size === 0 &&
+    activeLineSelections.fromIcicleIdentity.size === 0 &&
+    activeLineSelections.fromIcicleColors.size === 0 &&
+    activeLineSelections.yearsFromTimelineSets.size === 0 &&
+    activeLineSelections.yearsFromSetTypes.size === 0 &&
+    activeLineSelections.fromYears.size === 0 &&
+    activeLineSelections.yearsFromScatterplotCards.size > 0;
+
 
   svg.selectAll("circle.data-point").each(function () {
     const d = d3.select(this).datum();
     if (!d) return;
 
     const yearStr = d.year.getFullYear().toString();
-    let match =
-      [...activeLineSelections.fromAlluvialOriginality].some((val) =>
-        d.originalities?.has(val)
-      ) ||
-      [...activeLineSelections.fromAlluvialRarity].some((val) =>
-        d.rarities?.has(val)
-      ) ||
-      [...activeLineSelections.fromIcicleIdentity].some((val) =>
-        d.colorIdentities?.has(val)
-      ) ||
-      [...activeLineSelections.fromIcicleColors].some((val) =>
-        d.numColorsPresent?.has(val)
-      ) ||
-      [...activeLineSelections.fromYears].includes(yearStr);
+    const yearTime = d.year.getTime();
 
-    if (!match) {
-      for (const pair of activeLineSelections.fromAlluvialLinkPairs) {
-        const [orig, rare] = pair.split("|");
-        const origMatch = d.originalities?.has(orig);
-        const rareMatch = d.rarities?.has(rare);
-        if (origMatch && rareMatch) {
-          match = true;
-          break;
-        }
+    if (onlyScatterplotActive) {
+      if (activeLineSelections.yearsFromScatterplotCards.has(yearStr)) {
+        matchingYears.add(yearTime);
       }
+      return;
     }
 
-    // ✅ Check yearsFromTimelineSets sets
-    if (!match) {
-      for (const storedYear of activeLineSelections.yearsFromTimelineSets.values()) {
-        if (storedYear === yearStr) {
-          match = true;
-          break;
-        }
-      }
+    // --- Group 1: Alluvial ---
+    let alluvialMatch = true;
+    const origMatch = [...activeLineSelections.fromAlluvialOriginality].some(val => d.originalities?.has(val));
+    const rarityMatch = [...activeLineSelections.fromAlluvialRarity].some(val => d.rarities?.has(val));
+    const linkPairMatch = [...activeLineSelections.fromAlluvialLinkPairs].some(pair => {
+      const [orig, rare] = pair.split("|");
+      return d.originalities?.has(orig) && d.rarities?.has(rare);
+    });
+
+    if (
+      activeLineSelections.fromAlluvialOriginality.size > 0 ||
+      activeLineSelections.fromAlluvialRarity.size > 0 ||
+      activeLineSelections.fromAlluvialLinkPairs.size > 0
+    ) {
+      alluvialMatch = origMatch || rarityMatch || linkPairMatch;
     }
 
-    if (!match) {
-      for (const yearSet of activeLineSelections.yearsFromSetTypes.values()) {
-        if (yearSet.has(yearStr)) {
-          match = true;
-          break;
-        }
-      }
+    // --- Group 2: Icicle ---
+    let icicleMatch = true;
+    const identityMatch = [...activeLineSelections.fromIcicleIdentity].some(val => d.colorIdentities?.has(val));
+    const colorMatch = [...activeLineSelections.fromIcicleColors].some(val => d.numColorsPresent?.has(+val));
+
+    if (
+      activeLineSelections.fromIcicleIdentity.size > 0 ||
+      activeLineSelections.fromIcicleColors.size > 0
+    ) {
+      icicleMatch = identityMatch || colorMatch;
     }
 
-    if (!match) {
-  if (activeLineSelections.yearsFromScatterplotCards?.has(yearStr)) {
-    match = true;
-  }
-}
-    if (match) {
-      matchingYears.add(d.year.getTime());
+    // --- Group 3: Timeline ---
+    let timelineMatch = true;
+    const matchFromSets = [...activeLineSelections.yearsFromTimelineSets.values()].includes(yearStr);
+    const matchFromSetTypes = [...activeLineSelections.yearsFromSetTypes.values()].some(set => set.has(yearStr));
+
+    if (
+      activeLineSelections.yearsFromTimelineSets.size > 0 ||
+      activeLineSelections.yearsFromSetTypes.size > 0
+    ) {
+      timelineMatch = matchFromSets || matchFromSetTypes;
+    }
+
+    // --- Group 4: Explicit Year Selection ---
+    let yearGroupMatch = true;
+    if (activeLineSelections.fromYears.size > 0) {
+      yearGroupMatch = activeLineSelections.fromYears.has(yearStr);
+    }
+
+    const isIntersected =
+      alluvialMatch && icicleMatch && timelineMatch && yearGroupMatch;
+
+    const isScatterMatch = activeLineSelections.yearsFromScatterplotCards.has(yearStr);
+
+    if (isIntersected || isScatterMatch) {
+      matchingYears.add(yearTime);
     }
   });
 
+  // --- Draw matching year lines ---
   const y1 = +svg.select(".hover-line").attr("y1");
   const y2 = +svg.select(".hover-line").attr("y2");
   const marginLeft =
@@ -1114,7 +1212,6 @@ function updateLineChartSelections() {
   matchingYears.forEach((t) => {
     const date = new Date(+t);
     const x = currentZoomTransform.applyX(window._lineChartXScale(date)) + marginLeft;
-
 
     svg
       .append("line")
@@ -1130,6 +1227,9 @@ function updateLineChartSelections() {
       .lower();
   });
 }
+
+
+
 
 function highlightLineChartFromAlluvialCategory(category, value) {
   if (!category || !value) return;
@@ -1200,4 +1300,15 @@ function highlightLineChartFromNumColors(numColors) {
 
   drawVerticalLinesForYears([...new Set(matchedYears)]);
 }
+
+function highlightLineChartHoverOnlyFromExternal(payload) {
+  const year = new Date(payload.year).getFullYear().toString();
+  d3.select(".LineChart")
+    .selectAll(`circle.data-point[data-year='${year}']`)
+    .classed("hover-temp", true);
+
+  const timestamp = new Date(+year, 0, 1).getTime();
+  drawVerticalLinesForYears([timestamp]);
+}
+
 

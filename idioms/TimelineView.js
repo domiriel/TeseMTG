@@ -1,13 +1,15 @@
 
 import { updateState, getState } from "../state.js";
 import { updateFilterPanel } from "./FilterPanel.js";
-import { emitSetHover, emitClearHover, onNumColorsHover, onClearNumColorsHover, onAlluvialClick, onAlluvialLinkClick, emitSetTypeHover, emitClearSetTypeHover, onClearAlluvialSelections,
+import { emitSetHover, emitClearHover, onNumColorsHover, onClearNumColorsHover, onAlluvialClick, onAlluvialLinkClick, emitSetTypeHover, emitClearSetTypeHover, onClearAlluvialSelections, onClearSelection,
         onHoverCard, onClearHover, emitClearSetHover,emitTimelineSetClick, onAlluvialLinkHover, onClearAlluvialLinkHover,onScatterplotCards,onClearScatterplotBrush, emitClearTimelineSelections,
-        emitYearClick, onRectHover, onClearRectHover, onClearLineYearHover, onLineChartClick, onLineChartBrush, emitLineChartClick, emitTimelineSetTypeClick, onClearIcicleSelections,
-        onLineYearHover, onAlluvialHover, onClearAlluvialHover, onIcicleClick, onIcicleNumClick, emitTimelineBrush, emitClearTimelineBrush, onClearLineChartBrush} from "./Events.js";
+        emitYearClick,emitClearLineYearHover, onRectHover, onClearRectHover, onClearLineYearHover, onLineChartClick, onLineChartBrush, emitLineChartClick, emitTimelineSetTypeClick, onClearIcicleSelections,
+        onLineYearHover, onAlluvialHover, onClearAlluvialHover, onIcicleClick, onIcicleNumClick, emitTimelineBrush, emitClearTimelineBrush, onClearLineChartBrush,
+        emitLineYearHover} from "./Events.js";
 
 let localSelectedYears = new Set();
 let localSelectedSetNames = new Set();
+let ignoreNextBrushEnd = false;
 const yearStats = new Map();     // key: "2020", value: { totalCardCount, rarities, originalities, colorIdentities, setNames }
 const setTypeStats = new Map();
 
@@ -222,12 +224,13 @@ const dynamicLegendData = bounds.slice(0, -1).map((min, i) => {
 
 const timelineTooltipText = `
 <strong>Timeline Interactions:</strong><br>
-• <strong>Click</strong> a year: Selects/Diselects dots in the scatterplot with prints from that year.<br>
-• <strong>Hover</strong> a year: Shows number of sets and their types.<br>
-• <strong>Click</strong> a set square: Selects dots with prints from that set.<br>
-• <strong>Right-Click</strong> a year, set square, or set type: Filter by that element.<br>
-• <strong>Brush</strong>: Adds/removes multiple sets from the global Set Names filters.<br>
-• <strong>Scroll</strong>: Zoom in/out on the timeline.<br>
+• <strong>Click</strong> a year, a set or set type: Selects/Diselects the corresponding element, affecting the cards highlighted in other views.<br>
+• <strong>Hover</strong> a year, a set or a set type: Shows tooltip details and highlights corresponding element across views.<br>
+• <strong>Right-Click</strong> a year, set square, or set type: Applies or removes a global filter for that category.<br>
+• <strong>Brush</strong>: Selects/Diselects multiple sets.<br>
+• <strong>Scroll</strong>: Zoom in/out on the Timeline.<br>
+• <strong>Right-click drag</strong> or <strong>Ctrl + left-click drag</strong>: Pan the Timeline<br>
+• <strong>Double-Click</strong> background: Clears selections made within the Timeline(Years Excluded).<br>
 `;
 
     const yearTypeCounts = new Map();
@@ -269,6 +272,7 @@ set.selectedColor = getSelectedColor(quintilePercent);
       rarities: new Set(),
       originalities: new Set(),
       colorIdentities: new Set(),
+      numColorsPresent: new Set(),
       setNames: new Set()
     });
   }
@@ -277,6 +281,7 @@ set.selectedColor = getSelectedColor(quintilePercent);
   set.rarities.forEach(r => y.rarities.add(r));
   set.originalities.forEach(o => y.originalities.add(o));
   set.colorIdentities.forEach(c => y.colorIdentities.add(c));
+  set.numColorsPresent.forEach(n => y.numColorsPresent.add(n));
   y.setNames.add(set.name);
 
   // ✅ Full aggregation per set type
@@ -286,6 +291,7 @@ set.selectedColor = getSelectedColor(quintilePercent);
       rarities: new Set(),
       originalities: new Set(),
       colorIdentities: new Set(),
+      numColorsPresent: new Set(),
       setNames: new Set(),
       releaseDates: new Set(),
     });
@@ -295,6 +301,7 @@ set.selectedColor = getSelectedColor(quintilePercent);
   set.rarities.forEach(r => t.rarities.add(r));
   set.originalities.forEach(o => t.originalities.add(o));
   set.colorIdentities.forEach(c => t.colorIdentities.add(c));
+  set.numColorsPresent.forEach(n => t.numColorsPresent.add(n));
   
   t.setNames.add(set.name);
   t.releaseDates.add(set.releaseDate);
@@ -453,7 +460,8 @@ const xScale = d3.scaleTime()
     emitLineChartClick({
         year: year,
         originalities: yearInfo.originalities,
-        rarities: yearInfo.rarities
+        rarities: yearInfo.rarities,
+        source: "timeline"
     });
 })
 
@@ -483,7 +491,8 @@ const xScale = d3.scaleTime()
             .on("mouseover", function (event, d) {
               d3.select(this).classed("hovered", true);
     const year = d.getFullYear().toString();
-     const yearInfo = yearStats.get(year);
+    const yearInfo = yearStats.get(year);
+    highlightAllViewsForYear(year);
     const types = yearTypeCounts.get(year);
     let totalSets = 0;
     if (types) {
@@ -519,6 +528,7 @@ tooltip.style("left", `${left}px`)
 .on("mouseout", function () {
   d3.select(this).classed("hovered", false);
   d3.select("#tooltip").style("display", "none");
+  emitClearLineYearHover();
 });
 
 
@@ -726,7 +736,6 @@ chartGroup.append("g")
                 clearAllViewsHoverOnly(); // Clear highlights in all views
             })
              .on("click", function (event, d) {
-
                 const isSelected = activeTimelineSelections.sets.has(d.name);
             
                 if (isSelected) {
@@ -734,6 +743,7 @@ chartGroup.append("g")
                 } else {
                     activeTimelineSelections.sets.add(d.name);
                 }
+                updateTimelineSelections();
                 emitTimelineSetClick({
             name: d.name,
             releaseDate: d.releaseDate,
@@ -743,7 +753,7 @@ chartGroup.append("g")
             rarities: new Set(d.rarities),
             colorIdentities: new Set(d.colorIdentities)
         });
-                          updateTimelineSelections();
+
             })
 
 .on("contextmenu", function (event, d) {
@@ -855,7 +865,7 @@ chartGroup.append("g")
 })
             .on("mouseover", function (event, type) {
                 d3.select(this).classed("hovered", true);
-                 const setInfo = setTypeStats.get(type);
+                const setInfo = setTypeStats.get(type);
                 const count = typeCounts.get(type) || 0;
                 highlightAllViewsForSetType(type);
                 tooltip
@@ -944,12 +954,24 @@ function zoomed(event) {
 
 
 function brushed(event) {
-  if (!event.selection) return;
+  // 🔒 Skip re-triggered brush ends caused by programmatic .call(brush.move, null)
+  if (ignoreNextBrushEnd) {
+    ignoreNextBrushEnd = false;
+    return;
+  }
+
+  if (!event.selection) {
+    activeTimelineSelections.sets.clear();
+    activeTimelineSelections.setTypes.clear();
+    emitClearTimelineBrush();
+    updateTimelineSelections();
+    return;
+  }
 
   const [[x0, y0], [x1, y1]] = event.selection;
-  const selected = [];
   const brushedSets = [];
-d3.selectAll(".set-rect").each(function (d) {
+
+  d3.selectAll(".set-rect").each(function (d) {
     const rect = d3.select(this);
     const x = +rect.attr("x");
     const y = +rect.attr("y");
@@ -967,22 +989,22 @@ d3.selectAll(".set-rect").each(function (d) {
         originalities: new Set(d.originalities),
         rarities: new Set(d.rarities),
         colorIdentities: new Set(d.colorIdentities),
-        releaseDate : d.releaseDate
-
+        releaseDate: d.releaseDate,
       });
     }
   });
 
-
   if (brushedSets.length === 0) {
     activeTimelineSelections.sets.clear();
+    activeTimelineSelections.setTypes.clear();
     emitClearTimelineBrush();
     updateTimelineSelections();
-    chartGroup.select(".brush").call(brush.move, null);
+    ignoreNextBrushEnd = true;
+    chartGroup.select(".brush").call(brush.move, null); // Clear UI
     return;
   }
 
-brushedSets.forEach(set => {
+  brushedSets.forEach((set) => {
     if (activeTimelineSelections.sets.has(set.name)) {
       activeTimelineSelections.sets.delete(set.name);
     } else {
@@ -992,9 +1014,11 @@ brushedSets.forEach(set => {
 
   updateTimelineSelections();
   emitTimelineBrush(brushedSets);
-  // ✅ Clear brush selection but KEEP the brush UI
-  chartGroup.select(".brush").call(brush.move, null);
+
+  ignoreNextBrushEnd = true;
+  chartGroup.select(".brush").call(brush.move, null); // Reset UI
 }
+
 
 // Double-click anywhere outside meaningful elements to clear Timeline selections
 wrapper.on("dblclick", function(event) {
@@ -1109,7 +1133,8 @@ function highlightAllViewsForSet(setName) {
     cardCount: setEntry.cardCount,
     originalities: new Set(setEntry.originalities),
     rarities: new Set(setEntry.rarities),
-    colorIdentities: new Set(setEntry.colorIdentities)
+    colorIdentities: new Set(setEntry.colorIdentities),
+    numColorsPresent: new Set(setEntry.numColorsPresent)
 });
 }
 
@@ -1122,9 +1147,28 @@ function highlightAllViewsForSetType(setType) {
     releaseDates: setInfo.releaseDates,
     originalities: new Set(setInfo.originalities),
     rarities: new Set(setInfo.rarities),
-    colorIdentities: new Set(setInfo.colorIdentities)
+    colorIdentities: new Set(setInfo.colorIdentities),
+    numColorsPresent: new Set(setInfo.numColorsPresent),
 });
 }
+
+function highlightAllViewsForYear(year) {
+  const dateObj = new Date(+year, 0, 1); // 👈 Convert numeric year to Date
+  
+
+  const yearInfo = yearStats.get(year);
+  if (!yearInfo) return;
+
+  emitLineYearHover({
+    year: dateObj, // 👈 Send the full Date object
+    originalities: yearInfo.originalities,
+    rarities: yearInfo.rarities,
+    colorIdentities: yearInfo.colorIdentities,
+    numColorsPresent: yearInfo.numColorsPresent,
+    source: "timeline"
+  });
+}
+
 
 
 function clearAllViewsHoverOnly() {
@@ -1154,6 +1198,20 @@ const activeTimelineSelections = {
   setTypes: new Set(),
   setsFromScatterplot: new Set(),
 };
+
+
+onClearSelection(() => {
+  activeTimelineSelections.fromAlluvialOriginality.clear();
+  activeTimelineSelections.fromAlluvialRarity.clear();
+  activeTimelineSelections.fromAlluvialLinkPairs.clear();
+  activeTimelineSelections.fromIcicleIdentity.clear();
+  activeTimelineSelections.fromIcicleColors.clear();
+  activeTimelineSelections.fromYears.clear();
+  activeTimelineSelections.sets.clear();
+  activeTimelineSelections.setTypes.clear();
+  activeTimelineSelections.setsFromScatterplot.clear();
+  updateTimelineSelections();
+});
 
 onClearAlluvialSelections(() => {
   activeTimelineSelections.fromAlluvialOriginality.clear();
@@ -1284,99 +1342,152 @@ onIcicleNumClick(({ numColors }) => {
 
 
 function updateTimelineSelections() {
-  const rects = d3.selectAll(".set-rect");
+  const allRects = d3.selectAll(".set-rect").nodes();
 
-  rects.each(function(d) {
-    const rect = d3.select(this);
-    let isMatched = false;
+  const onlyScatterplotActive =
+    activeTimelineSelections.fromAlluvialOriginality.size === 0 &&
+    activeTimelineSelections.fromAlluvialRarity.size === 0 &&
+    activeTimelineSelections.fromAlluvialLinkPairs.size === 0 &&
+    activeTimelineSelections.fromIcicleIdentity.size === 0 &&
+    activeTimelineSelections.fromIcicleColors.size === 0 &&
+    activeTimelineSelections.fromYears.size === 0 &&
+    activeTimelineSelections.sets.size === 0 &&
+    activeTimelineSelections.setTypes.size === 0 &&
+    activeTimelineSelections.setsFromScatterplot.size > 0;
 
-    for (const val of activeTimelineSelections.fromAlluvialOriginality) {
-      if ([...(d.originalities || [])].some(o => o === val)) {
-        isMatched = true;
-        break;
-      }
+  // === NO filters active: reset all
+  if (
+    activeTimelineSelections.fromAlluvialOriginality.size === 0 &&
+    activeTimelineSelections.fromAlluvialRarity.size === 0 &&
+    activeTimelineSelections.fromAlluvialLinkPairs.size === 0 &&
+    activeTimelineSelections.fromIcicleIdentity.size === 0 &&
+    activeTimelineSelections.fromIcicleColors.size === 0 &&
+    activeTimelineSelections.fromYears.size === 0 &&
+    activeTimelineSelections.sets.size === 0 &&
+    activeTimelineSelections.setTypes.size === 0 &&
+    activeTimelineSelections.setsFromScatterplot.size === 0
+  ) {
+    d3.selectAll(".set-rect")
+      .classed("selectedHovered", false)
+      .attr("fill", d => d.baseColor);
+    d3.selectAll(".year-tick-timeline")
+      .classed("selected", false);
+    d3.selectAll(".set-type-label")
+      .classed("selected", false);
+    return;
+  }
+
+  // === SPECIAL CASE: only scatterplot active
+  if (onlyScatterplotActive) {
+    for (const rect of allRects) {
+      const d = d3.select(rect).datum();
+      const isSelected = activeTimelineSelections.setsFromScatterplot.has(d.name);
+      d3.select(rect)
+        .classed("selectedHovered", isSelected)
+        .attr("fill", isSelected ? d.selectedColor : d.baseColor);
+    }
+    return;
+  }
+
+  const alluvialMatches = new Set();
+  const icicleMatches = new Set();
+  const yearMatches = new Set();
+  const timelineMatches = new Set();
+  const scatterMatches = new Set();
+
+  for (const rect of allRects) {
+    const d = d3.select(rect).datum();
+
+    // === ALLUVIAL GROUP ===
+    const hasOrig = [...activeTimelineSelections.fromAlluvialOriginality].some(o =>
+      [...(d.originalities || [])].includes(o)
+    );
+    const hasRare = [...activeTimelineSelections.fromAlluvialRarity].some(r =>
+      [...(d.rarities || [])].includes(r)
+    );
+    const hasLink = [...activeTimelineSelections.fromAlluvialLinkPairs].some(pair => {
+      const [o, r] = pair.split("|");
+      return [...(d.originalities || [])].includes(o) && [...(d.rarities || [])].includes(r);
+    });
+
+    const alluvialMatch = hasOrig || hasRare || hasLink ||
+      (
+        activeTimelineSelections.fromAlluvialOriginality.size === 0 &&
+        activeTimelineSelections.fromAlluvialRarity.size === 0 &&
+        activeTimelineSelections.fromAlluvialLinkPairs.size === 0
+      );
+    if (alluvialMatch) alluvialMatches.add(rect);
+
+    // === ICICLE GROUP ===
+    const identityMatch = [...activeTimelineSelections.fromIcicleIdentity].some(id =>
+      d.colorIdentities?.has(id)
+    ) || activeTimelineSelections.fromIcicleIdentity.size === 0;
+
+    const numColorMatch = [...activeTimelineSelections.fromIcicleColors].some(n =>
+      d.numColorsPresent?.has(+n)
+    ) || activeTimelineSelections.fromIcicleColors.size === 0;
+
+    if (identityMatch && numColorMatch) icicleMatches.add(rect);
+
+    // === YEAR GROUP ===
+    const year = d.releaseDate.getFullYear();
+    if (
+      activeTimelineSelections.fromYears.size === 0 ||
+      activeTimelineSelections.fromYears.has(year.toString())
+    ) {
+      yearMatches.add(rect);
     }
 
-    if (!isMatched) {
-      for (const val of activeTimelineSelections.fromAlluvialRarity) {
-        if ([...(d.rarities || [])].some(r => r === val)) {
-          isMatched = true;
-          break;
-        }
-      }
-    }
+    // === TIMELINE (Sets OR Set Types) ===
+    const hasTimelineMatch =
+      activeTimelineSelections.sets.size === 0 &&
+      activeTimelineSelections.setTypes.size === 0
+        || activeTimelineSelections.sets.has(d.name)
+        || activeTimelineSelections.setTypes.has(d.setType);
 
-    if (!isMatched) {
-      for (const val of activeTimelineSelections.fromIcicleIdentity) {
-        if ([...(d.colorIdentities || [])].some(ci => ci === val)) {
-          isMatched = true;
-          break;
-        }
-      }
-    }
+    if (hasTimelineMatch) timelineMatches.add(rect);
 
-    if (!isMatched) {
-      for (const val of activeTimelineSelections.fromIcicleColors) {
-        if ([...(d.numColorsPresent || [])].some(nc => nc === +val)) {
-          isMatched = true;
-          break;
-        }
-      }
-    }
-if (!isMatched) {
-  for (const val of activeTimelineSelections.fromYears) {
-    const setYear = d.releaseDate.getFullYear();
-    if (setYear === +val) {
-      isMatched = true;
-      break;
+    // === SCATTERPLOT GROUP ===
+    if (activeTimelineSelections.setsFromScatterplot.has(d.name)) {
+      scatterMatches.add(rect);
     }
   }
-}
-    if (!isMatched) {
-  for (const val of activeTimelineSelections.sets) {
-    if (d.name === val) {
-      isMatched = true;
-      break;
-    }
+
+  // === INTERSECT logical groups
+  const intersected = new Set(
+    [...allRects].filter(rect =>
+      alluvialMatches.has(rect) &&
+      icicleMatches.has(rect) &&
+      yearMatches.has(rect) &&
+      timelineMatches.has(rect)
+    )
+  );
+
+  // === UNION with scatterplot
+  const finalSelected = new Set([...intersected, ...scatterMatches]);
+
+  for (const rect of allRects) {
+    const d = d3.select(rect).datum();
+    const isSelected = finalSelected.has(rect);
+    d3.select(rect)
+      .classed("selectedHovered", isSelected)
+      .attr("fill", isSelected ? d.selectedColor : d.baseColor);
   }
-}
-    if (!isMatched) {
-  for (const pair of activeTimelineSelections.fromAlluvialLinkPairs) {
-    const [orig, rare] = pair.split("|");
-    const origMatch = [...(d.originalities || [])].includes(orig);
-    const rareMatch = [...(d.rarities || [])].includes(rare);
-
-    if (origMatch && rareMatch) {
-      isMatched = true;
-      break;
-    }
-  }
-}
-
-if (
-  !isMatched &&
-  activeTimelineSelections.setsFromScatterplot?.has(d.name)
-) {
-  isMatched = true;
-}
-
-    rect.classed("selectedHovered", isMatched)
-        .attr("fill", isMatched ? d.selectedColor : d.baseColor);
-    // Highlight year labels based on selected years
-
-
-  });
 
   d3.selectAll(".year-tick-timeline")
-  .classed("selected", function(d) {
-    const yearStr = d.getFullYear().toString();
-    return activeTimelineSelections.fromYears.has(yearStr);
-  });
+    .classed("selected", d =>
+      activeTimelineSelections.fromYears.has(d.getFullYear().toString())
+    );
+
   d3.selectAll(".set-type-label")
-  .classed("selected", function(d) {
-    return activeTimelineSelections.setTypes.has(d);
-  });
+    .classed("selected", d =>
+      activeTimelineSelections.setTypes.has(d)
+    );
 }
+
+
+
+
 
 
 

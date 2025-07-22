@@ -23,6 +23,7 @@ import {
   onClearTimelineBrush,
   onClearLineChartBrush,
   onClearSetTypeHover,
+  onClearSelection,
   onClearScatterplotBrush,
   onScatterplotBrush,
   emitClearAlluvialSelections,
@@ -214,7 +215,7 @@ const activeAlluvialSelections = new Map();
 
 onClearIcicleSelections(() => {
     for (const [key, value] of activeAlluvialSelections.entries()) {
-    if (value.source === "icicleColors" || value.source === "icicleNumColors" ) {
+    if (value.source === "icicle") {
       activeAlluvialSelections.delete(key);
     }
   }
@@ -222,12 +223,16 @@ onClearIcicleSelections(() => {
 });
 
 onClearTimelineSelections(() => {
-  console.log("Clearing Timeline selections");
     for (const [key, value] of activeAlluvialSelections.entries()) {
     if (value.source === "timeline" || value.source === "timelineSetsType") {
       activeAlluvialSelections.delete(key);
     }
   }
+  updateAlluvialFromSelections(); // to re-render Alluvial visuals
+});
+
+onClearSelection(() => {
+  activeAlluvialSelections.clear();
   updateAlluvialFromSelections(); // to re-render Alluvial visuals
 });
 
@@ -240,7 +245,7 @@ onIcicleClick(({ colorIdentity, originalities, rarities }) => {
     activeAlluvialSelections.delete(key);
   } else {
     activeAlluvialSelections.set(key, {
-      source: "icicleColors",
+      source: "icicle",
       originalities: new Set(originalities),
       rarities: new Set(rarities),
     });
@@ -258,7 +263,7 @@ onIcicleNumClick(({ numColors, originalities, rarities }) => {
     activeAlluvialSelections.delete(key);
   } else {
     activeAlluvialSelections.set(key, {
-      source: "icicleNumColors",
+      source: "icicle",
       originalities: new Set(originalities),
       rarities: new Set(rarities),
     });
@@ -296,7 +301,7 @@ onTimelineSetTypeClick((setInfo) => {
   } else {
     // Toggle ON: store the identities
     activeAlluvialSelections.set(type, {
-      source: "timelineSetsType",
+      source: "timeline",
       originalities: new Set(originalities),
       rarities: new Set(rarities),
     });
@@ -343,7 +348,6 @@ onLineChartBrush((entries) => {
 });
 
 onScatterplotCards(({ originalities, rarities }) => {
-  console.log("Scatterplot Cards:", originalities, rarities);
   if (!activeAlluvialSelections.has("cards")) {
     activeAlluvialSelections.set("cards", {
       source: "scatterplot",
@@ -408,55 +412,62 @@ onClearLineChartBrush(() => {
 });
 
 function updateAlluvialFromSelections() {
-  const allSelectedOriginalities = new Set();
-  const allSelectedRarities = new Set();
-  // Merge all originalities and rarities from each Icicle selection
-  for (const { originalities, rarities } of activeAlluvialSelections.values()) {
-    originalities?.forEach((o) => allSelectedOriginalities.add(o));
-    rarities?.forEach((r) => allSelectedRarities.add(r));
+  const groupedBySource = new Map();
+
+  for (const [_, { source, originalities, rarities }] of activeAlluvialSelections) {
+    if (!groupedBySource.has(source)) {
+      groupedBySource.set(source, {
+        originalities: new Set(),
+        rarities: new Set(),
+      });
+    }
+    const group = groupedBySource.get(source);
+    originalities?.forEach((o) => group.originalities.add(o));
+    rarities?.forEach((r) => group.rarities.add(r));
   }
 
-  // Go through each Alluvial node rect and update class + fill
+  const scatterGroup = groupedBySource.get("scatterplot");
+  groupedBySource.delete("scatterplot");
+
+  let finalOriginalities = null;
+  let finalRarities = null;
+
+  for (const { originalities, rarities } of groupedBySource.values()) {
+    if (finalOriginalities === null) {
+      finalOriginalities = new Set(originalities);
+      finalRarities = new Set(rarities);
+    } else {
+      finalOriginalities = new Set([...finalOriginalities].filter((o) => originalities.has(o)));
+      finalRarities = new Set([...finalRarities].filter((r) => rarities.has(r)));
+    }
+  }
+
+  if (finalOriginalities === null) {
+    finalOriginalities = new Set();
+    finalRarities = new Set();
+  }
+  if (scatterGroup) {
+    scatterGroup.originalities.forEach((o) => finalOriginalities?.add(o));
+    scatterGroup.rarities.forEach((r) => finalRarities?.add(r));
+  }
+
+
+  // Update Alluvial rects
   d3.selectAll("g.node rect").each(function (d) {
     const isOriginality = d.x0 === 0;
     const match = isOriginality
-      ? allSelectedOriginalities.has(d.name)
-      : allSelectedRarities.has(d.name);
+      ? finalOriginalities?.has(d.name)
+      : finalRarities?.has(d.name);
 
     d3.select(this)
       .classed("selectedHovered", match)
       .attr("fill", match ? d.selectedColor : d.baseColor);
   });
 
-
-  const svg = d3.select(".AlluvialChart").select("svg");
-if (!svg.empty()) {
-  const containerRect = svg.node().getBoundingClientRect();
-  const chartWidth = containerRect.width * 0.85;
-  const chartHeight = containerRect.height * 0.75;
-  const margin = {
-    top: containerRect.height * 0.17,
-    right: 26,
-    bottom: 40,
-    left: containerRect.width * 0.015,
-  };
-
-  renderAlluvialLegend(
-    svg,
-    chartWidth,
-    margin,
-    chartHeight,
-    containerRect.width,
-    {
-      min: d3.min(d3.selectAll("g.node").data(), (d) => d.avgPrice),
-      max: d3.max(d3.selectAll("g.node").data(), (d) => d.avgPrice),
-    },
-    getState().selectedPriceAttribute || "price_eur", // fallback
-    true
-  );
+  // Update Legend
+  
 }
 
-}
 onClearSetHover(() => {
   clearAlluvialHoverOnly();
 });
@@ -511,10 +522,11 @@ function formatPriceSymbol(attr) {
 }
 
 const infoTooltipText = `
-<strong>Chart Interactions:</strong><br>
-• <strong>Click</strong> on a node or link: Selects/diselects the dots in the scatterplot that matches the category.<br>
-• <strong>Right-Click</strong> on a node or link: Applies a global filter to the dataset based on that category or pair..<br>
-• <strong>Hover</strong> on nodes or links: see details and highlights the other visualizations.<br>
+<strong>Alluvial Chart Interactions:</strong><br>
+• <strong>Click</strong> a node or link: Selects or deselects a category, affecting the cards highlighted in other views.<br>
+• <strong>Right-Click</strong> a node or link: Applies or removes a global filter in the filter panel for that category.<br>
+• <strong>Hover</strong> on nodes or links: Shows tooltip details and highlights corresponding categories across views.<br>
+• <strong>Double-Click</strong> background: Clears selections made within the Alluvial chart.<br>
 `;
 
 function getMarginLeftOffset(screenWidth) {
@@ -807,13 +819,31 @@ export function createAlluvialChart(
             emitClearAlluvialLinkHover();
           })
           .on("click", function (event, d) {
-            const key = `${d.source.name}|${d.target.name}`;
-            activeAlluvialSelections.set(key, {
-                source: "alluvial",
-                originalities:
-                new  Set([d.source.name]) ,
-                rarities: new Set([d.target.name]),
-              });
+const origKey = d.source.name;
+const rarityKey = d.target.name;
+
+// Toggle originality selection
+if (activeAlluvialSelections.has(origKey)) {
+  activeAlluvialSelections.delete(origKey);
+} else {
+  activeAlluvialSelections.set(origKey, {
+    source: "alluvial",
+    originalities: new Set([origKey]),
+    rarities: new Set(),
+  });
+}
+
+// Toggle rarity selection
+if (activeAlluvialSelections.has(rarityKey)) {
+  activeAlluvialSelections.delete(rarityKey);
+} else {
+  activeAlluvialSelections.set(rarityKey, {
+    source: "alluvial",
+    originalities: new Set(),
+    rarities: new Set([rarityKey]),
+  });
+}
+
               updateAlluvialFromSelections(); // handles all fill + class logic
             emitAlluvialLinkClick({
               originality: d.source.name.toLowerCase(),

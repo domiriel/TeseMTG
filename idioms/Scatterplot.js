@@ -2,7 +2,7 @@
 import { updateState, getState } from "../state.js";
 import { emitHoverCard, emitClearHover,
           onSetHover, onClearSetHover, onRectHover, onClearRectHover,onClearLineYearHover, onLineYearHover, onNumColorsHover, onClearNumColorsHover, emitScatterplotCards, emitScatterplotBrush, emitClearScatterplotBrush, 
-          onAlluvialHover, onClearAlluvialHover, onAlluvialClick, onAlluvialLinkClick, onIcicleClick, onLineChartClick, onIcicleNumClick,onCardSearch, onClearAlluvialSelections,onClearIcicleSelections,
+          onAlluvialHover, onClearAlluvialHover, onAlluvialClick, onAlluvialLinkClick, onIcicleClick, onLineChartClick, onIcicleNumClick,onCardSearch, onClearAlluvialSelections,onClearIcicleSelections, onClearSelection,
           onTimelineSetClick, onYearClick, onAlluvialLinkHover, onClearAlluvialLinkHover, onLineChartBrush, onClearLineChartBrush, onSetTypeHover, onTimelineSetTypeClick, onTimelineBrush, onClearTimelineBrush} from "./Events.js";
 import { getEffectivePriceAttribute } from "../script.js"; 
 const colorGroups = [
@@ -16,6 +16,7 @@ const ZOOM_RESET_EPSILON = 0.001;
 const activeSelections = {
   originalities: new Set(),
   rarities: new Set(),
+   originalityRarityPairs: new Set(),
   colorIdentities: new Set(),
   numColors: new Set(),
   years: new Set(),
@@ -23,6 +24,19 @@ const activeSelections = {
   setTypes: new Set(),
   cards: new Map()
 };
+
+onClearSelection(() => {
+  activeSelections.originalities.clear();
+  activeSelections.rarities.clear();
+  activeSelections.originalityRarityPairs.clear();
+  activeSelections.colorIdentities.clear();
+  activeSelections.numColors.clear();
+  activeSelections.years.clear();
+  activeSelections.sets.clear();
+  activeSelections.setTypes.clear();
+  activeSelections.cards.clear();
+  applySelectionToScatter();
+});
 
 const dotSizeByZoom = [
   { threshold: 1, radius: 2.5 },     // zoom < 1 — never happens since min is 1
@@ -52,54 +66,70 @@ onClearIcicleSelections(() => {
   applySelectionToScatter();
 });
 
+const filterGroups = {
+  alluvial: ["originalities", "rarities", "originalityRarityPairs"],
+  icicle: ["colorIdentities", "numColors"],
+  timeline: ["sets", "setTypes"],
+  lineChart: ["years"]
+};
+
+
+
 function getCardsMatchingActiveSelections(data) {
-  let result = data;
+  const groupKeys = Object.keys(filterGroups);
 
-  if (activeSelections.originalities.size > 0) {
-    result = result.filter(card =>
-      card.all_originalities?.some(orig =>
-        activeSelections.originalities.has(orig)
-      )
-    );
-  }
+  return data.filter(card => {
+    return groupKeys.every(groupName => {
+      const filters = filterGroups[groupName];
 
-  if (activeSelections.rarities.size > 0) {
-    result = result.filter(card =>
-      activeSelections.rarities.has(card.rarity?.toLowerCase())
-    );
-  }
+      // Skip group if no sub-filters are active
+      const hasAnyActive = filters.some(key =>
+        activeSelections[key]?.size > 0
+      );
+      if (!hasAnyActive) return true;
 
-  if (activeSelections.colorIdentities.size > 0) {
-    result = result.filter(card => {
-      const identityKey = card.color_identity?.join("") || "Colorless";
-      return activeSelections.colorIdentities.has(identityKey);
+      // OR logic within group
+      return filters.some(key => {
+        const set = activeSelections[key];
+        if (!set || set.size === 0) return false;
+
+        switch (key) {
+          case "originalities":
+            return card.all_originalities?.some(o => set.has(o));
+          case "rarities":
+            return set.has(card.rarity?.toLowerCase());
+          case "originalityRarityPairs":
+            return Array.from(set).some(pair => {
+              const [o, r] = pair.split("|");
+              return card.all_originalities?.includes(o) &&
+                     card.rarity?.toLowerCase() === r;
+            });
+
+          case "colorIdentities":
+            const idKey = card.color_identity?.join("") || "Colorless";
+            return set.has(idKey);
+          case "numColors":
+            return set.has(card.color_identity?.length || 0);
+
+          case "sets":
+            return card.all_sets?.some(s => set.has(s.name));
+          case "setTypes":
+            return card.all_set_types?.some(t =>
+              set.has(t.toLowerCase())
+            );
+
+          case "years":
+            const year = new Date(card.release_date).getFullYear();
+            return set.has(year);
+
+          default:
+            return false;
+        }
+      });
     });
-  }
-  if (activeSelections.numColors.size > 0) {
-    result = result.filter(card =>
-      activeSelections.numColors.has(card.color_identity?.length || 0)
-    );
-  }
-  if (activeSelections.years.size > 0) {
-    result = result.filter(card => {
-      const year = new Date(card.release_date).getFullYear();
-      return activeSelections.years.has(year);
-    });
-  }
-  if (activeSelections.sets.size > 0) {
-    result = result.filter(card =>
-      card.all_sets?.some(s => activeSelections.sets.has(s.name))
-    );
-  }
-  if (activeSelections.setTypes.size > 0) {
-    result = result.filter(card =>
-      card.all_set_types?.some(type =>
-        activeSelections.setTypes.has(type.toLowerCase())
-      )
-    );
-  }
-  return result;
+  });
 }
+
 
 function applySelectionToScatter() {
   const hasAnySelection = Object.entries(activeSelections)
@@ -204,7 +234,8 @@ const scatterTooltipText = `
 • <strong>Brush</strong>: Toggle on/off persistent highlights of multiple cards.<br>
 • <strong>Hover on labels</strong>: view tooltip explanation.<br>
 • <strong>Scroll</strong>: Zoom in/out.<br>
-• <strong>Moving mouse while holding right-click</strong>: Panning<br>
+• <strong>Right-click drag</strong> or <strong>Ctrl + left-click drag</strong>: Pan the Scatterplot<br>
+• <strong>Double-Click</strong> background: Clears selections made within the Scatterplot.<br>
 `;
 
 onAlluvialClick(({ category, value }) => {
@@ -219,7 +250,7 @@ onYearClick(({ year }) => {
 });
 
 onTimelineSetClick(setInfo => {
-  addActiveSelection("sets", setName);
+  addActiveSelection("sets", setInfo.name);
   applySelectionToScatter();
 });
 
@@ -229,10 +260,22 @@ applySelectionToScatter();
 });
 
 onAlluvialLinkClick(({ originality, rarity }) => {
-  addActiveSelection("originalities", originality);
-  addActiveSelection("rarities", rarity);
+  addPairSelection("originalityRarityPairs", originality, rarity);
   applySelectionToScatter();
 });
+
+function addPairSelection(category, originality, rarity) {
+  const set = activeSelections[category];
+  if (!set) return;
+
+  const key = `${originality}|${rarity}`;
+  if (set.has(key)) {
+    set.delete(key);
+  } else {
+    set.add(key);
+  }
+}
+
 
 onIcicleClick(({ colorIdentity }) => {
 
@@ -272,6 +315,7 @@ applySelectionToScatter();
 onClearTimelineBrush(() => {
   // Get the current state
 activeSelections.sets.clear();
+activeSelections.setTypes.clear();
 applySelectionToScatter();
 });
 
@@ -545,7 +589,7 @@ function clickFn(event, d) {
 
 
 onCardSearch(card => {
-  console.log("Card search triggered:", card);
+
   if (activeSelections.cards.has(card.name)) {
     activeSelections.cards.delete(card.name);
   } else {
@@ -1153,7 +1197,6 @@ infoGroup
 
 const visibleData = filteredData
 const initialRadius = getDotRadiusForZoom(currentZoomLevel);
-console.log("Initial radius for zoom level", currentZoomLevel, "is", initialRadius);
 const dots = gClip.selectAll("circle")
   .data(visibleData, d => d.name)
   .join("circle")
@@ -1321,7 +1364,6 @@ currentZoomLevel = transform.k;
   updateAxes(getSymbolFromAttribute(lastPriceAttribute), newX);
 
   const newRadius = getDotRadiusForZoom(currentZoomLevel);
-  console.log("New radius for zoom level", currentZoomLevel, "is", newRadius);
   const gClip = d3.select(".clip-group");
 
   gClip.selectAll("circle")

@@ -180,7 +180,6 @@ requestAnimationFrame(() => {
   const freeTextSearch = stateSnapshot.freeTextSearch;
   let selectedFilters = sharedFilters || stateSnapshot.selectedFilters;
 
-  console.log(selectedFilters)
   const filtered = getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
  
   createIcicleChart(filtered, ".IcicleChart");
@@ -294,19 +293,13 @@ subscribe((state) => {
   window.addEventListener("resize", () => {
     const { selectedFilters, freeTextSearch, hoveredCards } = getState();
     const selectedPriceAttribute = getEffectivePriceAttribute(getState());
-    const { default: filteredData, icicle: IcicleFiltered, timeline: TimelineFiltered } =
-      getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
+    const filteredData = getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
     createAlluvialChart(filteredData, ".AlluvialChart", true, selectedPriceAttribute);
-    createTimelineView(TimelineFiltered, ".TimelineView", true);
+    createTimelineView(filteredData, ".TimelineView", true);
     createStackedLineChart(filteredData, ".LineChart", true);
-    createIcicleChart(IcicleFiltered, ".IcicleChart", true);
+    createIcicleChart(filteredData, ".IcicleChart", true);
     updateScatterPlot(prepareScatterData(filteredData, selectedPriceAttribute), selectedPriceAttribute);
     createFilterPanel(originalData, filteredData, ".FilterPanel", selectedFilters);
-
-    highlightAlluvialElements(hoveredCards);
-    highlightIcicleRect(hoveredCards);
-    highlightTimelineSets(hoveredCards);
-    highlightLineChart(hoveredCards);
     updateDrawer(hoveredCards);
     
   });
