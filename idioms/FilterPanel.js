@@ -508,6 +508,7 @@ export function createFilterPanel(
     .style("margin-top", "6px")
     .style("width", "95%")
     .style("cursor", "pointer")
+    .style("text-align", "left")
     .on("click", () => {
       emitClearSelection();
     });
