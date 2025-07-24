@@ -138,8 +138,6 @@ function getCardsMatchingActiveSelections(data) {
           case "colorIdentities":
             const idKey = card.color_identity?.join("") || "Colorless";
             return set.has(idKey);
-          case "numColors":
-            return set.has(card.color_identity?.length || 0);
 
           case "sets":
             return card.all_sets?.some((s) => set.has(s.name));
@@ -303,15 +301,33 @@ function addPairSelection(category, originality, rarity) {
   }
 }
 
-onIcicleClick(({ colorIdentity }) => {
+onIcicleClick(({ colorIdentity, numColors }) => {
   addActiveSelection("colorIdentities", colorIdentity);
+  activeSelections.numColors.add(numColors)
+  console.log(activeSelections)
   applySelectionToScatter();
 });
 
-onIcicleNumClick(({ numColors }) => {
-  addActiveSelection("numColors", numColors);
+onIcicleNumClick(({ numColors, colorIdentities }) => {
+  const groupSet = activeSelections.numColors;
+
+  const identitySet = activeSelections.colorIdentities;
+
+  const isSelected = groupSet.has(numColors);
+  console.log(isSelected)
+  if (isSelected) {
+    // Remove group and all children
+    groupSet.delete(numColors);
+    colorIdentities.forEach((id) => identitySet.delete(id));
+  } else {
+    // Add group and all children
+    groupSet.add(numColors);
+    colorIdentities.forEach((id) => identitySet.add(id));
+  }
+
   applySelectionToScatter();
 });
+
 
 onLineChartClick(({ year }) => {
   const targetYear = parseInt(year, 10); // Ensure it's a number
