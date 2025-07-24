@@ -1,12 +1,37 @@
-import { getState, subscribe, updateState, loadFiltersFromURL } from "./state.js";
+import {
+  getState,
+  subscribe,
+  updateState,
+  loadFiltersFromURL,
+} from "./state.js";
 // @ts-ignore
-import { createIcicleChart, highlightIcicleRect } from "./idioms/IcicleChart.js";
-import { createAlluvialChart, highlightAlluvialElements } from "./idioms/AlluvialChart.js";
-import { createTimelineView, highlightTimelineSets } from "./idioms/TimelineView.js";
-import { createScatterPlot, updateScatterPlot, prepareScatterData } from "./idioms/Scatterplot.js";
-import { createStackedLineChart, highlightLineChart } from "./idioms/LineChart.js";
+import {
+  createIcicleChart,
+  highlightIcicleRect,
+} from "./idioms/IcicleChart.js";
+import {
+  createAlluvialChart,
+  highlightAlluvialElements,
+} from "./idioms/AlluvialChart.js";
+import {
+  createTimelineView,
+  highlightTimelineSets,
+} from "./idioms/TimelineView.js";
+import {
+  createScatterPlot,
+  updateScatterPlot,
+  prepareScatterData,
+} from "./idioms/Scatterplot.js";
+import {
+  createStackedLineChart,
+  highlightLineChart,
+} from "./idioms/LineChart.js";
 import { createFilterPanel, updateFilterPanel } from "./idioms/FilterPanel.js";
-import { createHiddenDrawer, updateDrawer, createIllegalDrawer} from "./idioms/HiddenDrawer.js";
+import {
+  createHiddenDrawer,
+  updateDrawer,
+  createIllegalDrawer,
+} from "./idioms/HiddenDrawer.js";
 import { showLoader, hideLoader } from "./idioms/LoadingAnimation.js";
 
 const filterApplicationOrder = [
@@ -21,7 +46,7 @@ const filterApplicationOrder = [
   "Color Identity",
   "Supertypes",
   "Types",
-  "Subtypes"
+  "Subtypes",
 ];
 const GROUPED_DATA_VERSION = "v6";
 export function getEffectivePriceAttribute(state) {
@@ -35,13 +60,13 @@ async function writeGroupedDataToOPFS(groupedData) {
   console.log("Saving grouped data to OPFS");
   const serializable = {
     __version: GROUPED_DATA_VERSION, // Save the version
-    data: {}
+    data: {},
   };
 
   for (const [category, map] of Object.entries(groupedData)) {
     serializable.data[category] = {};
     for (const [key, cards] of map.entries()) {
-      serializable.data[category][key] = cards.map(card => card.index);
+      serializable.data[category][key] = cards.map((card) => card.index);
     }
   }
 
@@ -52,7 +77,6 @@ async function writeGroupedDataToOPFS(groupedData) {
   await writable.close();
 }
 
-
 async function readGroupedDataFromOPFS(originalData) {
   try {
     const root = await navigator.storage.getDirectory();
@@ -61,7 +85,7 @@ async function readGroupedDataFromOPFS(originalData) {
     const text = await file.text();
     const parsed = JSON.parse(text);
 
-    console.log(parsed.__version)
+    console.log(parsed.__version);
     if (parsed.__version !== GROUPED_DATA_VERSION) {
       console.warn("Grouped data version mismatch. Rebuilding cache.");
       return null;
@@ -72,7 +96,10 @@ async function readGroupedDataFromOPFS(originalData) {
     for (const [category, obj] of Object.entries(raw)) {
       revived[category] = new Map();
       for (const [key, cards] of Object.entries(obj)) {
-        revived[category].set(key, cards.map(index => originalData[index]));
+        revived[category].set(
+          key,
+          cards.map((index) => originalData[index])
+        );
       }
     }
     return revived;
@@ -81,7 +108,6 @@ async function readGroupedDataFromOPFS(originalData) {
     return null;
   }
 }
-
 
 async function clearOPFSCache() {
   const root = await navigator.storage.getDirectory();
@@ -109,13 +135,13 @@ async function init() {
   }
 
   const t0 = performance.now();
- let originalData;
-const raw = await d3.json("./data/dataset_card_details.json");
-originalData = JSON.parse(JSON.stringify(raw));
+  let originalData;
+  const raw = await d3.json("./data/dataset_card_details.json");
+  originalData = JSON.parse(JSON.stringify(raw));
 
-let groupedData = await readGroupedDataFromOPFS(originalData);
-//console.log(groupedData)
- if (!groupedData) {
+  let groupedData = await readGroupedDataFromOPFS(originalData);
+  //console.log(groupedData)
+  if (!groupedData) {
     const raw = await d3.json("./data/dataset_card_details.json");
     originalData = JSON.parse(JSON.stringify(raw));
     const tDataLoaded = performance.now();
@@ -131,47 +157,45 @@ let groupedData = await readGroupedDataFromOPFS(originalData);
   updateState({ originalData, groupedData });
   const t1 = performance.now();
 
-getState().onChange("hoveredCards", (hoveredCards) => {
-  showLoader();
+  getState().onChange("hoveredCards", (hoveredCards) => {
+    showLoader();
 
-  console.log("Hello")
-  const t0 = performance.now();
+    console.log("Hello");
+    const t0 = performance.now();
 
-  const t1 = performance.now();
-  const t2 = performance.now();
+    const t1 = performance.now();
+    const t2 = performance.now();
 
-  //highlightIcicleRect(hoveredCards);
-  const t3 = performance.now();
+    //highlightIcicleRect(hoveredCards);
+    const t3 = performance.now();
 
-  //highlightTimelineSets(hoveredCards);
-  const t4 = performance.now();
+    //highlightTimelineSets(hoveredCards);
+    const t4 = performance.now();
 
-  //highlightLineChart(hoveredCards);
-  const t5 = performance.now();
+    //highlightLineChart(hoveredCards);
+    const t5 = performance.now();
 
-  updateDrawer(hoveredCards);
-  const t6 = performance.now();
+    updateDrawer(hoveredCards);
+    const t6 = performance.now();
 
-  // Optional debug logging
-  // console.log(`Hover update timings:
-  // Alluvial: ${(t2 - t1).toFixed(2)}ms
-  // Icicle: ${(t3 - t2).toFixed(2)}ms
-  // Timeline: ${(t4 - t3).toFixed(2)}ms
-  // Line chart: ${(t5 - t4).toFixed(2)}ms
-  // Drawer: ${(t6 - t5).toFixed(2)}ms
-  // Total: ${(t6 - t0).toFixed(2)}ms`);
+    // Optional debug logging
+    // console.log(`Hover update timings:
+    // Alluvial: ${(t2 - t1).toFixed(2)}ms
+    // Icicle: ${(t3 - t2).toFixed(2)}ms
+    // Timeline: ${(t4 - t3).toFixed(2)}ms
+    // Line chart: ${(t5 - t4).toFixed(2)}ms
+    // Drawer: ${(t6 - t5).toFixed(2)}ms
+    // Total: ${(t6 - t0).toFixed(2)}ms`);
 
-requestAnimationFrame(() => {
-  updateState({
-    isHoverUpdate: false,
-    suppressGlobalNotify: true
+    requestAnimationFrame(() => {
+      updateState({
+        isHoverUpdate: false,
+        suppressGlobalNotify: true,
+      });
+    });
+
+    hideLoader(); // Keep this if you want the loader to fade out slightly delayed
   });
-});
-
-  hideLoader(); // Keep this if you want the loader to fade out slightly delayed
-});
-
-
 
   const stateSnapshot = getState();
   const sharedFilters = loadFiltersFromURL();
@@ -180,21 +204,42 @@ requestAnimationFrame(() => {
   const freeTextSearch = stateSnapshot.freeTextSearch;
   let selectedFilters = sharedFilters || stateSnapshot.selectedFilters;
 
-  const filtered = getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
- 
+  const filtered = getFilteredData(
+    originalData,
+    selectedFilters,
+    selectedPriceAttribute,
+    freeTextSearch
+  );
+
   createIcicleChart(filtered, ".IcicleChart");
   createFilterPanel(originalData, filtered, ".FilterPanel", selectedFilters);
   updateFilterPanel(originalData, filtered, selectedFilters);
-  createAlluvialChart(filtered, ".AlluvialChart", false, selectedPriceAttribute);
+  createAlluvialChart(
+    filtered,
+    ".AlluvialChart",
+    false,
+    selectedPriceAttribute
+  );
   cardsInIllegalDrawer = computeIllegalCards(originalData);
 
-  const processedIllegalData = prepareScatterData(cardsInIllegalDrawer, selectedPriceAttribute);
+  const processedIllegalData = prepareScatterData(
+    cardsInIllegalDrawer,
+    selectedPriceAttribute
+  );
 
-createIllegalDrawer(processedIllegalData, ".IllegalDrawerArea");
+  createIllegalDrawer(processedIllegalData, ".IllegalDrawerArea");
   createHiddenDrawer(".HiddenDrawerArea");
   createTimelineView(filtered, ".TimelineView");
-  const processedScatterData = prepareScatterData(filtered, selectedPriceAttribute);
-  createScatterPlot(processedScatterData, ".Scatterplot", false, selectedPriceAttribute);
+  const processedScatterData = prepareScatterData(
+    filtered,
+    selectedPriceAttribute
+  );
+  createScatterPlot(
+    processedScatterData,
+    ".Scatterplot",
+    false,
+    selectedPriceAttribute
+  );
   createStackedLineChart(filtered, ".LineChart");
 
   highlightAlluvialElements([]);
@@ -206,14 +251,14 @@ createIllegalDrawer(processedIllegalData, ".IllegalDrawerArea");
   updateState({
     lastFilterInputs: {
       selectedFilters: cloneFilters(selectedFilters),
-selectedPriceCurrency: stateSnapshot.selectedPriceCurrency,
-    selectedPriceSuffix: stateSnapshot.selectedPriceSuffix,
-      freeTextSearch
+      selectedPriceCurrency: stateSnapshot.selectedPriceCurrency,
+      selectedPriceSuffix: stateSnapshot.selectedPriceSuffix,
+      freeTextSearch,
     },
     originalFilteredData: filtered,
     previousFilteredData: filtered,
     lastFilteredData: filtered,
-    originalSelectedFilters: cloneFilters(selectedFilters)
+    originalSelectedFilters: cloneFilters(selectedFilters),
   });
 
   const TFinal = performance.now();
@@ -222,90 +267,122 @@ selectedPriceCurrency: stateSnapshot.selectedPriceCurrency,
 
   hideLoader(150);
 
-subscribe((state) => {
-  showLoader();
-  if (isUpdatingFilteredData) return;
-  if (state.isHoverUpdate) return;
+  subscribe((state) => {
+    showLoader();
+    if (isUpdatingFilteredData) return;
+    if (state.isHoverUpdate) return;
 
-  const t0 = performance.now();
-  const context = state.updateContext || "default";
-  const { selectedFilters, freeTextSearch } = state;
-  const selectedPriceAttribute = getEffectivePriceAttribute(state);
+    const t0 = performance.now();
+    const context = state.updateContext || "default";
+    const { selectedFilters, freeTextSearch } = state;
+    const selectedPriceAttribute = getEffectivePriceAttribute(state);
 
-  const t1 = performance.now();
-  const filteredData = getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
-  const t2 = performance.now();
-  //console.log(`[t${(t2 - t1).toFixed(2)}ms] Filtered data`);
+    const t1 = performance.now();
+    const filteredData = getFilteredData(
+      originalData,
+      selectedFilters,
+      selectedPriceAttribute,
+      freeTextSearch
+    );
+    const t2 = performance.now();
+    //console.log(`[t${(t2 - t1).toFixed(2)}ms] Filtered data`);
 
-  updateFilterPanel(originalData, filteredData, selectedFilters, ".FilterPanel");
-  const t3 = performance.now();
-  //console.log(`[t${(t3 - t2).toFixed(2)}ms] Updated filter panel`);
+    updateFilterPanel(
+      originalData,
+      filteredData,
+      selectedFilters,
+      ".FilterPanel"
+    );
+    const t3 = performance.now();
+    //console.log(`[t${(t3 - t2).toFixed(2)}ms] Updated filter panel`);
 
-  if (
-    window._prevFilteredLength === filteredData.length &&
-    window._prevPriceAttribute === selectedPriceAttribute &&
-    context === "default"
-  ) {
+    if (
+      window._prevFilteredLength === filteredData.length &&
+      window._prevPriceAttribute === selectedPriceAttribute &&
+      context === "default"
+    ) {
+      hideLoader(100);
+      return;
+    }
+
+    window._prevFilteredLength = filteredData.length;
+    window._prevPriceAttribute = selectedPriceAttribute;
+
+    createIcicleChart(filteredData, ".IcicleChart", true);
+    const t4 = performance.now();
+    //console.log(`[t${(t4 - t3).toFixed(2)}ms] Icicle chart updated`);
+
+    createTimelineView(filteredData, ".TimelineView", true);
+    const t5 = performance.now();
+    //console.log(`[t${(t5 - t4).toFixed(2)}ms] Timeline view updated`);
+
+    createStackedLineChart(filteredData, ".LineChart", true);
+    const t6 = performance.now();
+    // console.log(`[t${(t6 - t5).toFixed(2)}ms] Line chart updated`);
+
+    createAlluvialChart(
+      filteredData,
+      ".AlluvialChart",
+      true,
+      selectedPriceAttribute
+    );
+    const t7 = performance.now();
+    //console.log(`[t${(t7 - t6).toFixed(2)}ms] Alluvial chart updated`);
+
+    const processedData = prepareScatterData(
+      filteredData,
+      selectedPriceAttribute
+    );
+    updateScatterPlot(processedData, selectedPriceAttribute);
+    const t8 = performance.now();
+    //console.log(`[t${(t8 - t7).toFixed(2)}ms] Scatterplot updated`);
+
+    const { hoveredCards } = getState();
+    highlightAlluvialElements(hoveredCards);
+    highlightIcicleRect(hoveredCards);
+    highlightTimelineSets(hoveredCards);
+    highlightLineChart(hoveredCards);
+    updateDrawer(hoveredCards);
+    const t9 = performance.now();
+    //console.log(`[t${(t9 - t8).toFixed(2)}ms] Highlights and drawer updated`);
+
+    const total = (t9 - t0).toFixed(2);
+    console.log(`[Total: ${total}ms] Full update cycle`);
+
     hideLoader(100);
-    return;
-  }
-
-  window._prevFilteredLength = filteredData.length;
-  window._prevPriceAttribute = selectedPriceAttribute;
-
-  createIcicleChart(filteredData, ".IcicleChart", true);
-  const t4 = performance.now();
-  //console.log(`[t${(t4 - t3).toFixed(2)}ms] Icicle chart updated`);
-
-  createTimelineView(filteredData, ".TimelineView", true);
-  const t5 = performance.now();
-  //console.log(`[t${(t5 - t4).toFixed(2)}ms] Timeline view updated`);
-
-  createStackedLineChart(filteredData, ".LineChart", true);
-  const t6 = performance.now();
- // console.log(`[t${(t6 - t5).toFixed(2)}ms] Line chart updated`);
-
-  createAlluvialChart(filteredData, ".AlluvialChart", true, selectedPriceAttribute);
-  const t7 = performance.now();
-  //console.log(`[t${(t7 - t6).toFixed(2)}ms] Alluvial chart updated`);
-
-  const processedData = prepareScatterData(filteredData, selectedPriceAttribute);
-  updateScatterPlot(processedData, selectedPriceAttribute);
-  const t8 = performance.now();
-  //console.log(`[t${(t8 - t7).toFixed(2)}ms] Scatterplot updated`);
-
-  const { hoveredCards } = getState();
-  highlightAlluvialElements(hoveredCards);
-  highlightIcicleRect(hoveredCards);
-  highlightTimelineSets(hoveredCards);
-  highlightLineChart(hoveredCards);
-  updateDrawer(hoveredCards);
-  const t9 = performance.now();
-  //console.log(`[t${(t9 - t8).toFixed(2)}ms] Highlights and drawer updated`);
-
-  const total = (t9 - t0).toFixed(2);
-  console.log(`[Total: ${total}ms] Full update cycle`);
-
-  hideLoader(100);
-});
-
+  });
 
   window.addEventListener("resize", () => {
     const { selectedFilters, freeTextSearch, hoveredCards } = getState();
     const selectedPriceAttribute = getEffectivePriceAttribute(getState());
-    const filteredData = getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch);
-    createAlluvialChart(filteredData, ".AlluvialChart", true, selectedPriceAttribute);
+    const filteredData = getFilteredData(
+      originalData,
+      selectedFilters,
+      selectedPriceAttribute,
+      freeTextSearch
+    );
+    createAlluvialChart(
+      filteredData,
+      ".AlluvialChart",
+      true,
+      selectedPriceAttribute
+    );
     createTimelineView(filteredData, ".TimelineView", true);
     createStackedLineChart(filteredData, ".LineChart", true);
     createIcicleChart(filteredData, ".IcicleChart", true);
-    updateScatterPlot(prepareScatterData(filteredData, selectedPriceAttribute), selectedPriceAttribute);
-    createFilterPanel(originalData, filteredData, ".FilterPanel", selectedFilters);
+    updateScatterPlot(
+      prepareScatterData(filteredData, selectedPriceAttribute),
+      selectedPriceAttribute
+    );
+    createFilterPanel(
+      originalData,
+      filteredData,
+      ".FilterPanel",
+      selectedFilters
+    );
     updateDrawer(hoveredCards);
-    
   });
 }
-  
-
 
 export function filterData(groupedData, selectedFilters, options = {}) {
   const { excludeCategory } = options;
@@ -317,7 +394,8 @@ export function filterData(groupedData, selectedFilters, options = {}) {
 
   const perCategoryMatches = [];
 
-  for (const category of filterApplicationOrder || Object.keys(selectedFilters)) {
+  for (const category of filterApplicationOrder ||
+    Object.keys(selectedFilters)) {
     if (excludeCategory && category === excludeCategory) continue;
 
     const values = selectedFilters[category];
@@ -329,71 +407,75 @@ export function filterData(groupedData, selectedFilters, options = {}) {
     let matched = new Set();
 
     if (applyAndWithin) {
-const sets = Array.from(values)
-    .map(val => group.get(val))
-    .filter(set => set);
+      const sets = Array.from(values)
+        .map((val) => group.get(val))
+        .filter((set) => set);
 
-  if (sets.length === 1) {
-    matched = new Set(sets[0]);
-  } else if (sets.length > 1) {
-    matched = sets.reduce((a, b) => intersectSets(new Set(a), new Set(b)));
-  } else {
-    matched = new Set();
-  }
+      if (sets.length === 1) {
+        matched = new Set(sets[0]);
+      } else if (sets.length > 1) {
+        matched = sets.reduce((a, b) => intersectSets(new Set(a), new Set(b)));
+      } else {
+        matched = new Set();
+      }
     } else {
-      values.forEach(val => {
+      values.forEach((val) => {
         const set = group.get(val);
-        if (set) set.forEach(card => matched.add(card));
+        if (set) set.forEach((card) => matched.add(card));
       });
     }
 
     perCategoryMatches.push(matched);
   }
 
-    filteredSet = perCategoryMatches.reduce(
-      (a, b) => intersectSets(a, b),
-      new Set(getState().originalData || [])
-    );
+  filteredSet = perCategoryMatches.reduce(
+    (a, b) => intersectSets(a, b),
+    new Set(getState().originalData || [])
+  );
 
   // Apply free text search
   const textTerms = selectedFilters["FreeTextSearch"];
   if (textTerms?.size > 0) {
-    const searchTerms = Array.from(textTerms).map(t => t.toLowerCase());
-    filteredSet = new Set([...filteredSet].filter(card => {
-      const cardText = [
-        card.name?.toLowerCase() || "",
-        ...(card.keywords || []).map(k => k.toLowerCase()),
-        card.subtype?.toLowerCase() || ""
-      ];
-      return searchTerms.some(term =>
-        cardText.some(text => text.includes(term))
-      );
-    }));
+    const searchTerms = Array.from(textTerms).map((t) => t.toLowerCase());
+    filteredSet = new Set(
+      [...filteredSet].filter((card) => {
+        const cardText = [
+          card.name?.toLowerCase() || "",
+          ...(card.keywords || []).map((k) => k.toLowerCase()),
+          card.subtype?.toLowerCase() || "",
+        ];
+        return searchTerms.some((term) =>
+          cardText.some((text) => text.includes(term))
+        );
+      })
+    );
   }
 
   return Array.from(filteredSet);
 }
 
-
 // Helper to create a copy of selectedFilters omitting some categories
 
 // Helper for intersecting two sets
 function intersectSets(setA, setB) {
-  return new Set([...setA].filter(x => setB.has(x)));
+  return new Set([...setA].filter((x) => setB.has(x)));
 }
-
 
 // Helper: test if a single card passes the filters (except those ignored)
 function shouldIncludeCard(card, selectedFilters) {
   // IcicleColorGroups
   if (selectedFilters["IcicleColorGroups"]?.size > 0) {
-    const groupLabel =( card.number_of_colours >= 4
-      ? "+4 Colors"
-      : card.number_of_colours == 1 ? "1 Color"
-      : card.number_of_colours === 0
+    const groupLabel = (
+      card.number_of_colours >= 4
+        ? "+4 Colors"
+        : card.number_of_colours == 1
+        ? "1 Color"
+        : card.number_of_colours === 0
         ? "Colorless"
-        : `${card.number_of_colours} Colors`).toLowerCase();
-    if (!selectedFilters["IcicleColorGroups"].has(groupLabel.toLowerCase())) return false;
+        : `${card.number_of_colours} Colors`
+    ).toLowerCase();
+    if (!selectedFilters["IcicleColorGroups"].has(groupLabel.toLowerCase()))
+      return false;
   }
 
   // IcicleColorIdentity
@@ -417,31 +499,28 @@ function shouldIncludeCard(card, selectedFilters) {
     const cardValue = extractCardValue(card, category);
     if (!cardValue) return false;
 
-    const isSplittable = ["Supertypes", "Types", "Subtypes", "Keywords"].includes(category);
+    const isSplittable = [
+      "Supertypes",
+      "Types",
+      "Subtypes",
+      "Keywords",
+    ].includes(category);
     const cardValues = Array.isArray(cardValue)
-      ? cardValue.map(v => v.trim().toLowerCase())
-      : (isSplittable
-          ? cardValue.split(/[\s/]+/).map(v => v.trim().toLowerCase())
-          : [cardValue.trim().toLowerCase()]);
+      ? cardValue.map((v) => v.trim().toLowerCase())
+      : isSplittable
+      ? cardValue.split(/[\s/]+/).map((v) => v.trim().toLowerCase())
+      : [cardValue.trim().toLowerCase()];
 
-    const filterValues = new Set(Array.from(values).map(v => v.trim().toLowerCase()));
-    if (!cardValues.some(v => filterValues.has(v))) return false;
+    const filterValues = new Set(
+      Array.from(values).map((v) => v.trim().toLowerCase())
+    );
+    if (!cardValues.some((v) => filterValues.has(v))) return false;
   }
 
   return true;
 }
 
-
-  
-  
-
-
-
-  
-  
-
-  
-  function buildGroupedData(data) {
+function buildGroupedData(data) {
   const grouped = {
     Originality: new Map(),
     Keywords: new Map(),
@@ -456,10 +535,10 @@ function shouldIncludeCard(card, selectedFilters) {
     "Color Identity": new Map(),
   };
 
-  data.forEach(card => {
+  data.forEach((card) => {
     for (const category of Object.keys(grouped)) {
       const values = extractCardValues(card, category);
-      values.forEach(value => {
+      values.forEach((value) => {
         if (!grouped[category].has(value)) {
           grouped[category].set(value, []);
         }
@@ -470,22 +549,26 @@ function shouldIncludeCard(card, selectedFilters) {
   return grouped;
 }
 
-
-
 function extractCardValues(card, category) {
   switch (category) {
     case "Originality":
       return card.originality ? [card.originality] : [];
     case "Keywords":
-      return Array.isArray(card.keywords) ? card.keywords.map(k => k.trim()) : [];
+      return Array.isArray(card.keywords)
+        ? card.keywords.map((k) => k.trim())
+        : [];
     case "Rarity":
       return card.rarity ? [card.rarity] : [];
     case "Supertypes":
-      return card.supertype ? card.supertype.split(/[\s/]+/).map(v => v.trim()) : [];
+      return card.supertype
+        ? card.supertype.split(/[\s/]+/).map((v) => v.trim())
+        : [];
     case "Types":
-      return card.type ? card.type.split(/[\s/]+/).map(v => v.trim()) : [];
+      return card.type ? card.type.split(/[\s/]+/).map((v) => v.trim()) : [];
     case "Subtypes":
-      return card.subtype ? card.subtype.split(/[\s/]+/).map(v => v.trim()) : [];
+      return card.subtype
+        ? card.subtype.split(/[\s/]+/).map((v) => v.trim())
+        : [];
     case "Set Types":
       return card.set_type ? [card.set_type] : [];
     case "Set Names":
@@ -498,57 +581,73 @@ function extractCardValues(card, category) {
       if (card.number_of_colours === 0) return ["colorless"];
       return [`${card.number_of_colours} colors`];
     case "Color Identity":
-      if (!Array.isArray(card.color_identity) || card.color_identity.length === 0) return ["colorless"];
+      if (
+        !Array.isArray(card.color_identity) ||
+        card.color_identity.length === 0
+      )
+        return ["colorless"];
       const sortedColors = card.color_identity
         .slice()
         .sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b])
         .join("");
       return [sortedColors.toLowerCase()];
 
-
     default:
       return [];
   }
 }
 
+function extractCardValue(card, category) {
+  switch (category) {
+    case "Keywords":
+      return Array.isArray(card.keywords) ? card.keywords.join(" ") : null;
 
-  function extractCardValue(card, category) {
-    switch (category) {
-      case "Keywords":
-  return Array.isArray(card.keywords) ? card.keywords.join(" ") : null;
+    case "Supertypes":
+      return card.supertype;
+    case "Types":
+      return card.type;
+    case "Subtypes":
+      return card.subtype;
+    case "Set Types":
+      return card.set_type;
+    case "Originality":
+      return card.originality;
+    case "Rarity":
+      return card.rarity;
+    case "Set Names":
+      return card.set_name;
+    case "Year":
+      if (!card.release_date) return null;
+      return new Date(card.release_date).getFullYear().toString();
 
-      case "Supertypes": return card.supertype;
-      case "Types": return card.type;
-      case "Subtypes": return card.subtype;
-      case "Set Types": return card.set_type;
-      case "Originality": return card.originality;
-      case "Rarity": return card.rarity;
-      case "Set Names": return card.set_name;
-      case "Year":
-        if (!card.release_date) return null;
-        return new Date(card.release_date).getFullYear().toString();
-    
-      case "Nº of Colors":
-          if (card.number_of_colours === 0) return "colorless";
-          if (card.number_of_colours === 1) return "1 color";
-        return `${card.number_of_colours} colors`;
-  
-case "Color Identity":
-  if (!Array.isArray(card.color_identity) || card.color_identity.length === 0) {
-    return "colorless";
+    case "Nº of Colors":
+      if (card.number_of_colours === 0) return "colorless";
+      if (card.number_of_colours === 1) return "1 color";
+      return `${card.number_of_colours} colors`;
+
+    case "Color Identity":
+      if (
+        !Array.isArray(card.color_identity) ||
+        card.color_identity.length === 0
+      ) {
+        return "colorless";
+      }
+      return card.color_identity
+        .slice()
+        .sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b])
+        .join("")
+        .toLowerCase();
+
+    default:
+      return null;
   }
-  return card.color_identity
-    .slice()
-    .sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b])
-    .join("")
-    .toLowerCase();
-
-
-        
-      default: return null;
-    }
-  }
-export function getFilteredData(originalData, selectedFilters, selectedPriceAttribute, freeTextSearch = "") {
+}
+export function getFilteredData(
+  originalData,
+  selectedFilters,
+  selectedPriceAttribute,
+  freeTextSearch = ""
+) {
   const state = getState();
   const groupedData = state.groupedData || buildGroupedData(originalData);
 
@@ -556,28 +655,31 @@ export function getFilteredData(originalData, selectedFilters, selectedPriceAttr
     return filterPriceOnly(originalData, selectedPriceAttribute);
   }
 
-
   // Case 2: Same as original, no change
   const currentPriceAttribute = getEffectivePriceAttribute(state);
   if (
     shallowCompareFilters(selectedFilters, state.originalSelectedFilters) &&
     !freeTextSearch &&
-    currentPriceAttribute === getEffectivePriceAttribute({
-      selectedPriceCurrency: state.lastFilterInputs?.selectedPriceCurrency,
-      selectedPriceSuffix: state.lastFilterInputs?.selectedPriceSuffix
-    })
+    currentPriceAttribute ===
+      getEffectivePriceAttribute({
+        selectedPriceCurrency: state.lastFilterInputs?.selectedPriceCurrency,
+        selectedPriceSuffix: state.lastFilterInputs?.selectedPriceSuffix,
+      })
   ) {
-    return state.originalFilteredData || filterPriceOnly(originalData, selectedPriceAttribute);
+    return (
+      state.originalFilteredData ||
+      filterPriceOnly(originalData, selectedPriceAttribute)
+    );
   }
 
   // Case 3: Same inputs as last time
   const lastInputs = state.lastFilterInputs || {};
-  const inputsMatch = 
+  const inputsMatch =
     shallowCompareFilters(selectedFilters, lastInputs.selectedFilters) &&
     lastInputs.selectedPriceCurrency === state.selectedPriceCurrency &&
     lastInputs.selectedPriceSuffix === state.selectedPriceSuffix &&
     freeTextSearch === lastInputs.freeTextSearch &&
-    lastInputs.filterLogicMode === state.filterLogicMode;;
+    lastInputs.filterLogicMode === state.filterLogicMode;
 
   if (inputsMatch && state.lastFilteredData) {
     return state.lastFilteredData;
@@ -589,28 +691,24 @@ export function getFilteredData(originalData, selectedFilters, selectedPriceAttr
 
   const cleaned = filterPriceOnly(filtered, selectedPriceAttribute);
   updateState({
-    lastFilterInputs: { 
+    lastFilterInputs: {
       selectedFilters: cloneFilters(selectedFilters),
       selectedPriceAttribute,
       freeTextSearch,
-      filterLogicMode: state.filterLogicMode
+      filterLogicMode: state.filterLogicMode,
     },
     lastFilteredData: cleaned,
   });
   isUpdatingFilteredData = false;
 
-  
-
   return cleaned;
 }
 
-
 export function filterPriceOnly(cards, priceAttr) {
-  return cards.filter(card => typeof card[priceAttr] === "number" && card[priceAttr] > 0);
+  return cards.filter(
+    (card) => typeof card[priceAttr] === "number" && card[priceAttr] > 0
+  );
 }
-
-
-
 
 // Helper: shallow compare two filter sets
 function shallowCompareFilters(a, b) {
@@ -618,7 +716,7 @@ function shallowCompareFilters(a, b) {
   const aKeys = Object.keys(a);
   const bKeys = Object.keys(b);
   if (aKeys.length !== bKeys.length) return false;
-  return aKeys.every(key => {
+  return aKeys.every((key) => {
     const aSet = a[key];
     const bSet = b[key];
     if (aSet?.size !== bSet?.size) return false;
@@ -630,9 +728,8 @@ function shallowCompareFilters(a, b) {
 }
 
 export function isFilterEmpty(selectedFilters) {
-  return Object.values(selectedFilters).every(set => set.size === 0);
+  return Object.values(selectedFilters).every((set) => set.size === 0);
 }
-
 
 // Helper: deep clone filter sets
 function cloneFilters(filters) {
@@ -643,7 +740,6 @@ function cloneFilters(filters) {
   return cloned;
 }
 
-
 function isCardPriceless(card) {
   return (
     typeof card.price_usd !== "number" ||
@@ -651,14 +747,13 @@ function isCardPriceless(card) {
     typeof card.price_usd_etched !== "number" ||
     typeof card.price_eur !== "number" ||
     typeof card.price_eur_foil !== "number" ||
-    typeof card.price_tix !== "number"
-  ) || (
-    card.price_usd <= 0 &&
-    card.price_usd_foil <= 0 &&
-    card.price_usd_etched <= 0 &&
-    card.price_eur <= 0 &&
-    card.price_eur_foil <= 0 &&
-    card.price_tix <= 0
+    typeof card.price_tix !== "number" ||
+    (card.price_usd <= 0 &&
+      card.price_usd_foil <= 0 &&
+      card.price_usd_etched <= 0 &&
+      card.price_eur <= 0 &&
+      card.price_eur_foil <= 0 &&
+      card.price_tix <= 0)
   );
 }
 
@@ -668,5 +763,4 @@ function computeIllegalCards(data) {
   return data.filter(isCardPriceless);
 }
 
-    init().catch(console.error);
-    
+init().catch(console.error);

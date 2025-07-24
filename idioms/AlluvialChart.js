@@ -98,7 +98,16 @@ onSetTypeHover((setInfo) => {
 function hasActiveAlluvialSelections() {
   return activeAlluvialSelections.size > 0;
 }
-function renderAlluvialLegend(svg, chartWidth, margin, chartHeight, svgWidth, priceRange, priceAttr, showPatterns = true) {
+function renderAlluvialLegend(
+  svg,
+  chartWidth,
+  margin,
+  chartHeight,
+  svgWidth,
+  priceRange,
+  priceAttr,
+  showPatterns = true
+) {
   const numBins = 5;
   const priceStep = (priceRange.max - priceRange.min) / numBins;
   const symbol = formatPriceSymbol(priceAttr);
@@ -209,12 +218,10 @@ function renderAlluvialLegend(svg, chartWidth, margin, chartHeight, svgWidth, pr
     .style("shape-rendering", "crispEdges");
 }
 
-
-
 const activeAlluvialSelections = new Map();
 
 onClearIcicleSelections(() => {
-    for (const [key, value] of activeAlluvialSelections.entries()) {
+  for (const [key, value] of activeAlluvialSelections.entries()) {
     if (value.source === "icicle") {
       activeAlluvialSelections.delete(key);
     }
@@ -223,7 +230,7 @@ onClearIcicleSelections(() => {
 });
 
 onClearTimelineSelections(() => {
-    for (const [key, value] of activeAlluvialSelections.entries()) {
+  for (const [key, value] of activeAlluvialSelections.entries()) {
     if (value.source === "timeline" || value.source === "timelineSetsType") {
       activeAlluvialSelections.delete(key);
     }
@@ -363,8 +370,6 @@ onScatterplotCards(({ originalities, rarities }) => {
   updateAlluvialFromSelections();
 });
 
-
-
 onTimelineBrush((entries) => {
   entries.forEach(({ name, originalities, rarities }) => {
     if (!name) return;
@@ -396,10 +401,9 @@ onClearTimelineBrush(() => {
 });
 
 onClearScatterplotBrush(() => {
-
   activeAlluvialSelections.delete("cards");
-   updateAlluvialFromSelections();
-})
+  updateAlluvialFromSelections();
+});
 
 onClearLineChartBrush(() => {
   for (const [key, value] of activeAlluvialSelections.entries()) {
@@ -414,7 +418,10 @@ onClearLineChartBrush(() => {
 function updateAlluvialFromSelections() {
   const groupedBySource = new Map();
 
-  for (const [_, { source, originalities, rarities }] of activeAlluvialSelections) {
+  for (const [
+    _,
+    { source, originalities, rarities },
+  ] of activeAlluvialSelections) {
     if (!groupedBySource.has(source)) {
       groupedBySource.set(source, {
         originalities: new Set(),
@@ -437,8 +444,12 @@ function updateAlluvialFromSelections() {
       finalOriginalities = new Set(originalities);
       finalRarities = new Set(rarities);
     } else {
-      finalOriginalities = new Set([...finalOriginalities].filter((o) => originalities.has(o)));
-      finalRarities = new Set([...finalRarities].filter((r) => rarities.has(r)));
+      finalOriginalities = new Set(
+        [...finalOriginalities].filter((o) => originalities.has(o))
+      );
+      finalRarities = new Set(
+        [...finalRarities].filter((r) => rarities.has(r))
+      );
     }
   }
 
@@ -450,7 +461,6 @@ function updateAlluvialFromSelections() {
     scatterGroup.originalities.forEach((o) => finalOriginalities?.add(o));
     scatterGroup.rarities.forEach((r) => finalRarities?.add(r));
   }
-
 
   // Update Alluvial rects
   d3.selectAll("g.node rect").each(function (d) {
@@ -465,7 +475,6 @@ function updateAlluvialFromSelections() {
   });
 
   // Update Legend
-  
 }
 
 onClearSetHover(() => {
@@ -819,32 +828,32 @@ export function createAlluvialChart(
             emitClearAlluvialLinkHover();
           })
           .on("click", function (event, d) {
-const origKey = d.source.name;
-const rarityKey = d.target.name;
+            const origKey = d.source.name;
+            const rarityKey = d.target.name;
 
-// Toggle originality selection
-if (activeAlluvialSelections.has(origKey)) {
-  activeAlluvialSelections.delete(origKey);
-} else {
-  activeAlluvialSelections.set(origKey, {
-    source: "alluvial",
-    originalities: new Set([origKey]),
-    rarities: new Set(),
-  });
-}
+            // Toggle originality selection
+            if (activeAlluvialSelections.has(origKey)) {
+              activeAlluvialSelections.delete(origKey);
+            } else {
+              activeAlluvialSelections.set(origKey, {
+                source: "alluvial",
+                originalities: new Set([origKey]),
+                rarities: new Set(),
+              });
+            }
 
-// Toggle rarity selection
-if (activeAlluvialSelections.has(rarityKey)) {
-  activeAlluvialSelections.delete(rarityKey);
-} else {
-  activeAlluvialSelections.set(rarityKey, {
-    source: "alluvial",
-    originalities: new Set(),
-    rarities: new Set([rarityKey]),
-  });
-}
+            // Toggle rarity selection
+            if (activeAlluvialSelections.has(rarityKey)) {
+              activeAlluvialSelections.delete(rarityKey);
+            } else {
+              activeAlluvialSelections.set(rarityKey, {
+                source: "alluvial",
+                originalities: new Set(),
+                rarities: new Set([rarityKey]),
+              });
+            }
 
-              updateAlluvialFromSelections(); // handles all fill + class logic
+            updateAlluvialFromSelections(); // handles all fill + class logic
             emitAlluvialLinkClick({
               originality: d.source.name.toLowerCase(),
               rarity: d.target.name.toLowerCase(),
@@ -1131,35 +1140,32 @@ if (activeAlluvialSelections.has(rarityKey)) {
     });
   }
 
-
-  svg.on("dblclick", function(event) {
-  // Check if the double-click target is NOT a node or a link
-  const target = d3.select(event.target);
-  const isNode = target.classed("node");
-  const isLink = target.classed("link");
-  if (!isNode && !isLink) {
-    for (const [key, value] of activeAlluvialSelections.entries()) {
-    if (value.source === "alluvial") {
-      activeAlluvialSelections.delete(key);
+  svg.on("dblclick", function (event) {
+    // Check if the double-click target is NOT a node or a link
+    const target = d3.select(event.target);
+    const isNode = target.classed("node");
+    const isLink = target.classed("link");
+    if (!isNode && !isLink) {
+      for (const [key, value] of activeAlluvialSelections.entries()) {
+        if (value.source === "alluvial") {
+          activeAlluvialSelections.delete(key);
+        }
+        emitClearAlluvialSelections();
+      }
     }
-    emitClearAlluvialSelections();
-  }
-  }
-  updateAlluvialFromSelections(); // re-render Alluvial visuals
-});
-  
+    updateAlluvialFromSelections(); // re-render Alluvial visuals
+  });
 
   renderAlluvialLegend(
-  svg,
-  chartWidth,
-  margin,
-  chartHeight,
-  svgWidth,
-  priceRange,
-  selectedPriceAttribute,
-  true
-);
-
+    svg,
+    chartWidth,
+    margin,
+    chartHeight,
+    svgWidth,
+    priceRange,
+    selectedPriceAttribute,
+    true
+  );
 }
 
 export function highlightAlluvialElements(hoveredCards) {

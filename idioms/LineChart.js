@@ -84,7 +84,6 @@ onClearLineYearHover(() => {
   clearLineChartHoverOnly();
 });
 
-
 onClearRectHover(() => {
   clearLineChartHoverOnly();
 });
@@ -104,8 +103,6 @@ onAlluvialHover(({ category, value }) => {
 onClearAlluvialHover(() => {
   clearLineChartHoverOnly();
 });
-
-
 
 onAlluvialLinkHover(({ originality, rarity }) => {
   highlightLineChartFromAlluvialLink(originality, rarity);
@@ -127,8 +124,7 @@ function getClonedFilters() {
 }
 export function createStackedLineChart(data, containerId, isUpdate = false) {
   d3.select(containerId).selectAll("*").remove();
-  d3.select(containerId)
-  .on("contextmenu", event => event.preventDefault());  
+  d3.select(containerId).on("contextmenu", (event) => event.preventDefault());
   data = data.filter((card) => card.name !== "Gleemax");
 
   const groupedData = d3
@@ -233,19 +229,19 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
 
   const zoom = d3
     .zoom()
-            .filter(event => {
-  // Allow wheel events
-  if (event.type === "wheel") return true;
+    .filter((event) => {
+      // Allow wheel events
+      if (event.type === "wheel") return true;
 
-  // Allow right-click
-  if (event.type === "mousedown" && event.button === 2) return true;
+      // Allow right-click
+      if (event.type === "mousedown" && event.button === 2) return true;
 
-  // Allow if Ctrl key is pressed during any event
-  if (event.ctrlKey) return true;
+      // Allow if Ctrl key is pressed during any event
+      if (event.ctrlKey) return true;
 
-  // Otherwise, ignore the event
-  return false;
-}) // 👈 allow zooming ONLY via scroll
+      // Otherwise, ignore the event
+      return false;
+    }) // 👈 allow zooming ONLY via scroll
     .scaleExtent([1, 20])
     .translateExtent([
       [0, 0],
@@ -339,7 +335,7 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
   const xScale = d3
     .scaleTime()
     .domain([domainStart, domainEnd])
-    .range([10, width]);
+    .range([10, width-2]);
 
   window._lineChartXScale = xScale;
 
@@ -478,7 +474,7 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
         }
 
         updateLineChartSelections(); // 👈 highlight matching years
-        
+
         emitLineChartClick({
           year: selectedYear,
           originalities: d.originalities,
@@ -568,70 +564,69 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
         sharedHoverLine.style("display", "none");
       });
 
-function brushed(event) {
-  // 🛑 Prevent duplicate triggers
-  if (ignoreNextBrushEnd) {
-    ignoreNextBrushEnd = false;
-    return;
-  }
+    function brushed(event) {
+      // 🛑 Prevent duplicate triggers
+      if (ignoreNextBrushEnd) {
+        ignoreNextBrushEnd = false;
+        return;
+      }
 
-  if (!event.selection) {
-    activeLineSelections.fromYears.clear();
-    emitClearLineChartBrush();
-    updateLineChartSelections();
-    ignoreNextBrushEnd = true;
+      if (!event.selection) {
+        activeLineSelections.fromYears.clear();
+        emitClearLineChartBrush();
+        updateLineChartSelections();
+        ignoreNextBrushEnd = true;
         brushGroup.call(brush.move, null);
-    brushGroup.selectAll("*").remove();
-    brushGroup.call(brush);
-    return;
-  }
+        brushGroup.selectAll("*").remove();
+        brushGroup.call(brush);
+        return;
+      }
 
-  const [x0, x1] = event.selection;
-  const zoomedX = currentZoomTransform.rescaleX(xScale);
+      const [x0, x1] = event.selection;
+      const zoomedX = currentZoomTransform.rescaleX(xScale);
 
-  const startDate = zoomedX.invert(x0);
-  const endDate = zoomedX.invert(x1);
+      const startDate = zoomedX.invert(x0);
+      const endDate = zoomedX.invert(x1);
 
-  const brushedEntries = groupedData
-    .filter((d) => d.year >= startDate && d.year <= endDate)
-    .map((d) => {
-      const yearStr = d.year.getFullYear().toString();
-      return {
-        year: yearStr,
-        originalities: new Set(d.originalities),
-        rarities: new Set(d.rarities),
-        colorIdentities: new Set(d.colorIdentities),
-      };
-    });
+      const brushedEntries = groupedData
+        .filter((d) => d.year >= startDate && d.year <= endDate)
+        .map((d) => {
+          const yearStr = d.year.getFullYear().toString();
+          return {
+            year: yearStr,
+            originalities: new Set(d.originalities),
+            rarities: new Set(d.rarities),
+            colorIdentities: new Set(d.colorIdentities),
+          };
+        });
 
-  if (brushedEntries.length === 0) {
-    activeLineSelections.fromYears.clear();
-    emitClearLineChartBrush();
-    updateLineChartSelections();
-    ignoreNextBrushEnd = true;
-    brushGroup.call(brush.move, null);
-    brushGroup.selectAll("*").remove();
-    brushGroup.call(brush);
-    return;
-  }
+      if (brushedEntries.length === 0) {
+        activeLineSelections.fromYears.clear();
+        emitClearLineChartBrush();
+        updateLineChartSelections();
+        ignoreNextBrushEnd = true;
+        brushGroup.call(brush.move, null);
+        brushGroup.selectAll("*").remove();
+        brushGroup.call(brush);
+        return;
+      }
 
-  brushedEntries.forEach((entry) => {
-    if (activeLineSelections.fromYears.has(entry.year)) {
-      activeLineSelections.fromYears.delete(entry.year);
-    } else {
-      activeLineSelections.fromYears.add(entry.year);
+      brushedEntries.forEach((entry) => {
+        if (activeLineSelections.fromYears.has(entry.year)) {
+          activeLineSelections.fromYears.delete(entry.year);
+        } else {
+          activeLineSelections.fromYears.add(entry.year);
+        }
+      });
+
+      updateLineChartSelections();
+      emitLineChartBrush(brushedEntries);
+
+      ignoreNextBrushEnd = true;
+      brushGroup.call(brush.move, null);
+      brushGroup.selectAll("*").remove();
+      brushGroup.call(brush);
     }
-  });
-
-  updateLineChartSelections();
-  emitLineChartBrush(brushedEntries);
-
-  ignoreNextBrushEnd = true;
-  brushGroup.call(brush.move, null);
-  brushGroup.selectAll("*").remove();
-  brushGroup.call(brush);
-}
-
 
     circleGroups.push({ group: g, yScale: y, metric });
 
@@ -688,13 +683,13 @@ function brushed(event) {
     });
 
     // ✅ Update selection lines to move with zoom
-svg.selectAll(".selected-hover-line").each(function () {
-  const line = d3.select(this);
-  const time = +line.attr("data-timestamp"); // stored below
-  const x = transform.applyX(xScale(new Date(time))) + margin.left;
+    svg.selectAll(".selected-hover-line").each(function () {
+      const line = d3.select(this);
+      const time = +line.attr("data-timestamp"); // stored below
+      const x = transform.applyX(xScale(new Date(time))) + margin.left;
 
-  line.attr("x1", x).attr("x2", x);
-});
+      line.attr("x1", x).attr("x2", x);
+    });
 
     xAxisGroups.forEach(({ g, isBottom }) => {
       g.call(
@@ -719,22 +714,22 @@ svg.selectAll(".selected-hover-line").each(function () {
       }
     });
   }
-svg.on("dblclick", function (event) {
-  const target = d3.select(event.target);
+  svg.on("dblclick", function (event) {
+    const target = d3.select(event.target);
 
-  const isCircle = target.classed("data-point");
-  const isText = target.node().tagName === "text";
-  const isInfoIcon = target.classed("info-icon") || target.node().closest(".info-icon");
+    const isCircle = target.classed("data-point");
+    const isText = target.node().tagName === "text";
+    const isInfoIcon =
+      target.classed("info-icon") || target.node().closest(".info-icon");
 
-  if (!isCircle && !isText && !isInfoIcon) {
-    // Clear all timeline-related selections
-    activeLineSelections.fromYears.clear();
+    if (!isCircle && !isText && !isInfoIcon) {
+      // Clear all timeline-related selections
+      activeLineSelections.fromYears.clear();
 
-    emitClearLineChartBrush(); // optional: emit a global clear
-    updateLineChartSelections(); // re-render
-  }
-});
-
+      emitClearLineChartBrush(); // optional: emit a global clear
+      updateLineChartSelections(); // re-render
+    }
+  });
 }
 
 export function highlightLineChart(hoveredCards) {
@@ -787,7 +782,8 @@ function drawVerticalLinesForYears(years) {
 
   years.forEach((time) => {
     const date = new Date(+time); // assumes UNIX time
-    const x = currentZoomTransform.applyX(window._lineChartXScale(date)) + marginLeft;
+    const x =
+      currentZoomTransform.applyX(window._lineChartXScale(date)) + marginLeft;
 
     svg
       .append("line")
@@ -799,10 +795,9 @@ function drawVerticalLinesForYears(years) {
       .attr("y2", y2)
       .attr("stroke", "#f2c46e")
       .attr("stroke-width", 1.5)
-      .attr("stroke-dasharray", "4 2")
+      .attr("stroke-dasharray", "4 2");
   });
 }
-
 
 function getXCoordFromYear(date, svg) {
   if (!window._lineChartXScale) return 0;
@@ -837,9 +832,7 @@ function highlightLineChartFromIcicle(rectInfo) {
       return years.has(year);
     });
 
-  const timestamps = Array.from(years).map((y) =>
-    new Date(+y, 0, 1).getTime()
-  );
+  const timestamps = Array.from(years).map((y) => new Date(+y, 0, 1).getTime());
   drawVerticalLinesForYears([...new Set(timestamps)]);
 }
 export function clearLineChartHoverOnly() {
@@ -860,7 +853,6 @@ export function highlightLineChartHoverOnlyFromSet(setReleaseDate) {
 
   const timestamp = new Date(+year, 0, 1).getTime();
   drawVerticalLinesForYears([timestamp]);
-  
 }
 export function highlightLineChartHoverOnlyFromSetType(setTypeReleaseDates) {
   if (!setTypeReleaseDates) return;
@@ -879,7 +871,7 @@ export function highlightLineChartHoverOnlyFromSetType(setTypeReleaseDates) {
     }
   });
 
-   const yearTimestamps = years.map((y) => new Date(+y, 0, 1).getTime());
+  const yearTimestamps = years.map((y) => new Date(+y, 0, 1).getTime());
   drawVerticalLinesForYears([...new Set(yearTimestamps)]);
 }
 
@@ -908,12 +900,11 @@ const activeLineSelections = {
   fromAlluvialLinkPairs: new Set(),
   fromIcicleIdentity: new Set(),
   fromIcicleColors: new Set(),
-  fromYears: new Set(), 
+  fromYears: new Set(),
   yearsFromTimelineSets: new Map(),
   yearsFromSetTypes: new Map(),
   yearsFromScatterplotCards: new Set(),
 };
-
 
 onClearSelection(() => {
   activeLineSelections.fromAlluvialOriginality.clear();
@@ -970,11 +961,10 @@ onAlluvialClick(({ category, value }) => {
   updateLineChartSelections();
 });
 onScatterplotCards(({ years }) => {
-  const stringYears = new Set([...years].map(y => y.toString()));
+  const stringYears = new Set([...years].map((y) => y.toString()));
   activeLineSelections.yearsFromScatterplotCards = stringYears;
   updateLineChartSelections();
 });
-
 
 onAlluvialLinkClick(({ originality, rarity }) => {
   const pairKey = `${originality}|${rarity}`;
@@ -1017,8 +1007,6 @@ onClearTimelineBrush(() => {
   activeLineSelections.yearsFromSetTypes.clear();
   updateLineChartSelections();
 });
-
-
 
 onTimelineSetClick((setInfo) => {
   const { name, releaseDate } = setInfo;
@@ -1069,17 +1057,17 @@ onIcicleClick(({ colorIdentity }) => {
   updateLineChartSelections();
 });
 
-onLineChartClick(({ year, source}) => {
+onLineChartClick(({ year, source }) => {
   if (source === "line-chart") return;
   const set = activeLineSelections.fromYears;
   if (set.has(year)) {
-  set.delete(year);
+    set.delete(year);
   } else {
     set.add(year);
-    }
-      
-        updateLineChartSelections();
-      });
+  }
+
+  updateLineChartSelections();
+});
 
 onIcicleNumClick(({ numColors }) => {
   if (!numColors) return;
@@ -1096,7 +1084,6 @@ onIcicleNumClick(({ numColors }) => {
 });
 
 function updateLineChartSelections() {
-
   const svg = d3.select(".LineChart svg");
   if (svg.empty()) return;
 
@@ -1113,7 +1100,8 @@ function updateLineChartSelections() {
     activeLineSelections.fromYears.size === 0 &&
     activeLineSelections.yearsFromScatterplotCards.size === 0;
   if (noSelections) {
-    return;}
+    return;
+  }
 
   const matchingYears = new Set();
 
@@ -1127,7 +1115,6 @@ function updateLineChartSelections() {
     activeLineSelections.yearsFromSetTypes.size === 0 &&
     activeLineSelections.fromYears.size === 0 &&
     activeLineSelections.yearsFromScatterplotCards.size > 0;
-
 
   svg.selectAll("circle.data-point").each(function () {
     const d = d3.select(this).datum();
@@ -1145,12 +1132,18 @@ function updateLineChartSelections() {
 
     // --- Group 1: Alluvial ---
     let alluvialMatch = true;
-    const origMatch = [...activeLineSelections.fromAlluvialOriginality].some(val => d.originalities?.has(val));
-    const rarityMatch = [...activeLineSelections.fromAlluvialRarity].some(val => d.rarities?.has(val));
-    const linkPairMatch = [...activeLineSelections.fromAlluvialLinkPairs].some(pair => {
-      const [orig, rare] = pair.split("|");
-      return d.originalities?.has(orig) && d.rarities?.has(rare);
-    });
+    const origMatch = [...activeLineSelections.fromAlluvialOriginality].some(
+      (val) => d.originalities?.has(val)
+    );
+    const rarityMatch = [...activeLineSelections.fromAlluvialRarity].some(
+      (val) => d.rarities?.has(val)
+    );
+    const linkPairMatch = [...activeLineSelections.fromAlluvialLinkPairs].some(
+      (pair) => {
+        const [orig, rare] = pair.split("|");
+        return d.originalities?.has(orig) && d.rarities?.has(rare);
+      }
+    );
 
     if (
       activeLineSelections.fromAlluvialOriginality.size > 0 ||
@@ -1162,8 +1155,12 @@ function updateLineChartSelections() {
 
     // --- Group 2: Icicle ---
     let icicleMatch = true;
-    const identityMatch = [...activeLineSelections.fromIcicleIdentity].some(val => d.colorIdentities?.has(val));
-    const colorMatch = [...activeLineSelections.fromIcicleColors].some(val => d.numColorsPresent?.has(+val));
+    const identityMatch = [...activeLineSelections.fromIcicleIdentity].some(
+      (val) => d.colorIdentities?.has(val)
+    );
+    const colorMatch = [...activeLineSelections.fromIcicleColors].some((val) =>
+      d.numColorsPresent?.has(+val)
+    );
 
     if (
       activeLineSelections.fromIcicleIdentity.size > 0 ||
@@ -1174,8 +1171,12 @@ function updateLineChartSelections() {
 
     // --- Group 3: Timeline ---
     let timelineMatch = true;
-    const matchFromSets = [...activeLineSelections.yearsFromTimelineSets.values()].includes(yearStr);
-    const matchFromSetTypes = [...activeLineSelections.yearsFromSetTypes.values()].some(set => set.has(yearStr));
+    const matchFromSets = [
+      ...activeLineSelections.yearsFromTimelineSets.values(),
+    ].includes(yearStr);
+    const matchFromSetTypes = [
+      ...activeLineSelections.yearsFromSetTypes.values(),
+    ].some((set) => set.has(yearStr));
 
     if (
       activeLineSelections.yearsFromTimelineSets.size > 0 ||
@@ -1193,7 +1194,8 @@ function updateLineChartSelections() {
     const isIntersected =
       alluvialMatch && icicleMatch && timelineMatch && yearGroupMatch;
 
-    const isScatterMatch = activeLineSelections.yearsFromScatterplotCards.has(yearStr);
+    const isScatterMatch =
+      activeLineSelections.yearsFromScatterplotCards.has(yearStr);
 
     if (isIntersected || isScatterMatch) {
       matchingYears.add(yearTime);
@@ -1211,7 +1213,8 @@ function updateLineChartSelections() {
 
   matchingYears.forEach((t) => {
     const date = new Date(+t);
-    const x = currentZoomTransform.applyX(window._lineChartXScale(date)) + marginLeft;
+    const x =
+      currentZoomTransform.applyX(window._lineChartXScale(date)) + marginLeft;
 
     svg
       .append("line")
@@ -1227,9 +1230,6 @@ function updateLineChartSelections() {
       .lower();
   });
 }
-
-
-
 
 function highlightLineChartFromAlluvialCategory(category, value) {
   if (!category || !value) return;
@@ -1270,7 +1270,8 @@ function highlightLineChartFromAlluvialLink(originality, rarity) {
     .selectAll("circle.data-point")
     .classed("hover-temp", function () {
       const d = d3.select(this).datum();
-      const match = d?.originalities?.has(lowerOrig) && d?.rarities?.has(lowerRarity);
+      const match =
+        d?.originalities?.has(lowerOrig) && d?.rarities?.has(lowerRarity);
       if (match) {
         matchedYears.push(d.year.getTime());
       }
@@ -1279,7 +1280,6 @@ function highlightLineChartFromAlluvialLink(originality, rarity) {
 
   drawVerticalLinesForYears([...new Set(matchedYears)]);
 }
-
 
 function highlightLineChartFromNumColors(numColors) {
   if (numColors === undefined || numColors === null) return;
@@ -1297,7 +1297,6 @@ function highlightLineChartFromNumColors(numColors) {
       return match;
     });
 
-
   drawVerticalLinesForYears([...new Set(matchedYears)]);
 }
 
@@ -1310,5 +1309,3 @@ function highlightLineChartHoverOnlyFromExternal(payload) {
   const timestamp = new Date(+year, 0, 1).getTime();
   drawVerticalLinesForYears([timestamp]);
 }
-
-

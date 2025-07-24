@@ -13,7 +13,7 @@ import {
   isFilterEmpty,
 } from "../script.js";
 
-import { emitCardSearch , emitClearSelection} from "./Events.js";
+import { emitCardSearch, emitClearSelection } from "./Events.js";
 import { showLoader, hideLoader } from "./LoadingAnimation.js";
 const EXCLUDED_SET_TYPES = new Set(["alchemy", "minigame"]);
 const optionMap = new Map();
@@ -496,22 +496,21 @@ export function createFilterPanel(
       updateState({ selectedFilters: clearedFilters });
     });
 
-    resetWrapper
-  .append("button")
-  .text("Clear Selections")
-  .style("padding", "6px 9px")
-  .style("font-size", "14px")
-  .style("background-color", "#6c757d")
-  .style("color", "#fff")
-  .style("border", "none")
-  .style("border-radius", "4px")
-  .style("margin-top", "6px")
-  .style("width", "95%")
-  .style("cursor", "pointer")
-  .on("click", () => {
-    emitClearSelection();
-  });
-
+  resetWrapper
+    .append("button")
+    .text("Clear Selections")
+    .style("padding", "6px 9px")
+    .style("font-size", "14px")
+    .style("background-color", "#6c757d")
+    .style("color", "#fff")
+    .style("border", "none")
+    .style("border-radius", "4px")
+    .style("margin-top", "6px")
+    .style("width", "95%")
+    .style("cursor", "pointer")
+    .on("click", () => {
+      emitClearSelection();
+    });
 
   Object.entries(filters).forEach(([category, values]) => {
     const section = wrapper
@@ -650,14 +649,14 @@ export function createFilterPanel(
       .attr("data-value", (d) => d.value)
       .on("click", function (event, d) {
         let currentFilters = getState().selectedFilters;
-        const updatedFilters = cloneFilters(currentFilters); 
+        const updatedFilters = cloneFilters(currentFilters);
         const isSelected = updatedFilters[category].has(d.value);
-        if(isSelected){
-          updatedFilters[category].delete(d.value)
+        if (isSelected) {
+          updatedFilters[category].delete(d.value);
           selectedSet.delete(d.value);
         } else {
           updatedFilters[category].add(d.value);
-          selectedSet.add(d.value); 
+          selectedSet.add(d.value);
         }
         updateState({ selectedFilters: updatedFilters });
         updatePills();

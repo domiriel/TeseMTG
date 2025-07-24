@@ -137,8 +137,32 @@ export function updateDrawer(cards = []) {
     card.tooltip_image = card.image_normal;
 
     wrapper.select("img").attr("src", card.image_normal);
+    const tooltipMeta = card.print_image_metadata?.find(
+      (d) => d.image === card.tooltip_image
+    );
 
+    wrapper.select(".set-info-box").remove();
+
+    // Add metadata display box before nav buttons
+    wrapper
+      .insert("div", ".nav-wrapper") // <-- INSERT before nav-wrapper
+      .datum(tooltipMeta || {})
+      .attr("class", "set-info-box")
+      .style("margin-bottom", "4px")
+      .style("font-size", "12px")
+      .style("background", "#f0f0f0")
+      .style("padding", "4px 8px")
+      .style("border-radius", "4px")
+      .style("text-align", "center")
+      .style("max-width", "90%")
+      .html((d) =>
+        d.set_name && d.set_type
+          ? `<strong>${d.set_name}</strong> <span style="color: #555;">(${d.set_type})</span>`
+          : "Unknown Set"
+      );
     const navWrapper = wrapper.select(".nav-wrapper").html("");
+
+    // Lookup set metadata for current tooltip image
 
     navWrapper
       .append("button")
@@ -151,7 +175,16 @@ export function updateDrawer(cards = []) {
           card.all_print_images.length;
         card.selectedPrintIndex = newIdx;
         card.tooltip_image = card.all_print_images[newIdx];
-
+        const updatedMeta = card.print_image_metadata?.find(
+          (d) => d.image === card.tooltip_image
+        );
+        wrapper
+          .select(".set-info-box")
+          .html(
+            updatedMeta?.set_name && updatedMeta?.set_type
+              ? `<strong>${updatedMeta.set_name}</strong> <span style="color: #555;">(${updatedMeta.set_type})</span>`
+              : "Unknown Set"
+          );
         const dot = d3
           .selectAll(".dots circle")
           .filter((d) => d.name === card.name)
@@ -177,6 +210,16 @@ export function updateDrawer(cards = []) {
           (card.selectedPrintIndex + 1) % card.all_print_images.length;
         card.selectedPrintIndex = newIdx;
         card.tooltip_image = card.all_print_images[newIdx];
+        const updatedMeta = card.print_image_metadata?.find(
+          (d) => d.image === card.tooltip_image
+        );
+        wrapper
+          .select(".set-info-box")
+          .html(
+            updatedMeta?.set_name && updatedMeta?.set_type
+              ? `<strong>${updatedMeta.set_name}</strong> <span style="color: #555;">(${updatedMeta.set_type})</span>`
+              : "Unknown Set"
+          );
         wrapper.select("img").attr("src", card.tooltip_image);
       });
 
@@ -332,44 +375,43 @@ export function createIllegalDrawer(cards, containerSelector = "body") {
   container.append("datalist").attr("id", "illegalCardNamesList");
 
   d3.select("#illegalSearchInput").on("keydown", (event) => {
-  if (event.key === "Enter") {
-    const query = event.target.value.trim().toLowerCase();
-    if (!query) return;
+    if (event.key === "Enter") {
+      const query = event.target.value.trim().toLowerCase();
+      if (!query) return;
 
-    const index = illegalCardsInDrawer.findIndex((card) =>
-      card.name.toLowerCase().includes(query)
-    );
-    if (index !== -1) {
-      illegalCurrentPage = Math.floor(index / pageSize);
-      updateIllegalDrawer(illegalCardsInDrawer);
+      const index = illegalCardsInDrawer.findIndex((card) =>
+        card.name.toLowerCase().includes(query)
+      );
+      if (index !== -1) {
+        illegalCurrentPage = Math.floor(index / pageSize);
+        updateIllegalDrawer(illegalCardsInDrawer);
 
-      // Scroll to the card after drawer updates (use setTimeout to wait for DOM update)
-const matchingCard = illegalCardsInDrawer[index];
-const cardSel = d3
-  .select("#illegalCardImages")
-  .selectAll(".card-wrapper")
-  .filter((d) => d.name === matchingCard.name);
+        // Scroll to the card after drawer updates (use setTimeout to wait for DOM update)
+        const matchingCard = illegalCardsInDrawer[index];
+        const cardSel = d3
+          .select("#illegalCardImages")
+          .selectAll(".card-wrapper")
+          .filter((d) => d.name === matchingCard.name);
 
-const cardEl = cardSel.node();
-const imgEl = cardSel.select("img").node();
+        const cardEl = cardSel.node();
+        const imgEl = cardSel.select("img").node();
 
-if (imgEl && !imgEl.complete) {
-  imgEl.onload = () => {
-    cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
-  };
-} else if (cardEl) {
-  cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-this.value = "";
-    } else {
-      d3.select("#illegalSearchInput").style("border", "1px solid red");
-      setTimeout(() => {
-        d3.select("#illegalSearchInput").style("border", "1px solid #ccc");
-      }, 1500);
+        if (imgEl && !imgEl.complete) {
+          imgEl.onload = () => {
+            cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+          };
+        } else if (cardEl) {
+          cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+        this.value = "";
+      } else {
+        d3.select("#illegalSearchInput").style("border", "1px solid red");
+        setTimeout(() => {
+          d3.select("#illegalSearchInput").style("border", "1px solid #ccc");
+        }, 1500);
+      }
     }
-  }
-});
-
+  });
 
   // Append button after the drawer
   const illegalButton = container
@@ -443,6 +485,31 @@ export function updateIllegalDrawer(cards = []) {
     card.image_normal = card.all_print_images[idx];
     wrapper.select("img").attr("src", card.image_normal);
 
+    const tooltipMeta = card.print_image_metadata?.find(
+      (d) => d.image === card.image_normal
+    );
+
+    // Remove any old set-info-box
+    wrapper.select(".set-info-box").remove();
+
+    // Insert new one above nav-wrapper
+    wrapper
+      .insert("div", ".nav-wrapper")
+      .datum(tooltipMeta || {})
+      .attr("class", "set-info-box")
+      .style("margin", "6px 0 4px")
+      .style("font-size", "12px")
+      .style("background", "#f0f0f0")
+      .style("padding", "4px 8px")
+      .style("border-radius", "4px")
+      .style("text-align", "center")
+      .style("max-width", "90%")
+      .html((d) =>
+        d.set_name && d.set_type
+          ? `<strong>${d.set_name}</strong> <span style="color: #555;">(${d.set_type})</span>`
+          : "Unknown Set"
+      );
+
     let navWrapper = wrapper.select(".nav-wrapper");
     if (navWrapper.empty()) {
       navWrapper = wrapper
@@ -467,6 +534,16 @@ export function updateIllegalDrawer(cards = []) {
           card.all_print_images.length;
         card.selectedPrintIndex = newIdx;
         card.image_normal = card.all_print_images[newIdx];
+        const updatedMeta = card.print_image_metadata?.find(
+          (d) => d.image === card.image_normal
+        );
+        wrapper
+          .select(".set-info-box")
+          .html(
+            updatedMeta?.set_name && updatedMeta?.set_type
+              ? `<strong>${updatedMeta.set_name}</strong> <span style="color: #555;">(${updatedMeta.set_type})</span>`
+              : "Unknown Set"
+          );
         wrapper.select("img").attr("src", card.image_normal);
       });
 
@@ -480,6 +557,16 @@ export function updateIllegalDrawer(cards = []) {
           (card.selectedPrintIndex + 1) % card.all_print_images.length;
         card.selectedPrintIndex = newIdx;
         card.image_normal = card.all_print_images[newIdx];
+        const updatedMeta = card.print_image_metadata?.find(
+          (d) => d.image === card.image_normal
+        );
+        wrapper
+          .select(".set-info-box")
+          .html(
+            updatedMeta?.set_name && updatedMeta?.set_type
+              ? `<strong>${updatedMeta.set_name}</strong> <span style="color: #555;">(${updatedMeta.set_type})</span>`
+              : "Unknown Set"
+          );
         wrapper.select("img").attr("src", card.image_normal);
       });
 
