@@ -1043,15 +1043,19 @@ onTimelineSetTypeClick((setInfo) => {
   updateLineChartSelections();
 });
 
-onIcicleClick(({ colorIdentity }) => {
+onIcicleClick(({ colorIdentity, numColors }) => {
   if (!colorIdentity) return;
 
   const selections = activeLineSelections.fromIcicleIdentity;
-
+  const numSelections = activeLineSelections.fromIcicleColors
   if (selections.has(colorIdentity)) {
     selections.delete(colorIdentity);
+    if(selections.size === 0){
+        numSelections.clear()
+      }
   } else {
     selections.add(colorIdentity);
+    numSelections.add(numColors)
   }
 
   updateLineChartSelections();
@@ -1069,19 +1073,25 @@ onLineChartClick(({ year, source }) => {
   updateLineChartSelections();
 });
 
-onIcicleNumClick(({ numColors }) => {
-  if (!numColors) return;
+onIcicleNumClick(({ numColors, colorIdentities }) => {
+  if (!numColors || !colorIdentities) return;
 
-  const selections = activeLineSelections.fromIcicleColors;
+  const groupSet = activeLineSelections.fromIcicleColors;
+  const identitySet = activeLineSelections.fromIcicleIdentity;
 
-  if (selections.has(numColors)) {
-    selections.delete(numColors);
+  const isGroupSelected = groupSet.has(numColors);
+
+  if (isGroupSelected) {
+    groupSet.delete(numColors);
+    colorIdentities.forEach((id) => identitySet.delete(id));
   } else {
-    selections.add(numColors);
+    groupSet.add(numColors);
+    colorIdentities.forEach((id) => identitySet.add(id));
   }
 
   updateLineChartSelections();
 });
+
 
 function updateLineChartSelections() {
   const svg = d3.select(".LineChart svg");
@@ -1094,7 +1104,6 @@ function updateLineChartSelections() {
     activeLineSelections.fromAlluvialRarity.size === 0 &&
     activeLineSelections.fromAlluvialLinkPairs.size === 0 &&
     activeLineSelections.fromIcicleIdentity.size === 0 &&
-    activeLineSelections.fromIcicleColors.size === 0 &&
     activeLineSelections.yearsFromTimelineSets.size === 0 &&
     activeLineSelections.yearsFromSetTypes.size === 0 &&
     activeLineSelections.fromYears.size === 0 &&
@@ -1110,7 +1119,6 @@ function updateLineChartSelections() {
     activeLineSelections.fromAlluvialRarity.size === 0 &&
     activeLineSelections.fromAlluvialLinkPairs.size === 0 &&
     activeLineSelections.fromIcicleIdentity.size === 0 &&
-    activeLineSelections.fromIcicleColors.size === 0 &&
     activeLineSelections.yearsFromTimelineSets.size === 0 &&
     activeLineSelections.yearsFromSetTypes.size === 0 &&
     activeLineSelections.fromYears.size === 0 &&
@@ -1158,15 +1166,11 @@ function updateLineChartSelections() {
     const identityMatch = [...activeLineSelections.fromIcicleIdentity].some(
       (val) => d.colorIdentities?.has(val)
     );
-    const colorMatch = [...activeLineSelections.fromIcicleColors].some((val) =>
-      d.numColorsPresent?.has(+val)
-    );
 
     if (
-      activeLineSelections.fromIcicleIdentity.size > 0 ||
-      activeLineSelections.fromIcicleColors.size > 0
+      activeLineSelections.fromIcicleIdentity.size > 0 
     ) {
-      icicleMatch = identityMatch || colorMatch;
+      icicleMatch = identityMatch 
     }
 
     // --- Group 3: Timeline ---

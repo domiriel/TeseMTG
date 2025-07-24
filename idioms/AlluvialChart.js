@@ -243,7 +243,7 @@ onClearSelection(() => {
   updateAlluvialFromSelections(); // to re-render Alluvial visuals
 });
 
-onIcicleClick(({ colorIdentity, originalities, rarities }) => {
+onIcicleClick(({ colorIdentity, originalities, rarities, numColors }) => {
   if (!colorIdentity) return;
 
   const key = colorIdentity; // could also be numColors or other ids in other handlers
@@ -255,29 +255,36 @@ onIcicleClick(({ colorIdentity, originalities, rarities }) => {
       source: "icicle",
       originalities: new Set(originalities),
       rarities: new Set(rarities),
+      numColors: numColors
     });
   }
-
   updateAlluvialFromSelections();
 });
 
-onIcicleNumClick(({ numColors, originalities, rarities }) => {
-  if (!numColors) return;
+onIcicleNumClick(({ numColors, children }) => {
+  if (!numColors || !children || children.length === 0) return;
+  const isGroupSelected = children.some((child) =>
+    activeAlluvialSelections.has(child.name)
+  );
 
-  const key = numColors; // could also be numColors or other ids in other handlers
-
-  if (activeAlluvialSelections.has(key)) {
-    activeAlluvialSelections.delete(key);
+  if (isGroupSelected) {
+    // Remove all children from the selection map
+    children.forEach((child) => activeAlluvialSelections.delete(child.name));
   } else {
-    activeAlluvialSelections.set(key, {
-      source: "icicle",
-      originalities: new Set(originalities),
-      rarities: new Set(rarities),
+    // Add all children with their metadata
+    children.forEach((child) => {
+      activeAlluvialSelections.set(child.name, {
+        source: "icicle",
+        originalities: new Set(child.originalities || []),
+        rarities: new Set(child.rarities || []),
+        numColors: numColors,
+      });
     });
   }
 
   updateAlluvialFromSelections();
 });
+
 
 onTimelineSetClick((setInfo) => {
   const { name, originalities, rarities } = setInfo;

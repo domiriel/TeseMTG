@@ -15,6 +15,7 @@ function getClonedFilters() {
 }
 
 import { updateState, getState } from "../state.js";
+import { emitClearSelection } from "./Events.js";
 export function createHiddenDrawer(containerSelector = "body") {
   const container = d3.select(containerSelector);
 
@@ -49,10 +50,10 @@ export function createHiddenDrawer(containerSelector = "body") {
     .style("border-radius", "4px")
     .style("cursor", "pointer")
     .on("click", () => {
+      
       updateState({ hoveredCards: [], isHoverUpdate: true });
 
-      // Optional: also unhighlight all dots
-      d3.selectAll(".dots circle").classed("selected-hover", false);
+      emitClearSelection();
     });
 
   drawerContainer

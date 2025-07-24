@@ -269,6 +269,8 @@ onScatterplotCards(({ colorIdentities }) => {
 
 function updateIcicleSelections() {
   const allRects = d3.selectAll("rect.icicle-rect").nodes();
+  const depth2Rects = allRects.filter((r) => d3.select(r).datum().depth === 2);
+  const depth1Rects = allRects.filter((r) => d3.select(r).datum().depth === 1);
 
   const onlyScatterplotActive =
     activeSelections.fromAlluvialOriginality.size === 0 &&
@@ -281,42 +283,48 @@ function updateIcicleSelections() {
     activeSelections.fromYears.size === 0 &&
     activeSelections.colorIdentitiesFromScatterplot.size > 0;
 
-  // === Nothing selected
-  if (
-    !hasActiveIcicleSelections() &&
-    activeSelections.colorIdentitiesFromScatterplot.size === 0
-  ) {
+  if (!hasActiveIcicleSelections() &&
+      activeSelections.colorIdentitiesFromScatterplot.size === 0) {
     d3.selectAll("rect.icicle-rect")
       .classed("selectedHovered", false)
       .attr("fill", (d) => d.data.color);
     return;
   }
 
-  // === SPECIAL CASE: Only scatterplot active
   if (onlyScatterplotActive) {
-    for (const rect of allRects) {
+    for (const rect of depth2Rects) {
       const d = d3.select(rect).datum();
       const identity = d.data.name;
       const isColorless = identity === "Colorless";
       const isSelected =
         activeSelections.colorIdentitiesFromScatterplot.has(identity) ||
-        (isColorless &&
-          activeSelections.colorIdentitiesFromScatterplot.has(""));
+        (isColorless && activeSelections.colorIdentitiesFromScatterplot.has(""));
 
       d3.select(rect)
         .classed("selectedHovered", isSelected)
         .attr("fill", isSelected ? d.data.selectedColor : d.data.color);
     }
+    // Don’t forget to handle depth 1 too — derive from children
+    for (const rect of depth1Rects) {
+      const d = d3.select(rect).datum();
+      const anyChildSelected = d.children?.some((child) => {
+        return d3.selectAll("rect.icicle-rect")
+          .filter((r) => r.__data__.depth === 2 && r.__data__.data.name === child.data.name)
+          .classed("selectedHovered");
+      });
+
+      d3.select(rect)
+        .classed("selectedHovered", anyChildSelected)
+        .attr("fill", anyChildSelected ? d.data.selectedColor : d.data.color);
+    }
+
     return;
   }
 
-  const alluvialMatches = new Set();
-  const icicleMatches = new Set();
-  const timelineMatches = new Set();
-  const yearMatches = new Set();
-  const scatterMatches = new Set();
+  // Step 1: compute selected depth-2 rects
+  const selectedDepth2Rects = new Set();
 
-  for (const rect of allRects) {
+  for (const rect of depth2Rects) {
     const d = d3.select(rect).datum();
     const identity = d.data.name;
     const numColors = d.data.numColors;
@@ -324,137 +332,92 @@ function updateIcicleSelections() {
     const groupColorIdentities = new Set(d.data.colorIdentities || []);
     const depth = d.depth;
 
-    // === ALLUVIAL GROUP ===
-    const hasOriginalityMatch = [
-      ...activeSelections.fromAlluvialOriginality,
-    ].some((orig) => d.data.originalities?.includes(orig));
-    const hasRarityMatch = [...activeSelections.fromAlluvialRarity].some((r) =>
+    let match = true;
+
+    // Alluvial
+    const hasOrig = [...activeSelections.fromAlluvialOriginality].some((orig) =>
+      d.data.originalities?.includes(orig)
+    );
+    const hasRarity = [...activeSelections.fromAlluvialRarity].some((r) =>
       d.data.rarities?.includes(r)
     );
-    const hasLinkMatch = [...activeSelections.fromAlluvialLinkPairs].some(
-      (pair) => {
-        const [orig, rare] = pair.split("|");
-        return (
-          d.data.originalities?.includes(orig) &&
-          d.data.rarities?.includes(rare)
-        );
-      }
-    );
-
-    const isAlluvialMatch =
-      hasOriginalityMatch ||
-      hasRarityMatch ||
-      hasLinkMatch ||
+    const hasLink = [...activeSelections.fromAlluvialLinkPairs].some((pair) => {
+      const [orig, rare] = pair.split("|");
+      return (
+        d.data.originalities?.includes(orig) &&
+        d.data.rarities?.includes(rare)
+      );
+    });
+    const matchAlluvial = hasOrig || hasRarity || hasLink ||
       (activeSelections.fromAlluvialOriginality.size === 0 &&
-        activeSelections.fromAlluvialRarity.size === 0 &&
-        activeSelections.fromAlluvialLinkPairs.size === 0);
+       activeSelections.fromAlluvialRarity.size === 0 &&
+       activeSelections.fromAlluvialLinkPairs.size === 0);
 
-    if (isAlluvialMatch) alluvialMatches.add(rect);
+    // Icicle
+    const matchIdentity = activeSelections.fromIcicleIdentity.size === 0 ||
+      activeSelections.fromIcicleIdentity.has(identity);
+    const matchIcicle = matchIdentity;
 
-    // === ICICLE GROUP ===
-    // === ICICLE GROUP ===
-    const groupMatch = activeSelections.fromIcicleColors.has(numColors);
-    const identityMatch =
-      depth === 2
-        ? activeSelections.fromIcicleIdentity.has(identity)
-        : [...activeSelections.fromIcicleIdentity].some((id) =>
-            groupColorIdentities.has(id)
-          );
-
-    const isIcicleMatch =
-      activeSelections.fromIcicleColors.size === 0 &&
-      activeSelections.fromIcicleIdentity.size === 0
-        ? true
-        : groupMatch || identityMatch;
-
-    if (isIcicleMatch) icicleMatches.add(rect);
-
-    // === TIMELINE GROUP ===
-    let isTimelineMatch = false;
-
-    if (activeSelections.colorIdentitiesFromTimelineSets.size > 0) {
+    // Timeline
+    let matchTimeline = true;
+    if (activeSelections.colorIdentitiesFromTimelineSets.size > 0 ||
+        activeSelections.colorIdentitiesFromTimelineSetsTypes.size > 0) {
       const matches =
-        depth === 2
-          ? [...activeSelections.colorIdentitiesFromTimelineSets.values()].some(
-              (set) => set.has(identity) || (isColorless && set.has(""))
-            )
-          : [...activeSelections.colorIdentitiesFromTimelineSets.values()].some(
-              (set) =>
-                [...groupColorIdentities].some(
-                  (id) => set.has(id) || (id === "Colorless" && set.has(""))
-                )
-            );
-      if (matches) isTimelineMatch = true;
+        [...activeSelections.colorIdentitiesFromTimelineSets.values()].some(
+          (set) => set.has(identity) || (isColorless && set.has(""))
+        ) ||
+        [...activeSelections.colorIdentitiesFromTimelineSetsTypes.values()].some(
+          (set) => set.has(identity) || (isColorless && set.has(""))
+        );
+      matchTimeline = matches;
     }
 
-    if (activeSelections.colorIdentitiesFromTimelineSetsTypes.size > 0) {
-      const matches =
-        depth === 2
-          ? [
-              ...activeSelections.colorIdentitiesFromTimelineSetsTypes.values(),
-            ].some((set) => set.has(identity) || (isColorless && set.has("")))
-          : [
-              ...activeSelections.colorIdentitiesFromTimelineSetsTypes.values(),
-            ].some((set) =>
-              [...groupColorIdentities].some(
-                (id) => set.has(id) || (id === "Colorless" && set.has(""))
-              )
-            );
-      if (matches) isTimelineMatch = true;
-    }
-
-    if (
-      activeSelections.colorIdentitiesFromTimelineSets.size === 0 &&
-      activeSelections.colorIdentitiesFromTimelineSetsTypes.size === 0
-    ) {
-      isTimelineMatch = true;
-    }
-
-    if (isTimelineMatch) timelineMatches.add(rect);
-
-    // === YEAR GROUP ===
-    let isYearMatch = true;
-    if (depth === 2 && activeSelections.fromYears.size > 0) {
-      const hasYearMatch = [...activeSelections.fromYears].some((y) =>
+    // Year
+    let matchYear = true;
+    if (activeSelections.fromYears.size > 0) {
+      matchYear = [...activeSelections.fromYears].some((y) =>
         d.data.years?.includes(y)
       );
-      isYearMatch = hasYearMatch;
     }
 
-    if (isYearMatch) yearMatches.add(rect);
+    // Scatterplot
+    const matchScatter =
+      activeSelections.colorIdentitiesFromScatterplot.has(identity) ||
+      (isColorless &&
+        activeSelections.colorIdentitiesFromScatterplot.has(""));
 
-    // === SCATTERPLOT GROUP ===
-    if (depth === 2) {
-      if (
-        activeSelections.colorIdentitiesFromScatterplot.has(identity) ||
-        (isColorless && activeSelections.colorIdentitiesFromScatterplot.has(""))
-      ) {
-        scatterMatches.add(rect);
-      }
+    if (matchAlluvial && matchIcicle && matchTimeline && matchYear) {
+      selectedDepth2Rects.add(rect);
+    }
+    if (matchScatter) {
+      selectedDepth2Rects.add(rect);
     }
   }
 
-  // === FINAL INTERSECTION
-  const finalSet = new Set(
-    [...alluvialMatches].filter(
-      (rect) =>
-        icicleMatches.has(rect) &&
-        timelineMatches.has(rect) &&
-        yearMatches.has(rect)
-    )
-  );
-
-  // === UNION WITH SCATTERPLOT
-  const totalSelected = new Set([...finalSet, ...scatterMatches]);
-
-  for (const rect of allRects) {
-    const isSelected = totalSelected.has(rect);
+  // Step 2: Mark depth 2
+  for (const rect of depth2Rects) {
+    const isSelected = selectedDepth2Rects.has(rect);
     const d = d3.select(rect).datum();
     d3.select(rect)
       .classed("selectedHovered", isSelected)
       .attr("fill", isSelected ? d.data.selectedColor : d.data.color);
   }
+
+  // Step 3: Mark depth 1 rects if any child is selected
+  for (const rect of depth1Rects) {
+    const d = d3.select(rect).datum();
+    const anyChildSelected = d.children?.some((child) => {
+      return selectedDepth2Rects.has(
+        depth2Rects.find((r) => d3.select(r).datum().data.name === child.data.name)
+      );
+    });
+
+    d3.select(rect)
+      .classed("selectedHovered", anyChildSelected)
+      .attr("fill", anyChildSelected ? d.data.selectedColor : d.data.color);
+  }
 }
+
 
 onClearLineYearHover(() => {
   clearIcicleHoverOnly();
@@ -996,40 +959,69 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
           .attr("fill", (d) => d.data.color)
           .style("cursor", "pointer")
           .on("click", function (event, d) {
+            if (wasPanning) {
+    wasPanning = false; // suppress this click only
+    return;
+  }
             if (clickTimer) return;
 
             clickTimer = setTimeout(() => {
               if (d.depth === 1) {
-                const set = activeSelections.fromIcicleColors;
-                if (set.has(d.data.numColors)) {
-                  set.delete(d.data.numColors);
-                } else {
-                  set.add(d.data.numColors);
-                }
+  const num = d.data.numColors;
+  const groupSet = activeSelections.fromIcicleColors;
+  const identitySet = activeSelections.fromIcicleIdentity;
+  const children = d.children || [];
 
-                updateIcicleSelections();
+  const groupAlreadySelected = groupSet.has(num);
 
-                emitIcicleNumClick({
-                  numColors: d.data.numColors,
-                  originalities: d.data.originalities,
-                  rarities: d.data.rarities,
-                });
-              } else if (d.depth === 2) {
+  if (groupAlreadySelected) {
+    // Remove group and all its children from selections
+    groupSet.delete(num);
+    children.forEach((c) => identitySet.delete(c.data.name));
+  } else {
+    // Add group and all its children
+    groupSet.add(num);
+    children.forEach((c) => identitySet.add(c.data.name));
+  }
+
+  updateIcicleSelections();
+
+  emitIcicleNumClick({
+    numColors: d.data.numColors,
+    originalities: d.data.originalities,
+    rarities: d.data.rarities,
+    colorIdentities: d.data.colorIdentities,
+    children: children.map((c) => ({
+      name: c.data.name,
+      originalities: c.data.originalities,
+      rarities: c.data.rarities,
+      years: c.data.years,
+    })),
+  });
+}
+ else if (d.depth === 2) {
                 // Identity-level click (e.g., "W", "UB", "Colorless", etc.)
 
                 const identity = d.data.name;
                 if (activeSelections.fromIcicleIdentity.has(identity)) {
                   activeSelections.fromIcicleIdentity.delete(identity);
+                  if(activeSelections.fromIcicleIdentity.size === 0){
+                    activeSelections.fromIcicleColors.clear()
+
+                  }
                 } else {
                   activeSelections.fromIcicleIdentity.add(identity);
+                  activeSelections.fromIcicleColors.add(d.data.numColors)
                 }
 
                 // Update visuals based on new selection state
                 updateIcicleSelections();
+                console.log(d.numColorsPresent)
                 emitIcicleClick({
                   colorIdentity: d.data.name,
                   originalities: d.data.originalities, // should be a Set<string> or array
                   rarities: d.data.rarities, // should be a Set<string> or array
+                  numColors: d.data.numColors
                 });
               }
 
@@ -1309,6 +1301,77 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
         return d.depth === 2 ? `rotate(-90, ${x}, ${y})` : null;
       });
   });
+
+
+  let isPanning = false;
+let panStartX = null;
+let panStartDomain = null;
+let wasPanning = false;
+
+svg
+  .on("mousedown", function (event) {
+    if (event.button !== 0 || !event.ctrlKey) return;
+    focus = root
+    isPanning = true;
+    wasPanning = false; // reset
+    panStartX = event.clientX;
+    panStartDomain = xScale.domain();
+  })
+.on("mousemove", function (event) {
+  if (!isPanning) return;
+
+  const dx = event.clientX - panStartX;
+  if (Math.abs(dx) > 3) wasPanning = true;
+
+  const domainWidth = panStartDomain[1] - panStartDomain[0];
+  const scaleWidth = xScale.range()[1] - xScale.range()[0];
+  const pxPerUnit = scaleWidth / domainWidth;
+
+  const offset = dx / pxPerUnit;
+
+  let newStart = panStartDomain[0] - offset;
+  let newEnd = panStartDomain[1] - offset;
+
+  // Clamp to data extent (root.x0, root.x1)
+  const dataStart = root.x0;
+  const dataEnd = root.x1;
+
+  if (newStart < dataStart) {
+    newStart = dataStart;
+    newEnd = dataStart + domainWidth;
+  } else if (newEnd > dataEnd) {
+    newEnd = dataEnd;
+    newStart = dataEnd - domainWidth;
+  }
+
+  xScale.domain([newStart, newEnd]);
+
+  rects
+    .attr("x", (d) => xScale(d.x0))
+    .attr("width", (d) => xScale(d.x1) - xScale(d.x0));
+
+  labels
+    .attr("x", (d) => (xScale(d.x0) + xScale(d.x1)) / 2)
+    .style("opacity", (d) => {
+      const rectWidth = xScale(d.x1) - xScale(d.x0);
+      const textLength = d.data.name.replaceAll("-", "").length * 6;
+      return rectWidth > textLength ? 1 : 0;
+    })
+    .attr("transform", (d) => {
+      const x = (xScale(d.x0) + xScale(d.x1)) / 2;
+      const y = yScale(d.depth);
+      return d.depth === 2 ? `rotate(-90, ${x}, ${y})` : null;
+    });
+})
+
+  .on("mouseup", function () {
+    isPanning = false;
+    // Don't clear wasPanning here — keep it until next click
+  })
+  .on("mouseleave", function () {
+    isPanning = false;
+  });
+
 
   const legendX = chartWidth + margin.right;
   const legendY = margin.top + 5;

@@ -1303,29 +1303,42 @@ onClearScatterplotBrush(() => {
   updateTimelineSelections();
 });
 
-onIcicleClick(({ colorIdentity }) => {
+onIcicleClick(({ colorIdentity, numColors }) => {
   if (!colorIdentity) return;
 
-  const selections = activeTimelineSelections.fromIcicleIdentity;
+  const identitySet = activeTimelineSelections.fromIcicleIdentity;
+  const groupSet = activeTimelineSelections.fromIcicleColors;
 
-  if (selections.has(colorIdentity)) {
-    selections.delete(colorIdentity);
+  if (identitySet.has(colorIdentity)) {
+    identitySet.delete(colorIdentity);
+
+    // If no identities remain, clear group set too
+    if (identitySet.size === 0) {
+      groupSet.clear();
+    }
   } else {
-    selections.add(colorIdentity);
+    identitySet.add(colorIdentity);
+    groupSet.add(numColors);
   }
 
   updateTimelineSelections();
 });
 
-onIcicleNumClick(({ numColors }) => {
-  if (!numColors) return;
 
-  const selections = activeTimelineSelections.fromIcicleColors;
+onIcicleNumClick(({ numColors, colorIdentities }) => {
+  if (!numColors || !colorIdentities) return;
 
-  if (selections.has(numColors)) {
-    selections.delete(numColors);
+  const groupSet = activeTimelineSelections.fromIcicleColors;
+  const identitySet = activeTimelineSelections.fromIcicleIdentity;
+
+  const isGroupSelected = groupSet.has(numColors);
+
+  if (isGroupSelected) {
+    groupSet.delete(numColors);
+    colorIdentities.forEach((id) => identitySet.delete(id));
   } else {
-    selections.add(numColors);
+    groupSet.add(numColors);
+    colorIdentities.forEach((id) => identitySet.add(id));
   }
 
   updateTimelineSelections();
@@ -1339,7 +1352,6 @@ function updateTimelineSelections() {
     activeTimelineSelections.fromAlluvialRarity.size === 0 &&
     activeTimelineSelections.fromAlluvialLinkPairs.size === 0 &&
     activeTimelineSelections.fromIcicleIdentity.size === 0 &&
-    activeTimelineSelections.fromIcicleColors.size === 0 &&
     activeTimelineSelections.fromYears.size === 0 &&
     activeTimelineSelections.sets.size === 0 &&
     activeTimelineSelections.setTypes.size === 0 &&
@@ -1351,7 +1363,6 @@ function updateTimelineSelections() {
     activeTimelineSelections.fromAlluvialRarity.size === 0 &&
     activeTimelineSelections.fromAlluvialLinkPairs.size === 0 &&
     activeTimelineSelections.fromIcicleIdentity.size === 0 &&
-    activeTimelineSelections.fromIcicleColors.size === 0 &&
     activeTimelineSelections.fromYears.size === 0 &&
     activeTimelineSelections.sets.size === 0 &&
     activeTimelineSelections.setTypes.size === 0 &&
@@ -1420,12 +1431,8 @@ function updateTimelineSelections() {
         d.colorIdentities?.has(id)
       ) || activeTimelineSelections.fromIcicleIdentity.size === 0;
 
-    const numColorMatch =
-      [...activeTimelineSelections.fromIcicleColors].some((n) =>
-        d.numColorsPresent?.has(+n)
-      ) || activeTimelineSelections.fromIcicleColors.size === 0;
 
-    if (identityMatch && numColorMatch) icicleMatches.add(rect);
+    if (identityMatch) icicleMatches.add(rect);
 
     // === YEAR GROUP ===
     const year = d.releaseDate.getFullYear();
