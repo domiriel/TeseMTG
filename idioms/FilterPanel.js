@@ -25,12 +25,12 @@ function getNormalizedKey(category, value) {
     : value;
 }
 const numColorsOrder = [
-  "Colorless",
-  "1 Color",
-  "2 Colors",
-  "3 Colors",
-  "4 Colors",
-  "+4 Colors",
+  "colorless",
+  "1 color",
+  "2 colors",
+  "3 colors",
+  "4 colors",
+  "5 colors",
 ];
 const colorIdentityOrder = [
   "colorless",
@@ -240,6 +240,7 @@ export function createFilterPanel(
 
   const groupedData = getState().groupedData;
 
+
   const allFilters = Object.fromEntries(
     Object.entries(groupedData)
       .filter(([category]) => VISIBLE_FILTER_CATEGORIES.includes(category))
@@ -255,7 +256,9 @@ export function createFilterPanel(
 
         entries = entries.sort((a, b) => {
           if (category === "Nº of Colors") {
-            return numColorsOrder.indexOf(a[0]) - numColorsOrder.indexOf(b[0]);
+            const aIdx = numColorsOrder.indexOf(a[0]);
+  const bIdx = numColorsOrder.indexOf(b[0]);
+  return aIdx - bIdx;
           }
           if (category === "Color Identity") {
             return (
@@ -1075,9 +1078,14 @@ function extractCardValue(card, category) {
         ? new Date(card.release_date).getFullYear().toString()
         : null;
     case "Nº of Colors":
-      if (card.number_of_colours >= 4) return "+4 Colors";
-      if (card.number_of_colours === 0) return "Colorless";
-      return `${card.number_of_colours} Colors`;
+  if (card.number_of_colours === 0) return "Colorless";
+  if (card.number_of_colours === 1) return "1 Color";
+  if (card.number_of_colours === 2) return "2 Colors";
+  if (card.number_of_colours === 3) return "3 Colors";
+  if (card.number_of_colours === 4) return "4 Colors";
+  if (card.number_of_colours === 5) return "5 Colors";
+  return null;
+
     case "Color Identity":
       if (
         !Array.isArray(card.color_identity) ||

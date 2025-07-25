@@ -564,33 +564,34 @@ export function createTimelineView(data, containerId, isUpdate = false) {
 
   const adjustedChartHeight = selectedSetTypes.length * lineSpacingFactor * 30;
 
+
+
+
+
   const svg = scrollContainer
     .append("svg")
     .attr("width", containerWidth)
     .style("overflow", "visible")
     .attr("height", adjustedChartHeight + 20);
 
-  const zoom = d3
-    .zoom()
-    .filter((event) => {
-      // Allow wheel events
-      if (event.type === "wheel") return true;
+  scrollContainer.node().addEventListener("wheel", (e) => {
+  e.preventDefault();
+}, { passive: false });
+const zoom = d3
+  .zoom()
+  .filter((event) => {
+    if (event.type === "wheel") return true;
+    if (event.type === "mousedown" && event.button === 2) return true;
+    if (event.ctrlKey) return true;
+    return false;
+  })
+  .scaleExtent([1, 10])
+  .translateExtent([
+    [0, 0],
+    [chartWidth, adjustedChartHeight] // ✅ allows vertical panning
+  ])
+  .on("zoom", zoomed); // ✅ Step 2 will define this
 
-      // Allow right-click
-      if (event.type === "mousedown" && event.button === 2) return true;
-
-      // Allow if Ctrl key is pressed during any event
-      if (event.ctrlKey) return true;
-
-      // Otherwise, ignore the event
-      return false;
-    }) // 👈 allow zooming ONLY via scroll
-    .scaleExtent([1, 10])
-    .translateExtent([
-      [0, 0],
-      [chartWidth, adjustedChartHeight],
-    ])
-    .on("zoom", zoomed);
 
   svg.call(zoom);
 
