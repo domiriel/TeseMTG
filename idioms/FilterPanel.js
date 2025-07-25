@@ -543,6 +543,8 @@ export function createFilterPanel(
       .style("border", "1px solid #ccc")
       .style("border-radius", "6px")
       .style("padding", "6px")
+      .style("width", "100%") // <- Not shown, but should be added
+.style("box-sizing", "border-box")
       .style("background", "#fff");
 
     const searchBox = section
@@ -552,10 +554,11 @@ export function createFilterPanel(
       .attr("type", "text")
       .attr("placeholder", `Search ${category}...`)
       .style("display", "none")
-      .style("width", "93.5%")
+      .style("width", "100%")
       .style("padding", "4px")
       .style("margin-top", "4px")
       .style("font-size", "14px")
+      .style("box-sizing", "border-box")
       .on("input", function () {
         const query = this.value.toLowerCase();
         content
@@ -1025,6 +1028,26 @@ export function updateFilterPanel(
 
     pills.exit().remove();
   });
+
+  const uniqueCardNames = Array.from(
+  new Set(filteredCards.map((card) => card.name))
+).sort();
+
+const inputId = d3
+  .select(containerId)
+  .select('input[list]')
+  .attr("list"); // Get the current list ID
+
+if (inputId) {
+  const dataList = d3.select(`#${inputId}`);
+  const options = dataList.selectAll("option").data(uniqueCardNames, d => d);
+
+  options.enter()
+    .append("option")
+    .attr("value", (d) => d);
+
+  options.exit().remove();
+}
 
   const t5 = performance.now();
 }

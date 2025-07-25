@@ -48,7 +48,7 @@ const filterApplicationOrder = [
   "Types",
   "Subtypes",
 ];
-const GROUPED_DATA_VERSION = "v6";
+const GROUPED_DATA_VERSION = "v7";
 export function getEffectivePriceAttribute(state) {
   const { selectedPriceCurrency, selectedPriceSuffix } = state;
   return selectedPriceCurrency === "tix"
@@ -160,7 +160,6 @@ async function init() {
   getState().onChange("hoveredCards", (hoveredCards) => {
     showLoader();
 
-    console.log("Hello");
     const t0 = performance.now();
 
     const t1 = performance.now();

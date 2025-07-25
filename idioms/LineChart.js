@@ -357,7 +357,7 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
     .append("rect")
     .attr("x", 0)
     .attr("y", 0)
-    .attr("width", width + 11)
+    .attr("width", width + 5)
     .attr("height", containerHeight);
 
   const sharedHoverLine = svg
@@ -650,9 +650,7 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
 
     xAxisG
       .selectAll("text")
-      .text(function (d) {
-        return d.getFullYear() % 2 === 1 ? d3.timeFormat("%Y")(d) : "";
-      })
+.text(d3.timeFormat("%Y"))
       .attr("transform", "rotate(-45)")
       .style("text-anchor", "end")
       .attr("font-size", "10px");
@@ -700,11 +698,7 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
       );
 
       g.selectAll("text")
-        .text(function (d) {
-          return isBottom && d.getFullYear() % 2 === 1
-            ? d3.timeFormat("%Y")(d)
-            : "";
-        })
+        .text(d3.timeFormat("%Y"))
         .attr("transform", "rotate(-45)")
         .style("text-anchor", "end")
         .attr("font-size", "10px");
@@ -780,10 +774,16 @@ function drawVerticalLinesForYears(years) {
       .attr("transform")
       ?.match(/translate\(([\d.]+)/)?.[1] || 0;
 
+  const xScaleZoomed = currentZoomTransform.rescaleX(window._lineChartXScale);
+  const visibleXMin = marginLeft;
+  const visibleXMax = marginLeft + window._lineChartXScale.range()[1];
+
   years.forEach((time) => {
-    const date = new Date(+time); // assumes UNIX time
-    const x =
-      currentZoomTransform.applyX(window._lineChartXScale(date)) + marginLeft;
+    const date = new Date(+time);
+    const x = xScaleZoomed(date) + marginLeft;
+
+    // ❌ Skip if not in visible X range
+    if (x < visibleXMin || x > visibleXMax) return;
 
     svg
       .append("line")
@@ -798,6 +798,7 @@ function drawVerticalLinesForYears(years) {
       .attr("stroke-dasharray", "4 2");
   });
 }
+
 
 function getXCoordFromYear(date, svg) {
   if (!window._lineChartXScale) return 0;

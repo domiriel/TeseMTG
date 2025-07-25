@@ -97,13 +97,14 @@ onClearIcicleSelections(() => {
 });
 
 const filterGroups = {
-  alluvial: ["originalities", "rarities", "originalityRarityPairs"],
+  alluvial: ["originalityRarityPairs"],
   icicle: ["colorIdentities", "numColors"],
   timeline: ["sets", "setTypes"],
   lineChart: ["years"],
 };
 
 function getCardsMatchingActiveSelections(data) {
+  console.log(activeSelections)
   const groupKeys = Object.keys(filterGroups);
 
   return data.filter((card) => {
@@ -266,8 +267,9 @@ onAlluvialClick(({ category, value }) => {
   const key =
     category.toLowerCase() === "originality" ? "originalities" : "rarities";
   addActiveSelection(key, value);
-  applySelectionToScatter();
+  updateOriginalityRarityPairsFromSelections();
 });
+
 
 onYearClick(({ year }) => {
   addActiveSelection("years", year);
@@ -284,10 +286,39 @@ onTimelineSetTypeClick(({ type }) => {
   applySelectionToScatter();
 });
 
+const ALL_ORIGINALITIES = new Set(["original", "reprint","functional reprint"]);
+const ALL_RARITIES = new Set(["common", "uncommon", "rare", "mythic", "special", "bonus"]);
+
 onAlluvialLinkClick(({ originality, rarity }) => {
   addPairSelection("originalityRarityPairs", originality, rarity);
   applySelectionToScatter();
 });
+
+
+function updateOriginalityRarityPairsFromSelections() {
+  const originalitySet = activeSelections.originalities;
+  const raritySet = activeSelections.rarities;
+
+  const pairs = new Set();
+
+  // Fallbacks: if only one side is populated, pair with all known values
+  const originalities = originalitySet.size > 0
+    ? Array.from(originalitySet)
+    : Array.from(ALL_ORIGINALITIES); // define this globally
+  const rarities = raritySet.size > 0
+    ? Array.from(raritySet)
+    : Array.from(ALL_RARITIES); // define this globally
+
+  for (const o of originalities) {
+    for (const r of rarities) {
+      pairs.add(`${o}|${r}`);
+    }
+  }
+
+  activeSelections.originalityRarityPairs = pairs;
+  applySelectionToScatter();
+}
+
 
 function addPairSelection(category, originality, rarity) {
   const set = activeSelections[category];

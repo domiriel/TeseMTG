@@ -2,12 +2,30 @@ import os
 import json
 from decimal import Decimal
 from collections import Counter, defaultdict
+from datetime import datetime
 mtg_color_order = {"W": 0, "U": 1, "B": 2, "R": 3, "G": 4}
 MTG_SUPERTYPES = {"Basic", "Legendary", "Ongoing","Token", "Snow", "World", "Host", "Elite"}
 MTG_CARD_TYPES = {
     "Artifact", "Conspiracy", "Creature","Dungeon", "Emblem", "Enchantment","Hero", "Instant","Kindred", "Land", "Phenomenon",
     "Plane", "Planeswalker", "Scheme", "Sorcery", "Vanguard", "Battle"
 }
+from datetime import datetime
+def get_normalized_card_name(card):
+    name = get_card_display_name(card)
+    return name.split('//')[0].strip()
+def get_release_date(card):
+    date_str = card.get('released_at', '')
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError:
+        return datetime.max  # place unknown releases at end
+def get_card_display_name(card):
+    if 'card_faces' in card and isinstance(card['card_faces'], list) and card['card_faces']:
+        return card['card_faces'][0].get('name', card.get('name', ''))
+    return card.get('name', '')
+
+def get_normalized_card_name(card):
+    return get_card_display_name(card).split('//')[0].strip()
 
 functional_reprint_names = set()
 def prettify_set_type(set_type):
@@ -37,7 +55,7 @@ def get_canonical_mechanics_key(card):
     front = card.get('card_faces', [{}])[0] if 'card_faces' in card else card
 
     return (
-        card.get('cmc', 0),
+        card.get('mana_cost', 0),
         front.get('type_line', ''),
         front.get('oracle_text', ''),
         front.get('power', ''),
@@ -72,47 +90,99 @@ originality_lookup = defaultdict(list)
 # Load entire dataset and build lookup dictionaries
 with open(input_file, 'r', encoding='utf-8') as file:
     all_cards = json.load(file)
-
+    all_cards.sort(key=get_release_date)
     for card in all_cards:
-        key = (card.get('cmc', 0), card.get('type_line', ''), card.get('oracle_text', ''),
+        key = (card.get('mana_cost', 0), card.get('type_line', ''), card.get('oracle_text', ''),
                card.get('power', ''), card.get('toughness', ''))
         originality_lookup[key].append(card)
 
 # Function to determine originality of the card
+log_file_path = os.path.join(output_dir, 'functional_reprints_log.txt')
+log_file = open(log_file_path, 'w', encoding='utf-8')
 def determine_originality(card):
+    card_name = get_normalized_card_name(card)
     if card.get('set_type') == 'memorabilia':
         return 'art_series'
 
-    # If name is already known to be a reprint, skip redundant comparison
-    if card['name'] in functional_reprint_names:
+    if card_name in functional_reprint_names:
         return 'functional reprint'
 
-    key = get_canonical_mechanics_key(card)
+    # Use front face if it's a double-faced card
+    front = card.get('card_faces', [{}])[0] if 'card_faces' in card else card
+
+    # Define attributes of the current card
+    mana_cost = front.get('mana_cost', '')
+    type_line = front.get('type_line', '')
+    oracle_text = front.get('oracle_text', '')
+    power = front.get('power', '')
+    toughness = front.get('toughness', '')
+    release_date = card.get('released_at', '')
+    card_types = set(parse_type_line(type_line)['type'].split())
+
+    key = (mana_cost, type_line, oracle_text, power, toughness)
     existing_cards = originality_lookup.get(key, [])
 
     for existing_card in existing_cards:
-        if existing_card.get('name') == card.get('name', ''):
-            continue  # same name, skip
+        existing_name = get_normalized_card_name(existing_card)
+        if existing_name == card_name:
+            continue
+        if existing_name in functional_reprint_names:
+            continue  # Do not use another functional reprint as a reference
 
-        if existing_card.get('released_at', '') >= card.get('released_at', ''):
-            continue  # not older, skip
+        # Release date check
+        if existing_card.get('released_at', '') >= release_date:
+            continue
 
-        # Fail-safe: skip functional reprint comparison between DFC and non-DFC
-        is_card_dfc = 'card_faces' in card
-        is_existing_dfc = 'card_faces' in existing_card
-        if is_card_dfc != is_existing_dfc:
-            continue  # one is DFC, the other is not → skip
+        # Faces
+        existing_front = existing_card.get('card_faces', [{}])[0] if 'card_faces' in existing_card else existing_card
+        existing_mana_cost = existing_front.get('mana_cost', '')
+        existing_type_line = existing_front.get('type_line', '')
+        existing_oracle_text = existing_front.get('oracle_text', '')
+        existing_power = existing_front.get('power', '')
+        existing_toughness = existing_front.get('toughness', '')
+        existing_types = set(parse_type_line(existing_type_line)['type'].split())
 
+        # Clause: mana cost
+        if mana_cost != existing_mana_cost:
+            continue
 
-        functional_reprint_names.add(card['name'])
+        # Clause: rule text
+        if oracle_text != existing_oracle_text:
+            continue
 
+        # Clause: types/supertypes/subtypes must match exactly
+        parsed1 = parse_type_line(type_line)
+        parsed2 = parse_type_line(existing_type_line)
+        if parsed1 != parsed2:
+            continue
+
+        # Clause: if both are creatures → power/toughness must match
+        both_creatures = "Creature" in card_types and "Creature" in existing_types
+        if both_creatures:
+            if power != existing_power or toughness != existing_toughness:
+                continue
+        else:
+            # if one is not a creature, we’re okay
+            pass
+
+        # Passed all checks ⇒ functional reprint
+        functional_reprint_names.add(card_name)
         for other in originality_lookup[key]:
-            if other.get('name') == card['name']:
-                functional_reprint_names.add(other['name'])
+            if get_normalized_card_name(other) == card_name:
+                functional_reprint_names.add(card_name)
+
+        msg = (
+            f"Functional reprint detected: '{card_name}' "
+            f"is a reprint of '{existing_name}' "
+            f"(released earlier on {existing_card.get('released_at', 'unknown')})"
+        )
+        log_file.write(msg + '\n')
 
         return 'functional reprint'
 
     return 'reprint' if card.get('reprint') else 'original'
+
+
 # Counters for statistics
 color_count = Counter()
 color_identity_count = Counter()
@@ -236,6 +306,8 @@ with open(output_file, 'w') as outfile:
 
     outfile.write('\n]')  # End of JSON array
 
+
+log_file.close()
 
 total_cards = len(all_cards)
 supertype_total = sum(supertype_count.values())

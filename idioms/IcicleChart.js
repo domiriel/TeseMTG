@@ -305,18 +305,21 @@ function updateIcicleSelections() {
         .attr("fill", isSelected ? d.data.selectedColor : d.data.color);
     }
     // Don’t forget to handle depth 1 too — derive from children
-    for (const rect of depth1Rects) {
-      const d = d3.select(rect).datum();
-      const anyChildSelected = d.children?.some((child) => {
-        return d3.selectAll("rect.icicle-rect")
-          .filter((r) => r.__data__.depth === 2 && r.__data__.data.name === child.data.name)
-          .classed("selectedHovered");
-      });
+for (const rect of depth1Rects) {
+  const d = d3.select(rect).datum();
+  const anyChildSelected = d.children?.some((child) => {
+    return depth2Rects.some((r) => {
+      const rd = d3.select(r).datum();
+      return rd.data.name === child.data.name &&
+             d3.select(r).classed("selectedHovered");
+    });
+  });
 
-      d3.select(rect)
-        .classed("selectedHovered", anyChildSelected)
-        .attr("fill", anyChildSelected ? d.data.selectedColor : d.data.color);
-    }
+  d3.select(rect)
+    .classed("selectedHovered", anyChildSelected)
+    .attr("fill", anyChildSelected ? d.data.selectedColor : d.data.color);
+}
+
 
     return;
   }
@@ -966,64 +969,89 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
             if (clickTimer) return;
 
             clickTimer = setTimeout(() => {
-              if (d.depth === 1) {
-  const num = d.data.numColors;
-  const groupSet = activeSelections.fromIcicleColors;
+if (d.depth === 1) {
+  const isColorless = d.data.name === "Colorless";
+  const isFiveColors = d.data.numColors === 5;
   const identitySet = activeSelections.fromIcicleIdentity;
   const children = d.children || [];
 
-  const groupAlreadySelected = groupSet.has(num);
+  if ((isColorless || isFiveColors) && children.length === 1) {
+    const identity = children[0].data.name;
 
-  if (groupAlreadySelected) {
-    // Remove group and all its children from selections
-    groupSet.delete(num);
-    children.forEach((c) => identitySet.delete(c.data.name));
+    if (identitySet.has(identity)) {
+      identitySet.delete(identity);
+    } else {
+      identitySet.add(identity);
+    }
+
+    updateIcicleSelections();
+
+    emitIcicleClick({
+      colorIdentity: identity,
+      originalities: children[0].data.originalities,
+      rarities: children[0].data.rarities,
+      numColors: children[0].data.numColors,
+    });
+
   } else {
-    // Add group and all its children
-    groupSet.add(num);
-    children.forEach((c) => identitySet.add(c.data.name));
+    // Normal group logic
+    const num = d.data.numColors;
+    const groupSet = activeSelections.fromIcicleColors;
+    const groupAlreadySelected = groupSet.has(num);
+
+    if (groupAlreadySelected) {
+      groupSet.delete(num);
+      children.forEach((c) => identitySet.delete(c.data.name));
+    } else {
+      groupSet.add(num);
+      children.forEach((c) => identitySet.add(c.data.name));
+    }
+
+    updateIcicleSelections();
+
+    emitIcicleNumClick({
+      numColors: d.data.numColors,
+      originalities: d.data.originalities,
+      rarities: d.data.rarities,
+      colorIdentities: d.data.colorIdentities,
+      children: children.map((c) => ({
+        name: c.data.name,
+        originalities: c.data.originalities,
+        rarities: c.data.rarities,
+        years: c.data.years,
+      })),
+    });
+  }
+}
+
+else if (d.depth === 2) {
+  const identity = d.data.name;
+  console.log(d.data)
+  const numColors = d.data.numColors;
+  const isColorlessOrFive = numColors === 0 || numColors === 5;
+
+  if (activeSelections.fromIcicleIdentity.has(identity)) {
+    activeSelections.fromIcicleIdentity.delete(identity);
+    if (activeSelections.fromIcicleIdentity.size === 0) {
+      activeSelections.fromIcicleColors.clear();
+    }
+  } else {
+    activeSelections.fromIcicleIdentity.add(identity);
+    if (!isColorlessOrFive) {
+      activeSelections.fromIcicleColors.add(numColors);
+    }
   }
 
   updateIcicleSelections();
 
-  emitIcicleNumClick({
-    numColors: d.data.numColors,
+  emitIcicleClick({
+    colorIdentity: identity,
     originalities: d.data.originalities,
     rarities: d.data.rarities,
-    colorIdentities: d.data.colorIdentities,
-    children: children.map((c) => ({
-      name: c.data.name,
-      originalities: c.data.originalities,
-      rarities: c.data.rarities,
-      years: c.data.years,
-    })),
+    numColors: numColors,
   });
 }
- else if (d.depth === 2) {
-                // Identity-level click (e.g., "W", "UB", "Colorless", etc.)
 
-                const identity = d.data.name;
-                if (activeSelections.fromIcicleIdentity.has(identity)) {
-                  activeSelections.fromIcicleIdentity.delete(identity);
-                  if(activeSelections.fromIcicleIdentity.size === 0){
-                    activeSelections.fromIcicleColors.clear()
-
-                  }
-                } else {
-                  activeSelections.fromIcicleIdentity.add(identity);
-                  activeSelections.fromIcicleColors.add(d.data.numColors)
-                }
-
-                // Update visuals based on new selection state
-                updateIcicleSelections();
-                console.log(d.numColorsPresent)
-                emitIcicleClick({
-                  colorIdentity: d.data.name,
-                  originalities: d.data.originalities, // should be a Set<string> or array
-                  rarities: d.data.rarities, // should be a Set<string> or array
-                  numColors: d.data.numColors
-                });
-              }
 
               clickTimer = null;
             }, 170); // match your existing debounce delay
