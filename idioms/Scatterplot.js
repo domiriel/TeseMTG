@@ -4,6 +4,7 @@ import {
   emitClearHover,
   onSetHover,
   onClearSetHover,
+  onAlluvialLink,
   onRectHover,
   onClearRectHover,
   onClearLineYearHover,
@@ -87,6 +88,7 @@ function getDotRadiusForZoom(zoomLevel) {
 onClearAlluvialSelections(() => {
   activeSelections.originalities.clear();
   activeSelections.rarities.clear();
+  activeSelections.originalityRarityPairs.clear();
   applySelectionToScatter();
 });
 
@@ -104,7 +106,6 @@ const filterGroups = {
 };
 
 function getCardsMatchingActiveSelections(data) {
-  console.log(activeSelections)
   const groupKeys = Object.keys(filterGroups);
 
   return data.filter((card) => {
@@ -319,6 +320,10 @@ function updateOriginalityRarityPairsFromSelections() {
   applySelectionToScatter();
 }
 
+onAlluvialLink((pairSets) => {
+  activeSelections.originalityRarityPairs = new Set(pairSets)
+  applySelectionToScatter();
+});
 
 function addPairSelection(category, originality, rarity) {
   const set = activeSelections[category];
@@ -335,7 +340,6 @@ function addPairSelection(category, originality, rarity) {
 onIcicleClick(({ colorIdentity, numColors }) => {
   addActiveSelection("colorIdentities", colorIdentity);
   activeSelections.numColors.add(numColors)
-  console.log(activeSelections)
   applySelectionToScatter();
 });
 
@@ -345,7 +349,6 @@ onIcicleNumClick(({ numColors, colorIdentities }) => {
   const identitySet = activeSelections.colorIdentities;
 
   const isSelected = groupSet.has(numColors);
-  console.log(isSelected)
   if (isSelected) {
     // Remove group and all children
     groupSet.delete(numColors);

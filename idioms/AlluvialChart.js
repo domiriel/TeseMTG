@@ -4,6 +4,7 @@ import {
   emitAlluvialHover,
   emitClearAlluvialHover,
   emitAlluvialLinkHover,
+  emitAlluvialLink,
   emitClearAlluvialLinkHover,
   emitAlluvialClick,
   emitAlluvialLinkClick,
@@ -48,6 +49,11 @@ const customOrder = [
   "special",
   "bonus",
 ];
+
+const selectedOriginalities = new Set();     // from clicked originality nodes
+const selectedRarities = new Set();          // from clicked rarity nodes
+const activeAlluvialLinks = new Set(); 
+const manuallySelectedLinks = new Set();
 
 function getDiscreteColor(percentage) {
   if (percentage < 20) return "#ceb397";
@@ -94,6 +100,41 @@ onSetTypeHover((setInfo) => {
     setInfo.rarities
   );
 });
+function updateActiveAlluvialLinks() {
+  activeAlluvialLinks.clear();
+
+  const oSize = selectedOriginalities.size;
+  const rSize = selectedRarities.size;
+
+  // 🛑 If nothing is selected, don't activate any links
+  if (oSize === 0 && rSize === 0) {
+    return;
+  }
+
+  d3.selectAll("path.link").each(function (d) {
+    const o = d.source.name.toLowerCase();
+    const r = d.target.name.toLowerCase();
+
+    const oMatch = oSize === 0 || selectedOriginalities.has(o);
+    const rMatch = rSize === 0 || selectedRarities.has(r);
+
+    if (oMatch && rMatch) {
+      activeAlluvialLinks.add(`${o}|${r}`);
+    }
+  });
+ 
+}
+
+
+function buildLinkKeySet(originalities = new Set(), rarities = new Set()) {
+  const keys = new Set();
+  for (const o of originalities) {
+    for (const r of rarities) {
+      keys.add(`${o}|${r}`);
+    }
+  }
+  return keys;
+}
 
 function hasActiveAlluvialSelections() {
   return activeAlluvialSelections.size > 0;
@@ -237,6 +278,47 @@ onClearTimelineSelections(() => {
   }
   updateAlluvialFromSelections(); // to re-render Alluvial visuals
 });
+
+function handleNodeClick(name, isOriginality) {
+  const selectedSet = isOriginality ? selectedOriginalities : selectedRarities;
+
+  const getLinksForNode = (node) => {
+    const links = [];
+    d3.selectAll("path.link").each(function (d) {
+      const o = d.source.name.toLowerCase();
+      const r = d.target.name.toLowerCase();
+      const key = `${o}|${r}`;
+      if ((isOriginality && o === node) || (!isOriginality && r === node)) {
+        links.push(key);
+      }
+    });
+    return links;
+  };
+
+  const linksForNode = getLinksForNode(name);
+  const manuallySelected = linksForNode.filter(l => manuallySelectedLinks.has(l));
+
+  if (selectedSet.has(name)) {
+    selectedSet.delete(name);
+    linksForNode.forEach(l => {
+      manuallySelectedLinks.delete(l);
+      activeAlluvialLinks.delete(l);
+    });
+  } else if (manuallySelected.length === linksForNode.length) {
+    // All links are manually selected → just unselect links, don't add node
+    linksForNode.forEach(l => manuallySelectedLinks.delete(l));
+  } else {
+    // Some links manually selected → add node, remove manual links
+    selectedSet.add(name);
+    manuallySelected.forEach(l => manuallySelectedLinks.delete(l));
+  }
+
+  updateActiveAlluvialLinks();
+  emitAlluvialLink([...activeAlluvialLinks, ...manuallySelectedLinks]);
+  updateAlluvialFromSelections();
+}
+
+
 
 onClearSelection(() => {
   activeAlluvialSelections.clear();
@@ -423,12 +505,10 @@ onClearLineChartBrush(() => {
 });
 
 function updateAlluvialFromSelections() {
+  const fullAlluvialLinkSet = new Set(activeAlluvialLinks);
+  manuallySelectedLinks.forEach((l) => fullAlluvialLinkSet.add(l));
   const groupedBySource = new Map();
-
-  for (const [
-    _,
-    { source, originalities, rarities },
-  ] of activeAlluvialSelections) {
+  for (const [_, { source, originalities, rarities }] of activeAlluvialSelections) {
     if (!groupedBySource.has(source)) {
       groupedBySource.set(source, {
         originalities: new Set(),
@@ -443,46 +523,95 @@ function updateAlluvialFromSelections() {
   const scatterGroup = groupedBySource.get("scatterplot");
   groupedBySource.delete("scatterplot");
 
-  let finalOriginalities = null;
-  let finalRarities = null;
 
+
+  if (
+  activeAlluvialSelections.size === 0 &&
+  fullAlluvialLinkSet.size === 0
+) {
+  // Reset nodes
+  d3.selectAll("g.node rect").each(function (d) {
+    d3.select(this)
+      .classed("selectedHovered", false)
+      .attr("fill", d.baseColor);
+  });
+
+  // Reset links
+  d3.selectAll("path.link").each(function (d) {
+    d3.select(this)
+      .classed("selectedHovered", false)
+      .attr("stroke", d.baseColor);
+  });
+
+  return; // ⬅️ Stop the function early
+}
+
+  let finalLinks = null;
+
+  // Intersect all link sets
   for (const { originalities, rarities } of groupedBySource.values()) {
-    if (finalOriginalities === null) {
-      finalOriginalities = new Set(originalities);
-      finalRarities = new Set(rarities);
+    const linkSet = buildLinkKeySet(originalities, rarities);
+    if (finalLinks === null) {
+      finalLinks = linkSet;
     } else {
-      finalOriginalities = new Set(
-        [...finalOriginalities].filter((o) => originalities.has(o))
-      );
-      finalRarities = new Set(
-        [...finalRarities].filter((r) => rarities.has(r))
-      );
+      finalLinks = new Set([...finalLinks].filter((l) => linkSet.has(l)));
     }
   }
 
-  if (finalOriginalities === null) {
-    finalOriginalities = new Set();
-    finalRarities = new Set();
-  }
-  if (scatterGroup) {
-    scatterGroup.originalities.forEach((o) => finalOriginalities?.add(o));
-    scatterGroup.rarities.forEach((r) => finalRarities?.add(r));
+  // If only scatterplot is active
+  if (finalLinks === null && scatterGroup) {
+    finalLinks = buildLinkKeySet(scatterGroup.originalities, scatterGroup.rarities);
   }
 
-  // Update Alluvial rects
+  // Union scatterplot if present
+  if (scatterGroup && finalLinks !== null) {
+    const scatterLinks = buildLinkKeySet(scatterGroup.originalities, scatterGroup.rarities);
+    scatterLinks.forEach((l) => finalLinks.add(l));
+  }
+
+  // Fallback to alluvial-only selection
+  if (finalLinks === null && fullAlluvialLinkSet.size > 0) {
+    finalLinks = new Set(fullAlluvialLinkSet);
+  }
+
+  // Intersect with activeAlluvialLinks if they exist
+  if (finalLinks && fullAlluvialLinkSet.size > 0) {
+    finalLinks = new Set([...finalLinks].filter((l) => fullAlluvialLinkSet.has(l)));
+
+  }
+
+  // Now extract final originality/rarity nodes involved in final links
+  const finalOriginalities = new Set();
+  const finalRarities = new Set();
+  for (const linkKey of finalLinks) {
+    const [o, r] = linkKey.split("|");
+    finalOriginalities.add(o);
+    finalRarities.add(r);
+  }
+
+  // Update node visuals
   d3.selectAll("g.node rect").each(function (d) {
     const isOriginality = d.x0 === 0;
     const match = isOriginality
-      ? finalOriginalities?.has(d.name)
-      : finalRarities?.has(d.name);
+      ? finalOriginalities.has(d.name.toLowerCase())
+      : finalRarities.has(d.name.toLowerCase());
 
     d3.select(this)
       .classed("selectedHovered", match)
       .attr("fill", match ? d.selectedColor : d.baseColor);
   });
 
-  // Update Legend
+  // Update link visuals
+  d3.selectAll("path.link").each(function (d) {
+    const key = `${d.source.name.toLowerCase()}|${d.target.name.toLowerCase()}`;
+    const match = finalLinks.has(key);
+
+    d3.select(this)
+      .classed("selectedHovered", match)
+      .attr("stroke", match ? d.selectedColor : d.baseColor);
+  });
 }
+
 
 onClearSetHover(() => {
   clearAlluvialHoverOnly();
@@ -772,7 +901,15 @@ export function createAlluvialChart(
           .attr("fill", "none")
           .attr("stroke-opacity", 0.5)
           .attr("stroke-width", (d) => Math.max(1, d.width))
-          .call((sel) => applyColorScale(sel, "stroke", priceRange))
+          .call((sel) => {
+  sel.each(function (d) {
+    const percentage = ((d.avgPrice - priceRange.min) / (priceRange.max - priceRange.min)) * 100;
+    d.baseColor = getDiscreteColor(percentage);
+    d.highlightColor = getHighlightedColor(percentage);
+    d.selectedColor = getSelectedColor(percentage);
+    d3.select(this).attr("stroke", d.baseColor);
+  });
+})
           .on("mouseover", function (event, d) {
             tooltip
               .style("display", "block")
@@ -834,38 +971,45 @@ export function createAlluvialChart(
               });
             emitClearAlluvialLinkHover();
           })
-          .on("click", function (event, d) {
-            const origKey = d.source.name;
-            const rarityKey = d.target.name;
+.on("click", function (event, d) {
+  const o = d.source.name.toLowerCase();
+  const r = d.target.name.toLowerCase();
+  const linkKey = `${o}|${r}`;
 
-            // Toggle originality selection
-            if (activeAlluvialSelections.has(origKey)) {
-              activeAlluvialSelections.delete(origKey);
-            } else {
-              activeAlluvialSelections.set(origKey, {
-                source: "alluvial",
-                originalities: new Set([origKey]),
-                rarities: new Set(),
-              });
-            }
+  const isSelected =
+    activeAlluvialLinks.has(linkKey) || manuallySelectedLinks.has(linkKey);
 
-            // Toggle rarity selection
-            if (activeAlluvialSelections.has(rarityKey)) {
-              activeAlluvialSelections.delete(rarityKey);
-            } else {
-              activeAlluvialSelections.set(rarityKey, {
-                source: "alluvial",
-                originalities: new Set(),
-                rarities: new Set([rarityKey]),
-              });
-            }
+  if (isSelected) {
+    manuallySelectedLinks.delete(linkKey);
+    activeAlluvialLinks.delete(linkKey);
 
-            updateAlluvialFromSelections(); // handles all fill + class logic
-            emitAlluvialLinkClick({
-              originality: d.source.name.toLowerCase(),
-              rarity: d.target.name.toLowerCase(),
-            });
-          })
+    // ✨ Check if 'o' still appears in any remaining links
+    let oStillUsed = false;
+    let rStillUsed = false;
+
+    const allRemainingLinks = new Set([
+      ...activeAlluvialLinks,
+      ...manuallySelectedLinks,
+    ]);
+
+    for (const key of allRemainingLinks) {
+      const [orig, rare] = key.split("|");
+      if (orig === o) oStillUsed = true;
+      if (rare === r) rStillUsed = true;
+      if (oStillUsed && rStillUsed) break; // early exit
+    }
+
+    if (!oStillUsed) selectedOriginalities.delete(o);
+    if (!rStillUsed) selectedRarities.delete(r);
+
+  } else {
+    manuallySelectedLinks.add(linkKey);
+  }
+  emitAlluvialLink([...activeAlluvialLinks, ...manuallySelectedLinks]); 
+  updateAlluvialFromSelections();
+})
+
+
           .on("contextmenu", function (event, d) {
             event.preventDefault(); // prevent the browser menu
             const currentState = getState();
@@ -896,7 +1040,15 @@ export function createAlluvialChart(
         update
           .attr("d", d3.sankeyLinkHorizontal())
           .attr("stroke-width", (d) => Math.max(1, d.width))
-          .call((sel) => applyColorScale(sel, "stroke", priceRange)),
+          .call((sel) => {
+  sel.each(function (d) {
+    const percentage = ((d.avgPrice - priceRange.min) / (priceRange.max - priceRange.min)) * 100;
+    d.baseColor = getDiscreteColor(percentage);
+    d.highlightColor = getHighlightedColor(percentage);
+    d.selectedColor = getSelectedColor(percentage);
+    d3.select(this).attr("stroke", d.baseColor);
+  });
+}),
       (exit) => exit.remove()
     );
 
@@ -1021,24 +1173,12 @@ export function createAlluvialChart(
             tooltip.style("display", "none");
             emitClearAlluvialHover();
           })
-          .on("click", function (event, d) {
-            const category = d.x0 === 0 ? "Originality" : "Rarity";
-            const value = d.name.toLowerCase();
+.on("click", function (event, d) {
+  const name = d.name.toLowerCase();
+  const isOriginality = d.x0 === 0; // or however you determine column
+  handleNodeClick(name, isOriginality);
+})
 
-            if (activeAlluvialSelections.has(value)) {
-              activeAlluvialSelections.delete(value);
-            } else {
-              activeAlluvialSelections.set(value, {
-                source: "alluvial",
-                originalities:
-                  category === "Originality" ? new Set([value]) : new Set(),
-                rarities: category === "Rarity" ? new Set([value]) : new Set(),
-              });
-            }
-
-            updateAlluvialFromSelections(); // handles all fill + class logic
-            emitAlluvialClick({ category, value }); // if needed for cross-view sync
-          })
 
           .on("contextmenu", function (event, d) {
             event.preventDefault();
@@ -1153,12 +1293,11 @@ export function createAlluvialChart(
     const isNode = target.classed("node");
     const isLink = target.classed("link");
     if (!isNode && !isLink) {
-      for (const [key, value] of activeAlluvialSelections.entries()) {
-        if (value.source === "alluvial") {
-          activeAlluvialSelections.delete(key);
-        }
-        emitClearAlluvialSelections();
-      }
+      selectedOriginalities.clear()
+      selectedRarities.clear()
+      manuallySelectedLinks.clear()
+      activeAlluvialLinks.clear()
+      emitClearAlluvialSelections()
     }
     updateAlluvialFromSelections(); // re-render Alluvial visuals
   });

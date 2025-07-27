@@ -319,3 +319,12 @@ export function onAlluvialLinkClick(handler) {
 export function emitAlluvialLinkClick(payload) {
   alluvialLinkClickHandlers.forEach(fn => fn(payload));
 }
+
+
+let alluvialLinkHandlers = [];
+export function onAlluvialLink(handler) {
+  alluvialLinkHandlers.push(handler);
+}
+export function emitAlluvialLink(payload) {
+  alluvialLinkHandlers.forEach(fn => fn(payload));
+}

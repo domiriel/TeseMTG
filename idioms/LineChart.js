@@ -22,6 +22,7 @@ import {
   onAlluvialHover,
   onAlluvialClick,
   onAlluvialLinkClick,
+  onAlluvialLink,
   emitClearLineChartBrush,
   onIcicleClick,
   onIcicleNumClick,
@@ -980,6 +981,11 @@ onAlluvialLinkClick(({ originality, rarity }) => {
   updateLineChartSelections();
 });
 
+onAlluvialLink((pairSets) => {
+  activeLineSelections.fromAlluvialLinkPairs = new Set(pairSets)
+  updateLineChartSelections();
+});
+
 onTimelineBrush((entries) => {
   const store = activeLineSelections.yearsFromTimelineSets;
 
@@ -1095,6 +1101,7 @@ onIcicleNumClick(({ numColors, colorIdentities }) => {
 
 
 function updateLineChartSelections() {
+  console.log(activeLineSelections)
   const svg = d3.select(".LineChart svg");
   if (svg.empty()) return;
 

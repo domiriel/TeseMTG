@@ -39,6 +39,7 @@ import {
   emitClearTimelineBrush,
   onClearLineChartBrush,
   emitLineYearHover,
+  onAlluvialLink
 } from "./Events.js";
 
 let localSelectedYears = new Set();
@@ -1261,6 +1262,11 @@ onAlluvialLinkClick(({ originality, rarity }) => {
     set.add(pairKey);
   }
 
+  updateTimelineSelections();
+});
+
+onAlluvialLink((pairSets) => {
+  activeTimelineSelections.fromAlluvialLinkPairs = new Set(pairSets)
   updateTimelineSelections();
 });
 

@@ -20,6 +20,7 @@ import {
   onClearLineYearHover,
   onAlluvialClick,
   onAlluvialLinkClick,
+  onAlluvialLink,
   onAlluvialLinkHover,
   onClearAlluvialLinkHover,
   onLineYearHover,
@@ -243,6 +244,11 @@ onAlluvialLinkClick(({ originality, rarity }) => {
     set.add(pairKey);
   }
 
+  updateIcicleSelections();
+});
+
+onAlluvialLink((pairSets) => {
+  activeSelections.fromAlluvialLinkPairs = new Set(pairSets)
   updateIcicleSelections();
 });
 
@@ -1026,7 +1032,6 @@ if (d.depth === 1) {
 
 else if (d.depth === 2) {
   const identity = d.data.name;
-  console.log(d.data)
   const numColors = d.data.numColors;
   const isColorlessOrFive = numColors === 0 || numColors === 5;
 
