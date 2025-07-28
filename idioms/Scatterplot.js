@@ -1635,22 +1635,29 @@ function shouldShowHoverTemp(d, cx, cy, chartWidth, chartHeight) {
   return inBounds && (!zoomedOut || d.isZoomKey);
 }
 
+function isInBounds(cx, cy, chartWidth, chartHeight) {
+  return cx >= 0 && cx <= chartWidth && cy >= 0 && cy <= chartHeight;
+}
+
 export function highlightScatterDotsFromSet(setName) {
   const svg = d3.select(".Scatterplot svg");
   const { logXScale, timeXScale, yScale } = svg.node().__scales__;
   const { chartWidth, chartHeight } = svg.node().__scatterMeta__;
   const xScale = xMetric === "avg_price" ? logXScale : timeXScale;
 
-  d3.selectAll(".dots circle").each(function (d) {
-    if (d.all_sets?.some((s) => s.name === setName)) {
+  d3.selectAll(".dots circle")
+    .filter((d) => d.all_sets?.some((s) => s.name === setName))
+    .classed("hover-temp", function (d) {
       const cx = xScale(getXValue(d));
       const cy = yScale(d.complexity);
-      if (shouldShowHoverTemp(d, cx, cy, chartWidth, chartHeight)) {
-        d3.select(this).classed("hover-temp", true);
+      const shouldShow = isInBounds(cx, cy, chartWidth, chartHeight);
+      if (shouldShow) {
+        this.style.display = null; // force visibility
       }
-    }
-  });
+      return shouldShow;
+    });
 }
+
 
 function highlightScatterDotsFromSetType(setType) {
   const lowerType = setType.toLowerCase();
@@ -1771,12 +1778,14 @@ function highlightScatterDotsFromAlluvialLink(originality, rarity) {
   });
 }
 
-export function clearScatterHoverOnly(Updateflag = "false") {
+export function clearScatterHoverOnly() {
   d3.selectAll(".dots circle").classed("hover-temp", false);
 
-  // const svg = d3.select(".Scatterplot svg");
-  // const { xScale, yScale } = svg.node().__scales__ || {};
-  // if (xScale && yScale) {
-  //   updatePointPositions(xScale, yScale);
-  // }
+  // Reapply zoom/visibility logic
+  const svg = d3.select(".Scatterplot svg");
+  const { logXScale, timeXScale, yScale } = svg.node().__scales__;
+  const xScale = xMetric === "avg_price" ? logXScale : timeXScale;
+
+  updatePointPositions(xScale, yScale);
 }
+
