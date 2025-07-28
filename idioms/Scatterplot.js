@@ -35,6 +35,7 @@ import {
   onTimelineSetTypeClick,
   onTimelineBrush,
   onClearTimelineBrush,
+  emitClearSelection,
 } from "./Events.js";
 import { getEffectivePriceAttribute } from "../script.js";
 const colorGroups = [
@@ -1468,8 +1469,7 @@ export function createScatterPlot(
       isDot || isCircleDot || isAxis || isLegend || isInfoIcon;
 
     if (!isInteractiveScatterElement) {
-      activeSelections.cards.clear();
-      emitClearScatterplotBrush();
+      emitClearSelection();
       applySelectionToScatter();
     }
   });

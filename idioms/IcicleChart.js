@@ -35,6 +35,7 @@ import {
   onClearLineChartBrush,
   onTimelineSetTypeClick,
   emitClearIcicleSelections,
+  emitClearSelection,
 } from "./Events.js";
 let globalRects = null;
 let clickTimer = null;
@@ -1286,9 +1287,7 @@ else if (d.depth === 2) {
     const isInfoIcon = target.classed(".info-icon");
 
     if (!isRect && !isText && !isInfoIcon) {
-      activeSelections.fromIcicleIdentity.clear();
-      activeSelections.fromIcicleColors.clear();
-      emitClearIcicleSelections();
+      emitClearSelection()
       updateIcicleSelections();
     }
   });

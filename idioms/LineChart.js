@@ -36,6 +36,7 @@ import {
   onClearScatterplotBrush,
   onClearTimelineBrush,
   onTimelineSetTypeClick,
+  emitClearSelection,
 } from "./Events.js";
 const lineChartTooltipText = `
 <strong>Timeline Interactions:</strong><br>
@@ -719,9 +720,7 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
 
     if (!isCircle && !isText && !isInfoIcon) {
       // Clear all timeline-related selections
-      activeLineSelections.fromYears.clear();
-
-      emitClearLineChartBrush(); // optional: emit a global clear
+      emitClearSelection()
       updateLineChartSelections(); // re-render
     }
   });

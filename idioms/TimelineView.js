@@ -39,7 +39,8 @@ import {
   emitClearTimelineBrush,
   onClearLineChartBrush,
   emitLineYearHover,
-  onAlluvialLink
+  onAlluvialLink,
+  emitClearSelection
 } from "./Events.js";
 
 let localSelectedYears = new Set();
@@ -1044,10 +1045,7 @@ const zoom = d3
 
     // Only clear if clicked outside interactive elements
     if (!isSetRect && !isYearLabel && !isTypeLabel && !isInfoIcon) {
-      activeTimelineSelections.fromYears.clear();
-      activeTimelineSelections.sets.clear();
-      activeTimelineSelections.setTypes.clear();
-      emitClearTimelineSelections();
+      emitClearSelection()
       updateTimelineSelections();
     }
   });

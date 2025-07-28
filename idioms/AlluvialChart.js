@@ -36,6 +36,7 @@ import {
   onClearLineYearHover,
   onIcicleClick,
   onIcicleNumClick,
+  emitClearSelection,
 } from "./Events.js";
 
 const customOrder = [
@@ -321,7 +322,11 @@ function handleNodeClick(name, isOriginality) {
 
 
 onClearSelection(() => {
-  activeAlluvialSelections.clear();
+  selectedOriginalities.clear()
+  selectedRarities.clear()
+  manuallySelectedLinks.clear()
+  activeAlluvialLinks.clear()
+  activeAlluvialSelections.clear()
   updateAlluvialFromSelections(); // to re-render Alluvial visuals
 });
 
@@ -1284,11 +1289,7 @@ export function createAlluvialChart(
     const isNode = target.classed("node");
     const isLink = target.classed("link");
     if (!isNode && !isLink) {
-      selectedOriginalities.clear()
-      selectedRarities.clear()
-      manuallySelectedLinks.clear()
-      activeAlluvialLinks.clear()
-      emitClearAlluvialSelections()
+      emitClearSelection()
     }
     updateAlluvialFromSelections(); // re-render Alluvial visuals
   });
