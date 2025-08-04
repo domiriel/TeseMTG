@@ -994,17 +994,20 @@ export function createScatterPlot(
           .tickValues(ticks)
           .tickFormat((d) => `${symbol}${d.toFixed(2)}`)
       );
-    } else if (xMetric === "release_date") {
-      xAxisG.call(
-        d3
-          .axisBottom(xS)
-          .ticks(d3.timeYear.every(1))
-          .tickFormat((d) => {
-            const year = d.getFullYear();
-            return year % 2 === 1 ? year.toString() : "";
-          })
-      );
-    }
+} else if (xMetric === "release_date") {
+  xAxisG.call(
+    d3.axisBottom(xS)
+      .ticks(d3.timeYear.every(1))
+      .tickFormat((d) => d.getFullYear())
+  );
+
+  xAxisG.selectAll("text")
+    .style("text-anchor", "end")
+    .attr("dx", "-0.8em")
+    .attr("dy", "0.15em")
+    .attr("transform", "rotate(-45)");
+}
+
 
     yAxisG.call(d3.axisLeft(yScale).ticks(numTicks));
   }
@@ -1014,7 +1017,7 @@ export function createScatterPlot(
   svg
     .append("foreignObject")
     .attr("x", chartWidth / 2 - 30) // Adjust as needed
-    .attr("y", height - 30)
+    .attr("y", height - 20)
     .attr("width", 130)
     .attr("height", 30)
     .style("pointer-events", "none")
@@ -1554,7 +1557,7 @@ export function updateScatterPlot(
     : yScale;
 
   const symbol = getSymbolFromAttribute(selectedPriceAttribute);
-  updateAxes(symbol);
+  updateAxes(symbol, newX);
 
   const t3 = performance.now();
 

@@ -256,7 +256,7 @@ export function updateDrawer(cards = []) {
 
     wrapper
       .select(".show-sets-btn")
-      .text(`Show Sets (${card.all_sets?.length || 0})`)
+      .text(`Isolate Sets (${card.all_sets?.length || 0})`)
       .style("margin-top", "6px")
       .style("padding", "4px 8px")
       .style("font-size", "13px")

@@ -652,7 +652,7 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
 
     xAxisG
       .selectAll("text")
-.text(d3.timeFormat("%Y"))
+      .text(d3.timeFormat("%Y"))
       .attr("transform", "rotate(-45)")
       .style("text-anchor", "end")
       .attr("font-size", "10px");
