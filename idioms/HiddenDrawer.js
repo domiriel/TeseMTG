@@ -252,11 +252,11 @@ export function updateDrawer(cards = []) {
       .select("img")
       .on("mouseover", (event) => showCompactTooltip(card, event))
       .on("mousemove", (event) => positionTooltip(event))
-      .on("mouseout", () => d3.select("#tooltip").style("display", "none"));
+      .on("mouseout", () => d3.select("#tooltip").style("display", "none").style("background", null).style("color", null));
 
     wrapper
       .select(".show-sets-btn")
-      .text(`Isolate Sets (${card.all_sets?.length || 0})`)
+      .text(`Filter by Set Appearence (${card.all_sets?.length || 0})`)
       .style("margin-top", "6px")
       .style("padding", "4px 8px")
       .style("font-size", "13px")

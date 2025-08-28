@@ -650,7 +650,9 @@ export function getFilteredData(
   const state = getState();
   const groupedData = state.groupedData || buildGroupedData(originalData);
 
-  if (isFilterEmpty(selectedFilters) && !freeTextSearch) {
+  console.log("Filtering with", selectedFilters, freeTextSearch);
+  if (isFilterEmpty(selectedFilters) && freeTextSearch==="") {
+    console.log("No filters applied, returning original data");
     return filterPriceOnly(originalData, selectedPriceAttribute);
   }
 
@@ -665,6 +667,7 @@ export function getFilteredData(
         selectedPriceSuffix: state.lastFilterInputs?.selectedPriceSuffix,
       })
   ) {
+    console.log("Reverting to original filtered data");
     return (
       state.originalFilteredData ||
       filterPriceOnly(originalData, selectedPriceAttribute)

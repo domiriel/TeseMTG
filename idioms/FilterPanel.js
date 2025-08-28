@@ -496,7 +496,8 @@ export function createFilterPanel(
     .on("click", () => {
       const clearedFilters = {};
       for (const key in selectedFilters) clearedFilters[key] = new Set();
-      updateState({ selectedFilters: clearedFilters });
+      
+      updateState({ selectedFilters: clearedFilters, freeTextSearch:"" });
     });
 
   resetWrapper
@@ -586,58 +587,8 @@ export function createFilterPanel(
       .style("gap", "4px");
     pillMap.set(category, pillContainer);
 
-    const selectedSet = selectedFilters[category];
 
-    function updateFilterStyles() {
-      content
-        .selectAll(".filter-option")
-        .style("background-color", (d) =>
-          selectedSet.has(d.value) ? "#cce5ff" : "#fff"
-        )
-        .style("cursor", "pointer");
-    }
 
-    function updatePills() {
-      const pills = pillContainer
-        .selectAll(".pill")
-        .data(Array.from(selectedSet), (d) => d);
-
-      pills
-        .enter()
-        .append("div")
-        .attr("class", "pill")
-        .style("background", "#8A9CE4")
-        .style("color", "white")
-        .style("padding", "2px 8px")
-        .style("border-radius", "12px")
-        .style("font-size", "12px")
-        .text((d) => formatDisplayLabel(category, d))
-        .append("span")
-        .style("margin-left", "6px")
-        .style("cursor", "pointer")
-        .text("\u2715")
-        .on("click", function (event, value) {
-          selectedSet.delete(value);
-          const updatedFilters = cloneFilters(selectedFilters);
-          updateState({
-            selectedFilters: updatedFilters,
-            updateContext:
-              category === "Set Names" ? "TimelineFilter" : undefined,
-          });
-          if (category === "Set Names") {
-            d3.selectAll(".set-rect").attr("fill", (rectData) =>
-              selectedFilters["Set Names"].has(rectData.name)
-                ? "#007bff"
-                : "#998066"
-            );
-          }
-
-          updatePills();
-          updateFilterStyles();
-        });
-
-      pills.exit().remove();
-    }
 
     const option = content
       .selectAll("div")
@@ -651,6 +602,7 @@ export function createFilterPanel(
       .style("padding", "4px 2px")
       .style("font-size", "14px")
       .style("width", "100%")
+      .style("cursor", "pointer")   
       .style("box-sizing", "border-box")
       .attr("data-category", category)
       .attr("data-value", (d) => d.value)
@@ -660,14 +612,11 @@ export function createFilterPanel(
         const isSelected = updatedFilters[category].has(d.value);
         if (isSelected) {
           updatedFilters[category].delete(d.value);
-          selectedSet.delete(d.value);
         } else {
           updatedFilters[category].add(d.value);
-          selectedSet.add(d.value);
         }
         updateState({ selectedFilters: updatedFilters });
-        updatePills();
-        updateFilterStyles();
+
         clearTimeout(window._filterPanelTimeout);
       });
 
@@ -681,9 +630,6 @@ export function createFilterPanel(
       const key = `${category}|${getNormalizedKey(category, d.value)}`;
       optionMap.set(key, d3.select(this));
     });
-
-    updateFilterStyles();
-    updatePills();
   });
 
   const settingsSection = wrapper
@@ -931,7 +877,7 @@ export function updateFilterPanel(
 
     let filteredSet;
 
-    if (isFilterEmpty(selectedFilters)) {
+    if (isFilterEmpty(selectedFilters )) {
       // No filters active: just use all visible cards
       filteredSet = filteredCards;
     } else if (!applyAndWithin) {
@@ -990,47 +936,49 @@ export function updateFilterPanel(
     });
 
     const t3 = performance.now();
-    //console.log(`[UI optionMap patch] took ${(t3 - t2).toFixed(2)}ms`);
+    console.log(`[UI optionMap patch] took ${(t3 - t2).toFixed(2)}ms`);
   });
 
   const t4 = performance.now();
 
   Object.entries(selectedFilters).forEach(([category, selectedSet]) => {
-    if (
-      !VISIBLE_FILTER_CATEGORIES.includes(category) &&
-      category !== "FreeTextSearch"
-    )
-      return;
+  if (!VISIBLE_FILTER_CATEGORIES.includes(category) && category !== "FreeTextSearch") return;
 
-    const pillContainer = pillMap.get(category);
-    if (!pillContainer) return;
+  const pillContainer = pillMap.get(category);
+  if (!pillContainer) return;
 
-    const pills = pillContainer
-      .selectAll(".pill")
-      .data(Array.from(selectedSet), (d) => d);
+  const values = Array.from(selectedSet || new Set());
+  const pills = pillContainer.selectAll(".pill").data(values, d => d);
 
-    pills
-      .enter()
-      .append("div")
-      .attr("class", "pill")
-      .style("background", "#8A9CE4")
-      .style("color", "white")
-      .style("padding", "2px 8px")
-      .style("border-radius", "12px")
-      .style("font-size", "12px")
-      .text((d) => formatDisplayLabel(category, d))
-      .append("span")
-      .style("margin-left", "6px")
-      .style("cursor", "pointer")
-      .text("\u2715")
-      .on("click", function (event, value) {
-        selectedSet.delete(value);
-        const updatedFilters = cloneFilters(selectedFilters);
-        updateState({ selectedFilters: updatedFilters });
-      });
+  const pillsEnter = pills.enter()
+    .append("div")
+    .attr("class", "pill")
+    .style("background", "#8A9CE4")
+    .style("color", "white")
+    .style("padding", "2px 8px")
+    .style("border-radius", "12px")
+    .style("font-size", "12px");
 
-    pills.exit().remove();
-  });
+  pillsEnter.append("span")
+    .attr("class", "pill-label")
+    .text(d => formatDisplayLabel(category, d));
+
+  pillsEnter.append("span")
+    .attr("class", "pill-close")
+    .style("margin-left", "6px")
+    .style("cursor", "pointer")
+    .text("\u2715")
+    .on("click", function (event, value) {
+      const current = getState().selectedFilters;
+      const updated = cloneFilters(current);
+      if (!updated[category]) updated[category] = new Set();
+      updated[category].delete(value);
+      updateState({ selectedFilters: updated });
+    });
+
+  pills.exit().remove();
+});
+
 
   const uniqueCardNames = Array.from(
   new Set(filteredCards.map((card) => card.name))
@@ -1053,6 +1001,9 @@ if (inputId) {
 }
 
   const t5 = performance.now();
+  console.log(
+  `[updateFilterPanel] prep=${(t1 - t0).toFixed(2)}ms | buildFilters=${(t2 - t1).toFixed(2)}ms | optionMapPatch=(deferred via rAF) | pills=${(t5 - t4).toFixed(2)}ms | totalSync=${(t5 - t0).toFixed(2)}ms`
+);
 }
 
 function extractCardValue(card, category) {
