@@ -450,9 +450,20 @@ const infoTooltipText = `
 • <strong>Double-click</strong>: zoom into or out of a group.<br>
 • <strong>Hover</strong>: shows tooltip and highlights other visualizations.<br>
 • <strong>Scroll</strong>: Zoom in/out.<br>
+• <strong>Right-click drag</strong> or <strong>Ctrl + left-click drag</strong>: Pan the Icicle chart<br>
 • <strong>Double-Click</strong> background: Clears selections made within the Icicle chart.<br>
 `;
 const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };
+
+const COLOR_NAMES = { W: "White", U: "Blue", B: "Black", R: "Red", G: "Green" };
+
+function formatColorIdentityDisplay(name) {
+  if (!name) return "";
+  // Handle both "WU" and "W-U"
+  const key = name.replaceAll("-", "");
+  if (key.toLowerCase() === "colorless") return "Colorless";
+  return key.split("").map((ch) => COLOR_NAMES[ch] || ch).join(" + ");
+}
 
 const colorScale = [
   { range: [0, 20], color: "#ceb397" },
@@ -1076,8 +1087,13 @@ else if (d.depth === 2) {
           })
           .on("mouseover", function (event, d) {
             const tooltip = d3.select("#tooltip");
+            const titleText =
+    d.depth === 2
+      ? formatColorIdentityDisplay(d.data.name)
+      : d.data.name.replaceAll("-", "");
+
             tooltip.style("display", "block").html(`
-                        <strong>${d.data.name.replaceAll("-", "")}</strong><br>
+                        <strong>${titleText}</strong><br>
                         Total: ${d.value} cards<br>
                         Original: ${
                           d.data.originalCount || 0

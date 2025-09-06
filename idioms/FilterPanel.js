@@ -24,6 +24,8 @@ function getNormalizedKey(category, value) {
     ? value.toLowerCase()
     : value;
 }
+
+let currentCardNames = [];
 const numColorsOrder = [
   "colorless",
   "1 color",
@@ -284,34 +286,44 @@ export function createFilterPanel(
   ).sort();
 
   const inputId = "searchInput_" + Math.random().toString(36).substring(2);
-  wrapper
-    .append("input")
-    .attr("type", "text")
-    .attr("list", inputId)
-    .attr("placeholder", "Select a card...")
-    .attr("title", "Type to select a card from the dataset")
-    .style("width", "85%")
-    .style("margin-bottom", "12px")
-    .style("padding", "6px")
-    .style("font-size", "16px");
 
-  wrapper
-    .append("datalist")
-    .attr("id", inputId)
+const searchInput = wrapper
+  .append("input")
+  .attr("type", "text")
+  .attr("list", inputId)
+  .attr("placeholder", "Select a card...")
+  .attr("title", "Type to select a card from the dataset")
+  .style("width", "85%")
+  .style("margin-bottom", "12px")
+  .style("padding", "6px")
+  .style("font-size", "16px");
+
+const dataList = wrapper.append("datalist").attr("id", inputId);
+
+// 🚨 don’t render all options up front!
+// Instead, render only on input:
+searchInput.on("input", function () {
+  const query = this.value.toLowerCase();
+    dataList.selectAll("option").remove();
+  const matches = currentCardNames
+    .filter((name) => name.toLowerCase().includes(query))
+    .slice(0, 50); // cap at 50 to keep DOM light
+
+  dataList
     .selectAll("option")
-    .data(uniqueCardNames)
-    .enter()
-    .append("option")
+    .data(matches, (d) => d)
+    .join("option")
     .attr("value", (d) => d);
+});
 
   wrapper
     .append("input")
     .attr("type", "text")
-    .attr("placeholder", "Filter by card name, keywords, or subtype...")
+    .attr("placeholder", "Filter by card name or Scryfall Filters...")
     .style("width", "85%")
     .attr(
       "title",
-      "Search by card name, keywords, or subtype (use e.g., t:Goblin or kw:Flying)"
+      "Filter by card name, or using Scryfall Filters (use e.g., t:Goblin or kw:Flying)"
     )
     .style("margin-bottom", "12px")
     .style("padding", "6px")
@@ -389,7 +401,7 @@ export function createFilterPanel(
     .append("input")
     .attr("type", "text")
     .attr("placeholder", "Search set name...")
-    .attr("title", "Type the name of a set and press Enter to scroll to it")
+    .attr("title", "Type the name of a set to scroll to it in the Timeline")
     .style("width", "85%")
     .style("margin-bottom", "12px")
     .style("padding", "6px")
@@ -448,7 +460,7 @@ export function createFilterPanel(
 
   pillMap.set("FreeTextSearch", freeTextPillContainer);
 
-  const searchInput = wrapper.select(`input[list="${inputId}"]`);
+
 
   searchInput.on("change", function () {
     const cardName = this.value.trim();
@@ -488,10 +500,13 @@ export function createFilterPanel(
     .text("Clear Filters")
     .style("padding", "6px 9px")
     .style("font-size", "14px")
-    .style("background-color", "#dc3545")
+    .style("background-color", "#6c757d")
+    .style("text-align", "left")
     .style("color", "#fff")
     .style("border", "none")
     .style("border-radius", "4px")
+    .style("margin-top", "6px")
+    .style("width", "95%")
     .style("cursor", "pointer")
     .on("click", () => {
       const clearedFilters = {};
@@ -506,6 +521,7 @@ export function createFilterPanel(
     .style("padding", "6px 9px")
     .style("font-size", "14px")
     .style("background-color", "#6c757d")
+    .style("text-align", "left")
     .style("color", "#fff")
     .style("border", "none")
     .style("border-radius", "4px")
@@ -524,19 +540,29 @@ export function createFilterPanel(
       .style("margin-top", "12px")
       .style("width", "95%");
 
-    section
-      .append("div")
-      .attr("class", "dropdown-header")
-      .text(category)
-      .style("background", "#B69677")
-      .style("padding", "6px 9px")
-      .style("border", "1px solid #ccc")
-      .style("border-radius", "6px")
-      .style("cursor", "pointer")
-      .style("font-weight", "bold")
-      .style("width", "100%")
-      .style("box-sizing", "border-box");
+const header = section
+  .append("div")
+  .attr("class", "dropdown-header")
+  .style("background", "#B69677")
+  .style("padding", "6px 9px")
+  .style("border", "1px solid #ccc")
+  .style("border-radius", "6px")
+  .style("cursor", "pointer")
+  .style("font-weight", "bold")
+  .style("width", "100%")
+  .style("box-sizing", "border-box")
+  .style("display", "flex")
+  .style("align-items", "center")
+  .style("justify-content", "space-between");
 
+    header.append("span").text(category);
+
+// right: static caret
+header.append("span")
+  .attr("class", "dropdown-caret")
+  .style("font-size", "20px")
+  .style("margin-left", "auto") // pushes it all the way right
+  .text("▾");
     const content = section
       .append("div")
       .attr("class", "dropdown-content")
@@ -548,6 +574,8 @@ export function createFilterPanel(
       .style("border-radius", "6px")
       .style("padding", "6px")
       .style("width", "100%") // <- Not shown, but should be added
+.style("max-width", "100%")   // 🔒 never exceed parent
+.style("overflow-x", "hidden")
 .style("box-sizing", "border-box")
       .style("background", "#fff");
 
@@ -600,8 +628,10 @@ export function createFilterPanel(
       .style("justify-content", "space-between")
       .style("align-items", "center")
       .style("padding", "4px 2px")
-      .style("font-size", "14px")
-      .style("width", "100%")
+      .style("font-size", "12.5px")
+      .style("width", "100%")        // 🔒 lock to parent width
+  .style("min-width", "0")       // 🔒 prevent flex children from stretching
+   //.style("word-break", "break-word")
       .style("cursor", "pointer")   
       .style("box-sizing", "border-box")
       .attr("data-category", category)
@@ -867,18 +897,18 @@ export function updateFilterPanel(
     return cleaned;
   };
 
-  const t1 = performance.now();
   let cachedFilteredSet = null;
+  const t1 = performance.now();
 
+  // --- FILTER COUNT COMPUTATION PER CATEGORY ---
   VISIBLE_FILTER_CATEGORIES.forEach((category) => {
     const tCatStart = performance.now();
+
     const categoryGroup = groupedData[category];
     if (!categoryGroup) return;
 
     let filteredSet;
-
-    if (isFilterEmpty(selectedFilters )) {
-      // No filters active: just use all visible cards
+    if (isFilterEmpty(selectedFilters)) {
       filteredSet = filteredCards;
     } else if (!applyAndWithin) {
       filteredSet = getFilteredSetExcluding(category, selectedFilters);
@@ -889,6 +919,7 @@ export function updateFilterPanel(
       }
       filteredSet = cachedFilteredSet;
     }
+
     const filteredIds = new Set(filteredSet.map((c) => c.index));
     const optionCounts = new Map();
 
@@ -911,99 +942,99 @@ export function updateFilterPanel(
     filters.set(category, new Map(sortedEntries));
 
     const tCatEnd = performance.now();
+
   });
 
   const t2 = performance.now();
+  console.log(`[updateFilterPanel] All category counts took ${(t2 - t1).toFixed(2)} ms`);
 
-  window.requestAnimationFrame(() => {
-    optionMap.forEach((el, key) => {
-      const [category, value] = key.split("|");
-      if (!filters.has(category)) return;
+  // --- UI PATCH FOR optionMap ---
+  const tPatchStart = performance.now();
+  optionMap.forEach((el, key) => {
+    const [category, value] = key.split("|");
+    if (!filters.has(category)) return;
 
-      const normValue = getNormalizedKey(category, value);
-      const count = filters.get(category)?.get(normValue) || 0;
-      const span = el.select("span");
-      span
-        .text(`${formatDisplayLabel(category, normValue)} (${count})`)
-        .attr("data-count", count);
+    const normValue = getNormalizedKey(category, value);
+    const count = filters.get(category)?.get(normValue) || 0;
+    const span = el.select("span");
+    span
+      .text(`${formatDisplayLabel(category, normValue)} (${count})`)
+      .attr("data-count", count);
 
-      const selectedSet = selectedFilters[category] || new Set();
-      const isSelected = selectedSet.has(value);
+    const selectedSet = selectedFilters[category] || new Set();
+    const isSelected = selectedSet.has(value);
 
-      el.style("opacity", count === 0 && !isSelected ? 0.4 : 1);
-      el.style("pointer-events", count === 0 && !isSelected ? "none" : "auto");
-      el.style("background-color", isSelected ? "#cce5ff" : "#fff");
-    });
-
-    const t3 = performance.now();
-    console.log(`[UI optionMap patch] took ${(t3 - t2).toFixed(2)}ms`);
+    el.style("opacity", count === 0 && !isSelected ? 0.4 : 1);
+    el.style("pointer-events", count === 0 && !isSelected ? "none" : "auto");
+    el.style("background-color", isSelected ? "#cce5ff" : "#fff");
   });
+  const tPatchEnd = performance.now();
 
-  const t4 = performance.now();
-
+  // --- PILL UPDATE ---
+  const tPillStart = performance.now();
   Object.entries(selectedFilters).forEach(([category, selectedSet]) => {
-  if (!VISIBLE_FILTER_CATEGORIES.includes(category) && category !== "FreeTextSearch") return;
+    if (!VISIBLE_FILTER_CATEGORIES.includes(category) && category !== "FreeTextSearch") return;
 
-  const pillContainer = pillMap.get(category);
-  if (!pillContainer) return;
+    const pillContainer = pillMap.get(category);
+    if (!pillContainer) return;
 
-  const values = Array.from(selectedSet || new Set());
-  const pills = pillContainer.selectAll(".pill").data(values, d => d);
+    const values = Array.from(selectedSet || new Set());
+    const pills = pillContainer.selectAll(".pill").data(values, d => d);
 
-  const pillsEnter = pills.enter()
-    .append("div")
-    .attr("class", "pill")
-    .style("background", "#8A9CE4")
-    .style("color", "white")
-    .style("padding", "2px 8px")
-    .style("border-radius", "12px")
-    .style("font-size", "12px");
+    const pillsEnter = pills.enter()
+      .append("div")
+      .attr("class", "pill")
+      .style("background", "#8A9CE4")
+      .style("color", "white")
+      .style("padding", "2px 8px")
+      .style("border-radius", "12px")
+      .style("font-size", "12px");
 
-  pillsEnter.append("span")
-    .attr("class", "pill-label")
-    .text(d => formatDisplayLabel(category, d));
+    pillsEnter.append("span")
+      .attr("class", "pill-label")
+      .text(d => formatDisplayLabel(category, d));
 
-  pillsEnter.append("span")
-    .attr("class", "pill-close")
-    .style("margin-left", "6px")
-    .style("cursor", "pointer")
-    .text("\u2715")
-    .on("click", function (event, value) {
-      const current = getState().selectedFilters;
-      const updated = cloneFilters(current);
-      if (!updated[category]) updated[category] = new Set();
-      updated[category].delete(value);
-      updateState({ selectedFilters: updated });
-    });
+    pillsEnter.append("span")
+      .attr("class", "pill-close")
+      .style("margin-left", "6px")
+      .style("cursor", "pointer")
+      .text("\u2715")
+      .on("click", function (event, value) {
+        const current = getState().selectedFilters;
+        const updated = cloneFilters(current);
+        if (!updated[category]) updated[category] = new Set();
+        updated[category].delete(value);
+        updateState({ selectedFilters: updated });
+      });
 
-  pills.exit().remove();
-});
+    pills.exit().remove();
+  });
+  const tPillEnd = performance.now();
 
-
-  const uniqueCardNames = Array.from(
+  // --- CARD NAME AUTOCOMPLETE ---
+  const tAutoStart = performance.now();
+  const uniqueCardNames = Array.from(new Set(filteredCards.map((card) => card.name))).sort();
+  currentCardNames = Array.from(
   new Set(filteredCards.map((card) => card.name))
 ).sort();
+  const tTest = performance.now();
+  console.log(`[updateFilterPanel] Unique card names extraction took ${(tTest - tAutoStart).toFixed(2)} ms`);
+  const inputId = d3
+    .select(containerId)
+    .select('input[list]')
+    .attr("list");
+  const tInput = performance.now();
+  if (inputId) {
+    const dataList = d3.select(`#${inputId}`);
+    dataList.selectAll("option").remove();
+    const tDataList = performance.now();
+  }
+  const tAutoEnd = performance.now();
+  console.log(`[updateFilterPanel] Datalist update took ${(tAutoEnd - tInput).toFixed(2)} ms`);
+  console.log(`[updateFilterPanel] Autocomplete update took ${(tAutoEnd - tAutoStart).toFixed(2)} ms`);
 
-const inputId = d3
-  .select(containerId)
-  .select('input[list]')
-  .attr("list"); // Get the current list ID
-
-if (inputId) {
-  const dataList = d3.select(`#${inputId}`);
-  const options = dataList.selectAll("option").data(uniqueCardNames, d => d);
-
-  options.enter()
-    .append("option")
-    .attr("value", (d) => d);
-
-  options.exit().remove();
-}
-
-  const t5 = performance.now();
-  console.log(
-  `[updateFilterPanel] prep=${(t1 - t0).toFixed(2)}ms | buildFilters=${(t2 - t1).toFixed(2)}ms | optionMapPatch=(deferred via rAF) | pills=${(t5 - t4).toFixed(2)}ms | totalSync=${(t5 - t0).toFixed(2)}ms`
-);
+  const tEnd = performance.now();
+  console.log(`[updateFilterPanel] TOTAL time ${(tEnd - t0).toFixed(2)} ms`);
 }
 
 function extractCardValue(card, category) {

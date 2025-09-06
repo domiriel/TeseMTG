@@ -438,11 +438,7 @@ export function filterData(groupedData, selectedFilters, options = {}) {
     const searchTerms = Array.from(textTerms).map((t) => t.toLowerCase());
     filteredSet = new Set(
       [...filteredSet].filter((card) => {
-        const cardText = [
-          card.name?.toLowerCase() || "",
-          ...(card.keywords || []).map((k) => k.toLowerCase()),
-          card.subtype?.toLowerCase() || "",
-        ];
+        const cardText = [card.name?.toLowerCase() || ""];
         return searchTerms.some((term) =>
           cardText.some((text) => text.includes(term))
         );

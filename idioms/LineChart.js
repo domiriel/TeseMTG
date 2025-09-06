@@ -39,7 +39,7 @@ import {
   emitClearSelection,
 } from "./Events.js";
 const lineChartTooltipText = `
-<strong>Timeline Interactions:</strong><br>
+<strong>Line Chart Interactions:</strong><br>
 • <strong>Hover</strong> a circle: View metrics for that year and highlight related elements across views.<br>
 • <strong>Click</strong> a circle: Selects/deselects a year, affecting the cards highlighted in other views.<br>
 • <strong>Right-click</strong> a circle: Toggles a global Year filter for that year.<br>
