@@ -50,26 +50,26 @@ const yearStats = new Map(); // key: "2020", value: { totalCardCount, rarities, 
 const setTypeStats = new Map();
 
 function getDiscreteColor(percentage) {
-  if (percentage < 20) return "#ceb397";
-  if (percentage < 40) return "#b8997a";
-  if (percentage < 60) return "#998066";
-  if (percentage < 80) return "#736659";
+  if (percentage < 20) return "#ffd394";
+  if (percentage < 40) return "#d3ae7c";
+  if (percentage < 60) return "#a98b66";
+  if (percentage < 80) return "#806a4f";
   return "#594a3a";
 }
 
 function getHighlightedColor(percentage) {
-  if (percentage < 20) return "#fbecd0";
-  if (percentage < 40) return "#f8dfb0";
-  if (percentage < 60) return "#f2c46e";
-  if (percentage < 80) return "#d89313";
+  if (percentage < 20) return "#ffca00";
+  if (percentage < 40) return "#e7b006";
+  if (percentage < 60) return "#ce970b";
+  if (percentage < 80) return "#b5800d";
   return "#9b690d";
 }
 
 function getSelectedColor(percentage) {
-  if (percentage < 20) return "#dcdfef";
-  if (percentage < 40) return "#b9bfda";
-  if (percentage < 60) return "#9AA0BC";
-  if (percentage < 80) return "#6a708a";
+  if (percentage < 20) return "#c7daff";
+  if (percentage < 40) return "#a2b1d3";
+  if (percentage < 60) return "#7d89a8";
+  if (percentage < 80) return "#5b6380";
   return "#3a4059";
 }
 
@@ -711,8 +711,8 @@ const zoom = d3
         enter
           .append("rect")
           .attr("class", "set-square set-rect")
-          .attr("width", 8)
-          .attr("height", 8)
+          .attr("width", 9)
+          .attr("height", 9)
           .attr("stroke", "black")
           .attr("fill", (d) => d.baseColor)
           .on("mouseover", function (event, d) {

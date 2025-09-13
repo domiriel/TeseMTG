@@ -198,6 +198,10 @@ body {
   stroke-width: 2px !important;
 }
 
+.TimelineView .set-rect.selectedHovered {
+  stroke:  #374272 ;
+  stroke-width: 1.5px ;
+}
 
 .Scatterplot circle.hover-temp{
   stroke: #d89313 !important;
@@ -270,7 +274,7 @@ body {
   color: black;
   border: 1px solid #ccc;
   border-radius: 8px 0 0 8px;
-  padding: 6px 10px;
+  padding: 6px 6px;
   font-size: 14px;
   cursor: pointer;
   box-shadow: -2px 0 5px rgba(0, 0, 0, 0.1);
@@ -320,7 +324,7 @@ body {
   color: white;
   border: 1px solid #a33a3a;
   border-radius: 8px 0 0 8px;
-  padding: 6px 10px;
+  padding: 6px 6px;
   font-size: 14px;
   cursor: pointer;
   box-shadow: -2px 0 5px rgba(0, 0, 0, 0.1);

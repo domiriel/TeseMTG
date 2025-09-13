@@ -40,10 +40,10 @@ import {
 import { getEffectivePriceAttribute } from "../script.js";
 const colorGroups = [
   { range: [1, 5691], color: "#594A3A" },
-  { range: [5692, 11382], color: "#736659" },
-  { range: [11383, 17074], color: "#998066" },
-  { range: [17075, 22765], color: "#b8997a" },
-  { range: [22766, 28456], color: "#ceb397" },
+  { range: [5692, 11382], color: "#806a4f" },
+  { range: [11383, 17074], color: "#a98b66" },
+  { range: [17075, 22765], color: "#d3ae7c" },
+  { range: [22766, 28456], color: "#ffd394" },
 ];
 const ZOOM_RESET_EPSILON = 0.001;
 const activeSelections = {
@@ -72,7 +72,7 @@ onClearSelection(() => {
 });
 
 const dotSizeByZoom = [
-  { threshold: 1, radius: 2.5 }, // zoom < 1 — never happens since min is 1
+  { threshold: 1, radius: 3.0 }, // zoom < 1 — never happens since min is 1
   { threshold: 2, radius: 3.5 }, // 1 ≤ zoom < 4
   { threshold: 4, radius: 4.5 }, // 4 ≤ zoom < 8
   { threshold: 8, radius: 4.5 }, // 8 ≤ zoom < 14
@@ -83,7 +83,7 @@ function getDotRadiusForZoom(zoomLevel) {
   for (const { threshold, radius } of dotSizeByZoom) {
     if (zoomLevel <= threshold) return radius;
   }
-  return 2.5; // fallback
+  return 3; // fallback
 }
 
 onClearAlluvialSelections(() => {
@@ -995,10 +995,38 @@ export function createScatterPlot(
           .tickFormat((d) => `${symbol}${d.toFixed(2)}`)
       );
 } else if (xMetric === "release_date") {
+  /*const d0 = (customX || xScale).domain()[0];
+  const d1 = (customX || xScale).domain()[1];
+  const minYear = d0.getFullYear();
+  const maxYear = d1.getFullYear();
+
+  xAxisG.call(
+    d3.axisBottom(customX || xScale)
+      .ticks(d3.timeYear.every(1))
+      .tickFormat((d) => {
+        const y = d.getFullYear();
+        // Show 4 digits at the extremes, 2 digits elsewhere
+        return (y === minYear || y === maxYear) ? String(y) : String(y).slice(-2);
+      })
+  );*/
+
+  const xS = customX || xScale;
+
+  // Generate the exact ticks D3 will draw
+  const tickDates = xS.ticks(d3.timeYear.every(1));
+  const first = tickDates[0]?.getTime();
+  const last  = tickDates[tickDates.length - 1]?.getTime();
+
   xAxisG.call(
     d3.axisBottom(xS)
-      .ticks(d3.timeYear.every(1))
-      .tickFormat((d) => d.getFullYear())
+      .tickValues(tickDates) // lock to these ticks so format aligns
+      .tickFormat((d) => {
+        const t = d.getTime();
+        const y = d.getFullYear();
+        // 4 digits on first/last visible ticks, 2 digits on the rest
+        if (tickDates.length <= 1) return String(y);
+        return (t === first || t === last) ? String(y) : String(y).slice(-2);
+      })
   );
 
   xAxisG.selectAll("text")
@@ -1017,7 +1045,7 @@ export function createScatterPlot(
   svg
     .append("foreignObject")
     .attr("x", chartWidth / 2 - 30) // Adjust as needed
-    .attr("y", height - 20)
+    .attr("y", height - 30)
     .attr("width", 130)
     .attr("height", 30)
     .style("pointer-events", "none")

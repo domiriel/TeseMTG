@@ -57,26 +57,26 @@ const activeAlluvialLinks = new Set();
 const manuallySelectedLinks = new Set();
 
 function getDiscreteColor(percentage) {
-  if (percentage < 20) return "#ceb397";
-  if (percentage < 40) return "#b8997a";
-  if (percentage < 60) return "#998066";
-  if (percentage < 80) return "#736659";
+  if (percentage < 20) return "#ffd394";
+  if (percentage < 40) return "#d3ae7c";
+  if (percentage < 60) return "#a98b66";
+  if (percentage < 80) return "#806a4f";
   return "#594a3a";
 }
 
 function getHighlightedColor(percentage) {
-  if (percentage < 20) return "#fbecd0";
-  if (percentage < 40) return "#f8dfb0";
-  if (percentage < 60) return "#f2c46e";
-  if (percentage < 80) return "#d89313";
+  if (percentage < 20) return "#ffca00";
+  if (percentage < 40) return "#e7b006";
+  if (percentage < 60) return "#ce970b";
+  if (percentage < 80) return "#b5800d";
   return "#9b690d";
 }
 
 function getSelectedColor(percentage) {
-  if (percentage < 20) return "#dcdfef";
-  if (percentage < 40) return "#b9bfda";
-  if (percentage < 60) return "#9AA0BC";
-  if (percentage < 80) return "#6a708a";
+  if (percentage < 20) return "#c7daff";
+  if (percentage < 40) return "#a2b1d3";
+  if (percentage < 60) return "#7d89a8";
+  if (percentage < 80) return "#5b6380";
   return "#3a4059";
 }
 
@@ -209,23 +209,26 @@ function renderAlluvialLegend(
       : svg.select("defs");
 
     if (showPatterns) {
-      const pattern = defs
-        .append("pattern")
-        .attr("id", patternId)
-        .attr("width", 1)
-        .attr("height", 1)
-        .attr("patternUnits", "objectBoundingBox")
-        .attr("patternContentUnits", "objectBoundingBox");
+      const p = 0.5;
+const a = Math.sqrt(2 * p); // ~= 0.774596
 
-      pattern
-        .append("path")
-        .attr("d", "M0,0 L1,0 L0,1 Z")
-        .attr("fill", selectedColor);
+const pattern = defs.append("pattern")
+  .attr("id", patternId)
+  .attr("width", 1)
+  .attr("height", 1)
+  .attr("patternUnits", "objectBoundingBox")
+  .attr("patternContentUnits", "objectBoundingBox");
 
-      pattern
-        .append("path")
-        .attr("d", "M1,0 L1,1 L0,1 Z")
-        .attr("fill", baseColor);
+// background = 70%
+pattern.append("rect")
+  .attr("width", 1)
+  .attr("height", 1)
+  .attr("fill", baseColor);
+
+// top-left triangle = 30%
+pattern.append("path")
+  .attr("d", `M0,0 L${a},0 L0,${a} Z`)
+  .attr("fill", selectedColor);
     }
 
     legendEntry

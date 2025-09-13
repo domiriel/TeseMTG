@@ -461,22 +461,32 @@ searchInput.on("input", function () {
   pillMap.set("FreeTextSearch", freeTextPillContainer);
 
 
+  function searchByName(inputEl) {
+  const cardName = inputEl.value.trim();
+  if (!cardName) return;
 
-  searchInput.on("change", function () {
-    const cardName = this.value.trim();
-    if (!cardName) return;
+  const circle = d3
+    .selectAll(".Scatterplot .dots circle")
+    .filter((d) => d.name === cardName)
+    .node();
+  if (!circle) return;
 
-    const circle = d3
-      .selectAll(".Scatterplot .dots circle")
-      .filter((d) => d.name === cardName)
-      .node();
+  const card = d3.select(circle).datum();
+  emitCardSearch(card);
 
-    if (!circle) return;
+  // keep the text but highlight it so user can type over it
+}
 
-    const card = d3.select(circle).datum();
-
-    emitCardSearch(card);
-    this.value = "";
+ searchInput
+  .on("keydown", function (event) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      searchByName(this);
+    }
+  })
+  .on("change", function () {
+    // still useful when selecting from the datalist with the mouse
+    searchByName(this);
   });
 
   const priceFields = new Set();
@@ -585,6 +595,7 @@ header.append("span")
       })
       .attr("type", "text")
       .attr("placeholder", `Search ${category}...`)
+      .classed("filter-search-input", true)
       .style("display", "none")
       .style("width", "100%")
       .style("padding", "4px")
@@ -873,6 +884,13 @@ export function updateFilterPanel(
   containerId = ".FilterPanel"
 ) {
   const t0 = performance.now();
+  d3.select(containerId)
+  .selectAll(".filter-search-input")
+  .property("value", "")
+  .each(function () {
+    // re-run the filter to show everything again
+    this.dispatchEvent(new Event("input", { bubbles: true }));
+  });
   selectedFilters = selectedFilters || {};
 
   const groupedData = getState().groupedData;

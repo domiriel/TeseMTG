@@ -14,29 +14,108 @@ function getClonedFilters() {
   return cloned;
 }
 
+let drawerBtnHover = false;
+let illegalBtnHover = false;
+
+function updateDrawerButtonLabel() {
+  
+  if (!drawerButton || !drawerContainer) return;
+  const isVisible = drawerContainer.classed("visible");
+  const arrow = isVisible ? "→" : "←";
+  const count = cardsInDrawer.length || 0;
+  // show count when visible OR while hovering
+  drawerButton.html(isVisible || drawerBtnHover ? `${arrow} (${count})` : `${arrow}`);
+}
+
+function updateIllegalButtonLabel() {
+  const illegalButton = d3.select("#toggleIllegalDrawerButton");
+  const illegalDrawer = d3.select("#illegalDrawer");
+  if (illegalButton.empty() || illegalDrawer.empty()) return;
+  const isVisible = illegalDrawer.classed("visible");
+  const arrow = isVisible ? "→" : "←";
+  const count = illegalCardsInDrawer.length || 0;
+  illegalButton.text(isVisible || illegalBtnHover ? `${arrow} (${count})` : `${arrow}`);
+}
+
+
 import { updateState, getState } from "../state.js";
-import { emitClearSelection } from "./Events.js";
+import { emitCardSearch, emitClearSelection } from "./Events.js";
 export function createHiddenDrawer(containerSelector = "body") {
   const container = d3.select(containerSelector);
 
   // Drawer first
   drawerContainer = container
-    .append("div")
-    .attr("id", "hiddenDrawer")
-    .attr("class", "drawer")
-    .html(`<div id="cardImages"></div>`);
+  .append("div")
+  .attr("id", "hiddenDrawer")
+  .attr("class", "drawer")
+
+  .html(`
+    <div class="drawer-header">
+      <div id="hiddenDrawerTitle" class="drawer-title">Selected Cards</div>
+    </div>
+    <div id="cardImages"></div>
+  `);
+
+// optional, match the look/feel of the illegal header
+drawerContainer
+  .select(".drawer-header")
+  .style("display", "flex")
+  .style("flex-direction", "column")
+  .style("align-items", "center")
+  .style("gap", "8px")
+  .style("margin-bottom", "12px");
+
+// make the title show the same tooltip text as the toggle button
+drawerContainer
+  .select("#hiddenDrawerTitle")
+  .style("color", "#8A9CE4") 
+  .on("mouseover", (event) => {
+    const tooltip = d3.select("#tooltip");
+    tooltip
+      .style("display", "block")
+      .html("Cards that match the current selections");
+    positionTooltip(event, tooltip);
+  })
+  .on("mousemove", (event) => positionTooltip(event))
+  .on("mouseout", () => d3.select("#tooltip").style("display", "none"));
+
 
   // Then button separately
   drawerButton = container
-    .append("button")
-    .attr("id", "toggleDrawerButton")
-    .style("background", "#8A9CE4")
-    .style("color", "white")
-    .on("click", () => {
-      const isVisible = drawerContainer.classed("visible");
-      drawerContainer.classed("visible", !isVisible);
-      updateButtonLabel(cardsInDrawer.length);
-    });
+  .append("button")
+  .attr("id", "toggleDrawerButton")
+  .style("background", "#8A9CE4")
+  .style("color", "white")
+  .on("mouseover", (event) => {
+    drawerBtnHover = true;
+    // show tooltip only when closed (unchanged)
+    if (!drawerContainer.classed("visible")) {
+      const tooltip = d3.select("#tooltip");
+      tooltip
+        .style("display", "block")
+        .html("Cards that match the current selections");
+      positionTooltip(event, tooltip);
+    }
+    updateDrawerButtonLabel();
+  })
+  .on("mousemove", (event) => {
+    if (!drawerContainer.classed("visible")) {
+      positionTooltip(event);
+    }
+  })
+  .on("mouseout", () => {
+    drawerBtnHover = false;
+    d3.select("#tooltip").style("display", "none");
+    updateDrawerButtonLabel();
+  })
+  .on("click", () => {
+    const isVisible = drawerContainer.classed("visible");
+    drawerContainer.classed("visible", !isVisible);
+    updateDrawerButtonLabel();
+  });
+
+updateDrawerButtonLabel(); // initial label (arrow only)
+
 
   drawerContainer
     .insert("button", "#cardImages")
@@ -62,7 +141,7 @@ export function createHiddenDrawer(containerSelector = "body") {
     .style("flex-direction", "column")
     .style("align-items", "center");
 
-  updateButtonLabel(0);
+  updateDrawerButtonLabel();
 }
 
 // Call this to update hovered card images
@@ -75,7 +154,7 @@ export function updateDrawer(cards = []) {
   const t0 = performance.now();
 
   cardsInDrawer = cards;
-  updateButtonLabel(cards.length);
+  updateDrawerButtonLabel();
 
   const cardArea = drawerContainer.select("#cardImages");
 
@@ -224,7 +303,7 @@ export function updateDrawer(cards = []) {
         wrapper.select("img").attr("src", card.tooltip_image);
       });
 
-    wrapper
+    /*wrapper
       .select(".remove-card")
       .text("✕")
       .attr("title", "Remove this card")
@@ -240,14 +319,24 @@ export function updateDrawer(cards = []) {
       .style("cursor", "pointer")
       .style("font-weight", "bold")
       .on("click", () => {
-        const newHovered = cardsInDrawer.filter((c) => c.name !== card.name);
-        updateState({ hoveredCards: newHovered, isHoverUpdate: true });
+        const name = card.name; // use the 'card' from the .each() closure
+        
 
-        d3.selectAll(".dots circle")
-          .filter((d) => d.name === card.name)
-          .classed("selected-hover", false);
+    const circle = d3
+      .selectAll(".Scatterplot .dots circle")
+      .filter(d => d.name === name)
+      .node();
+
+    if (!circle) return;
+
+    const cardDatum = d3.select(circle).datum();
+    emitCardSearch(cardDatum);
+    const newList = cardsInDrawer.filter(c => c.name !== name);
+    updateDrawer(newList);
+
+    updateDrawerButtonLabel(); 
       });
-
+*/
     wrapper
       .select("img")
       .on("mouseover", (event) => showCompactTooltip(card, event))
@@ -341,6 +430,18 @@ export function createIllegalDrawer(cards, containerSelector = "body") {
   <div id="illegalCardImages"></div>
 `);
 
+illegalDrawer
+  .select(".drawer-title")
+  .on("mouseover", (event) => {
+    const tooltip = d3.select("#tooltip");
+    tooltip
+      .style("display", "block")
+      .html("These cards are not shown in the visualizations because they have no price data in EUR, USD, or TIX.");
+    positionTooltip(event, tooltip);
+  })
+  .on("mousemove", (event) => positionTooltip(event))
+  .on("mouseout", () => d3.select("#tooltip").style("display", "none"));
+
   illegalDrawer
     .select(".illegal-header")
     .style("display", "flex")
@@ -415,19 +516,40 @@ export function createIllegalDrawer(cards, containerSelector = "body") {
   });
 
   // Append button after the drawer
-  const illegalButton = container
-    .append("button")
-    .attr("id", "toggleIllegalDrawerButton")
-    .style("background", "#D9534F")
-    .style("color", "white")
-    .text(`← (${cards.length})`)
-    .on("click", () => {
-      const nowVisible = !illegalDrawer.classed("visible");
-      illegalDrawer.classed("visible", nowVisible);
-      const arrow = nowVisible ? "→" : "←"; // ← when closed, → when open
-      illegalButton.text(`${arrow} (${cards.length})`);
-    });
+const illegalButton = container
+  .append("button")
+  .attr("id", "toggleIllegalDrawerButton")
+  .style("background", "#D9534F")
+  .style("color", "white")
+  .on("mouseover", (event) => {
+    illegalBtnHover = true;
+    // show tooltip only when closed (unchanged)
+    if (!illegalDrawer.classed("visible")) {
+      const tooltip = d3.select("#tooltip");
+      tooltip
+        .style("display", "block")
+        .html("These cards are not shown in the visualizations because they have no price data in EUR, USD, or TIX.");
+      positionTooltip(event, tooltip);
+    }
+    updateIllegalButtonLabel();
+  })
+  .on("mousemove", (event) => {
+    if (!illegalDrawer.classed("visible")) {
+      positionTooltip(event);
+    }
+  })
+  .on("mouseout", () => {
+    illegalBtnHover = false;
+    d3.select("#tooltip").style("display", "none");
+    updateIllegalButtonLabel();
+  })
+  .on("click", () => {
+    const nowVisible = !illegalDrawer.classed("visible");
+    illegalDrawer.classed("visible", nowVisible);
+    updateIllegalButtonLabel();
+  });
 
+updateIllegalButtonLabel(); // initial label (arrow only)
   d3.select("#illegalCardImages")
     .style("display", "flex")
     .style("flex-direction", "column")
@@ -575,7 +697,7 @@ export function updateIllegalDrawer(cards = []) {
       .select("img")
       .on("mouseover", (event) => showCompactTooltip(card, event))
       .on("mousemove", (event) => positionTooltip(event))
-      .on("mouseout", () => d3.select("#tooltip").style("display", "none"));
+      .on("mouseout", () => d3.select("#tooltip").style("display", "none").style("background", null).style("color", null));
   });
 
   // Pagination controls

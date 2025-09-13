@@ -201,9 +201,9 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
     .sort((a, b) => a.year - b.year);
 
   const metrics = [
-    { key: "reprints", label: "Func. Reprints", color: "#998066" },
+    { key: "reprints", label: "Functional Reprints", color: "#998066" },
     { key: "avgComplexity", label: "Avg. Complexity", color: "#998066" },
-    { key: "avgCMC", label: "Avg. MV", color: "#998066" },
+    { key: "avgCMC", label: "Avg. Mana Value", color: "#998066" },
   ];
 
   const container = d3.select(containerId);

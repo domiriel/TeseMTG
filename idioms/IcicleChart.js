@@ -457,35 +457,82 @@ const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };
 
 const COLOR_NAMES = { W: "White", U: "Blue", B: "Black", R: "Red", G: "Green" };
 
+const COLOR_NICKNAMES = {
+  // 2-color 
+  BR: "Rakdos",
+  WU: "Azorius",
+  WG: "Selesnya",
+  RG: "Gruul",
+  UB: "Dimir",
+  BG: "Golgari",
+  UR: "Izzet",
+  WR: "Boros",
+  UG: "Simic",
+  WB: "Orzhov",
+  
+  
+
+  // 3-color 
+  WRG: "Naya",
+  BRG: "Jund",
+  WUB: "Esper",
+  WUG: "Bant",
+  UBR: "Grixis",
+  URG: "Temur",
+  WUR: "Jeskai",
+  UBG: "Sultai",
+  WBR: "Mardu",
+  WBG: "Abzan",
+
+  // 4-color 
+  WUBR: "Yore-Tiller",
+  UBRG: "Glint-Eye",
+  WBRG: "Dune-Brood",
+  WUBG: "Witch-Maw",
+  WURG: "Ink-Treader",
+  
+  
+  
+  // 5-color 
+  WUBRG: "Rainbow",
+
+  
+  
+  
+  
+};
+
 function formatColorIdentityDisplay(name) {
   if (!name) return "";
-  // Handle both "WU" and "W-U"
   const key = name.replaceAll("-", "");
   if (key.toLowerCase() === "colorless") return "Colorless";
-  return key.split("").map((ch) => COLOR_NAMES[ch] || ch).join(" + ");
+
+  const pretty = key.split("").map((ch) => COLOR_NAMES[ch] || ch).join(" + ");
+  const nickname = COLOR_NICKNAMES[key]; // keys use W,U,B,R,G order already
+  return nickname ? `${pretty} (${nickname})` : pretty;
 }
 
 const colorScale = [
-  { range: [0, 20], color: "#ceb397" },
-  { range: [21, 40], color: "#b8997a" },
-  { range: [41, 60], color: "#998066" },
-  { range: [61, 80], color: "#736659" },
+  { range: [0, 20], color: "#ffd394" },
+  { range: [21, 40], color: "#d3ae7c" },
+  { range: [41, 60], color: "#a98b66" },
+  { range: [61, 80], color: "#806a4f" },
   { range: [81, 100], color: "#594a3a" },
 ];
 const darkTextColors = new Set(["#736659", "#594a3a"]);
 const colorScaleHighlight = [
-  { range: [0, 20], color: "#fbecd0" },
-  { range: [21, 40], color: "#f8dfb0" },
-  { range: [41, 60], color: "#f2c46e" },
-  { range: [61, 80], color: "#d89313" },
+  { range: [0, 20], color: "#ffca00" },
+  { range: [21, 40], color: "#e7b006" },
+  { range: [41, 60], color: "#ce970b" },
+  { range: [61, 80], color: "#b5800d" },
   { range: [81, 100], color: "#9b690d" },
 ];
 
 const colorScaleSelected = [
-  { range: [0, 20], color: "#dcdfef" },
-  { range: [21, 40], color: "#b9bfda" },
-  { range: [41, 60], color: "#9aa0bc" },
-  { range: [61, 80], color: "#6a708a" },
+  { range: [0, 20], color: "#c7daff" },
+  { range: [21, 40], color: "#a2b1d3" },
+  { range: [41, 60], color: "#7d89a8" },
+  { range: [61, 80], color: "#5b6380" },
   { range: [81, 100], color: "#3a4059" },
 ];
 
@@ -497,6 +544,8 @@ function getColorFromPercentage(percentage, scale = colorScale) {
   }
   return scale[0].color;
 }
+
+
 
 function hexToRgb(hex) {
   let bigint = parseInt(hex.slice(1), 16);
