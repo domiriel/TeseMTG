@@ -200,7 +200,6 @@ export function updateDrawer(cards = []) {
     .style("gap", "6px")
     .style("justify-content", "center");
 
-  cardEnter.append("button").attr("class", "remove-card");
   cardEnter.append("button").attr("class", "show-sets-btn");
 
   const t2 = performance.now();
