@@ -1,17 +1,18 @@
 # <https://tiagofilipepereira.github.io/TeseMTG/>
 # <https://drive.google.com/drive/folders/1fnTuy7QEW1UqqqLlJDayiyHFavhabUFK?usp=drive_link>
 
+## Charts
+- [Alluvial](docs/alluvial.md)
+
+
+
 # Interactions
 ## Filter Panel 
   - Filter charts by clicking on one of the filter options available
   - Can change the price used in the relevant charts(Alluvial and Scatterplot)
   - Reset Button that resets all the filters that are activated(even the ones that are not filter options in the filter panel)
   - Can Share and load filters(work in progress)
-## Alluvial Chart
-  - Can click on a node to only focus in the links that contain the node
-  - Can click on a link to only focus in that link and the nodes that are part of it
-  - Can double click on a node to activate the corresponding filter(e.g. Rarity)
-  - Can double click on a link to activate the correspondig set of filters (e.g. Original Rare cards)
+
 
 ## Icicle Chart
   - By clicking on one of the rectangles (e.g. 1 Color, Black + Blue cards), it becomes the focus in the chart and zooms on it
