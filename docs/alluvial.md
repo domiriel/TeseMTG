@@ -1,5 +1,5 @@
 
-[← Back to main page](../README.md)
+[← Back to main page](../)
 ## Alluvial Chart
   - Can click on a node to only focus in the links that contain the node
   - Can click on a link to only focus in that link and the nodes that are part of it
