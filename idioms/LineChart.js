@@ -724,41 +724,11 @@ export function createStackedLineChart(data, containerId, isUpdate = false) {
       updateLineChartSelections(); // re-render
     }
   });
+
+  updateLineChartSelections();
 }
 
-export function highlightLineChart(hoveredCards) {
-  const svg = d3.select(".LineChart svg");
-  if (svg.empty()) return;
 
-  const years = new Set(
-    hoveredCards.map((card) => {
-      const date = new Date(card.release_date);
-      return new Date(date.getFullYear(), 0, 1).getTime();
-    })
-  );
-
-  svg.selectAll(".highlight-hover-line").remove();
-
-  years.forEach((time) => {
-    svg
-      .append("line")
-      .attr("class", "highlight-hover-line")
-      .attr("x1", (d) => {
-        const x = getXCoordFromYear(new Date(time), svg);
-        return x;
-      })
-      .attr("x2", (d) => {
-        const x = getXCoordFromYear(new Date(time), svg);
-        return x;
-      })
-      .attr("y1", +svg.select(".hover-line").attr("y1"))
-      .attr("y2", +svg.select(".hover-line").attr("y2"))
-      .attr("stroke", "#9AA0BC")
-      .attr("stroke-width", 1.5)
-      .attr("stroke-dasharray", "4 2")
-      .lower();
-  });
-}
 
 function drawVerticalLinesForYears(years) {
   const svg = d3.select(".LineChart svg");
@@ -809,7 +779,7 @@ function getXCoordFromYear(date, svg) {
       ?.match(/translate\(([\d.]+)/)?.[1] || 0;
   return window._lineChartXScale(date) + marginLeft;
 }
-export function highlightLineChartHoverOnly(card) {
+function highlightLineChartHoverOnly(card) {
   if (!card?.release_date) return;
 
   const year = new Date(card.release_date).getFullYear().toString();
@@ -843,7 +813,7 @@ export function clearLineChartHoverOnly() {
   d3.select(".LineChart svg").selectAll(".highlight-hover-line").remove();
 }
 
-export function highlightLineChartHoverOnlyFromSet(setReleaseDate) {
+function highlightLineChartHoverOnlyFromSet(setReleaseDate) {
   if (!setReleaseDate) return;
 
   const year = setReleaseDate.getFullYear().toString();
@@ -855,7 +825,7 @@ export function highlightLineChartHoverOnlyFromSet(setReleaseDate) {
   const timestamp = new Date(+year, 0, 1).getTime();
   drawVerticalLinesForYears([timestamp]);
 }
-export function highlightLineChartHoverOnlyFromSetType(setTypeReleaseDates) {
+function highlightLineChartHoverOnlyFromSetType(setTypeReleaseDates) {
   if (!setTypeReleaseDates) return;
 
   const years = Array.from(setTypeReleaseDates).map((date) =>

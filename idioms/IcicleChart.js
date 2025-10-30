@@ -1483,6 +1483,8 @@ svg
     rectDimensions,
     legendFontSize
   );
+
+  updateIcicleSelections();
 }
 export function highlightIcicleRect(hoveredCards) {
   if (!globalRects) return;

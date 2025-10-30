@@ -1049,6 +1049,8 @@ const zoom = d3
       updateTimelineSelections();
     }
   });
+
+  updateTimelineSelections();
 }
 
 export function highlightTimelineSets(hoveredCards) {
@@ -1076,7 +1078,7 @@ export function highlightTimelineSets(hoveredCards) {
   });
 }
 
-export function highlightTimelineSetsHoverOnly(card) {
+function highlightTimelineSetsHoverOnly(card) {
   if (!card?.all_sets) return;
 
   const hoveredSetNames = new Set(
@@ -1173,7 +1175,7 @@ function clearAllViewsHoverOnly() {
   emitClearSetHover();
 }
 
-export function highlightTimelineSetsFromYearInfo(yearInfo) {
+function highlightTimelineSetsFromYearInfo(yearInfo) {
   if (!yearInfo || !yearInfo.year) return;
 
   const targetYear = yearInfo.year.getFullYear();

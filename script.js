@@ -11,11 +11,9 @@ import {
 } from "./idioms/IcicleChart.js";
 import {
   createAlluvialChart,
-  highlightAlluvialElements,
 } from "./idioms/AlluvialChart.js";
 import {
   createTimelineView,
-  highlightTimelineSets,
 } from "./idioms/TimelineView.js";
 import {
   createScatterPlot,
@@ -24,7 +22,6 @@ import {
 } from "./idioms/Scatterplot.js";
 import {
   createStackedLineChart,
-  highlightLineChart,
 } from "./idioms/LineChart.js";
 import { createFilterPanel, updateFilterPanel } from "./idioms/FilterPanel.js";
 import {
@@ -168,7 +165,7 @@ async function init() {
     //highlightIcicleRect(hoveredCards);
     const t3 = performance.now();
 
-    //highlightTimelineSets(hoveredCards);
+    
     const t4 = performance.now();
 
     //highlightLineChart(hoveredCards);
@@ -241,10 +238,7 @@ async function init() {
   );
   createStackedLineChart(filtered, ".LineChart");
 
-  highlightAlluvialElements([]);
-  highlightIcicleRect([]);
-  highlightTimelineSets([]);
-  highlightLineChart([]);
+
   updateDrawer([]);
 
   updateState({
@@ -337,10 +331,6 @@ async function init() {
     //console.log(`[t${(t8 - t7).toFixed(2)}ms] Scatterplot updated`);
 
     const { hoveredCards } = getState();
-    highlightAlluvialElements(hoveredCards);
-    highlightIcicleRect(hoveredCards);
-    highlightTimelineSets(hoveredCards);
-    highlightLineChart(hoveredCards);
     updateDrawer(hoveredCards);
     const t9 = performance.now();
     //console.log(`[t${(t9 - t8).toFixed(2)}ms] Highlights and drawer updated`);
