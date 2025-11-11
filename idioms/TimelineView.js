@@ -262,7 +262,7 @@ export function createTimelineView(data, containerId, isUpdate = false) {
 • <strong>Brush</strong>: Selects/Diselects multiple sets.<br>
 • <strong>Scroll</strong>: Zoom in/out on the Timeline.<br>
 • <strong>Right-click drag</strong> or <strong>Ctrl + left-click drag</strong>: Pan the Timeline<br>
-• <strong>Double-Click</strong> background: Clears selections made within the Timeline(Years Excluded).<br>
+• <strong>Double-Click</strong> background: Clears all selections made.<br>
 `;
 
   const yearTypeCounts = new Map();

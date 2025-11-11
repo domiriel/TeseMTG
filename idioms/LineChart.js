@@ -46,7 +46,7 @@ const lineChartTooltipText = `
 • <strong>Brush</strong> the timeline: Selects/Diselects multiple years .<br>
 • <strong>Scroll</strong>: Zoom in/out on the Line chart.<br>
 • <strong>Right-click drag</strong> or <strong>Ctrl + left-click drag</strong>: Pan the Line chart<br>
-• <strong>Double-Click</strong> background: Clears selections made within the Line chart.<br>
+• <strong>Double-Click</strong> background:Clears all selections made.<br>
 `;
 
 const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };

@@ -666,7 +666,7 @@ const infoTooltipText = `
 • <strong>Click</strong> a node or link: Selects or deselects a category, affecting the cards highlighted in other views.<br>
 • <strong>Right-Click</strong> a node or link: Applies or removes a global filter in the filter panel for that category.<br>
 • <strong>Hover</strong> on nodes or links: Shows tooltip details and highlights corresponding categories across views.<br>
-• <strong>Double-Click</strong> background: Clears selections made within the Alluvial chart.<br>
+• <strong>Double-Click</strong> background: Clears all selections made.<br>
 `;
 
 

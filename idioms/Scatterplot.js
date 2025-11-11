@@ -262,7 +262,7 @@ const scatterTooltipText = `
 • <strong>Hover on labels</strong>: view tooltip explanation.<br>
 • <strong>Scroll</strong>: Zoom in/out.<br>
 • <strong>Right-click drag</strong> or <strong>Ctrl + left-click drag</strong>: Pan the Scatterplot<br>
-• <strong>Double-Click</strong> background: Clears selections made within the Scatterplot.<br>
+• <strong>Double-Click</strong> background: Clears all selections made.<br>
 `;
 
 onAlluvialClick(({ category, value }) => {

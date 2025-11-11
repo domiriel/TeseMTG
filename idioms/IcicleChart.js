@@ -451,7 +451,7 @@ const infoTooltipText = `
 • <strong>Hover</strong>: shows tooltip and highlights other visualizations.<br>
 • <strong>Scroll</strong>: Zoom in/out.<br>
 • <strong>Right-click drag</strong> or <strong>Ctrl + left-click drag</strong>: Pan the Icicle chart<br>
-• <strong>Double-Click</strong> background: Clears selections made within the Icicle chart.<br>
+• <strong>Double-Click</strong> background: Clears all selections made.<br>
 `;
 const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };
 
@@ -1486,36 +1486,9 @@ svg
 
   updateIcicleSelections();
 }
-export function highlightIcicleRect(hoveredCards) {
-  if (!globalRects) return;
 
-  const identityMatches = new Set();
 
-  (hoveredCards || []).forEach((card) => {
-    let identity;
-    if (!card.color_identity || card.color_identity.length === 0) {
-      identity = "Colorless";
-    } else {
-      identity = card.color_identity
-        .slice()
-        .sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b])
-        .join("");
-    }
-    identityMatches.add(identity);
-  });
-
-  globalRects.each(function (d) {
-    const rect = d3.select(this);
-
-    if (d.depth === 2 && identityMatches.has(d.data.name)) {
-      rect.classed("selectedHovered", true).attr("fill", d.data.selectedColor);
-    } else {
-      rect.classed("selectedHovered", false).attr("fill", d.data.color);
-    }
-  });
-}
-
-export function highlightIcicleRectHoverOnly(card) {
+function highlightIcicleRectHoverOnly(card) {
   if (!card || !card.color_identity) return;
 
   const identityKey = card.color_identity.length
@@ -1547,7 +1520,7 @@ function clearIcicleHoverOnly() {
     });
 }
 
-export function highlightIcicleRectHoverOnlyFromSet(
+function highlightIcicleRectHoverOnlyFromSet(
   colorIdentities,
   numColors
 ) {

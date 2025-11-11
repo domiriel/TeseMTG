@@ -7,7 +7,6 @@ import {
 // @ts-ignore
 import {
   createIcicleChart,
-  highlightIcicleRect,
 } from "./idioms/IcicleChart.js";
 import {
   createAlluvialChart,
@@ -162,7 +161,6 @@ async function init() {
     const t1 = performance.now();
     const t2 = performance.now();
 
-    //highlightIcicleRect(hoveredCards);
     const t3 = performance.now();
 
     
