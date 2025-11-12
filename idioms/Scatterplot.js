@@ -1,3 +1,9 @@
+// Scatterplot.js
+//
+//
+
+//
+
 import { updateState, getState } from "../state.js";
 import {
   emitHoverCard,
@@ -38,6 +44,8 @@ import {
   emitClearSelection,
 } from "./Events.js";
 import { getEffectivePriceAttribute } from "../script.js";
+
+// Dot color groups by EDHREC rank buckets.
 const colorGroups = [
   { range: [1, 5691], color: "#594A3A" },
   { range: [5692, 11382], color: "#806a4f" },
@@ -45,19 +53,40 @@ const colorGroups = [
   { range: [17075, 22765], color: "#d3ae7c" },
   { range: [22766, 28456], color: "#ffd394" },
 ];
+
 const ZOOM_RESET_EPSILON = 0.001;
+
+
+
+/**
+ * Combine all activeTimelineSelections into final set highlights.
+ *
+ * Logic:
+ * - OR within each chart:
+ *   • Alluvial: originality ∨ rarity ∨ link pair
+ *   • Icicle: color identities / color groups
+ *   • Timeline: sets ∨ set types
+ *   • Line: years
+ * - AND across charts:
+ *   • A set must satisfy all active non-empty charts simultaneously.
+ * - Scatterplot manual selections (click/brush/card search):
+ *   • Always applied as an additive union on top of the intersection
+ *     (anything selected via Scatterplot stays highlighted even if other filters wouldn't include it).
+ */
+
 const activeSelections = {
-  originalities: new Set(),
-  rarities: new Set(),
-  originalityRarityPairs: new Set(),
-  colorIdentities: new Set(),
-  numColors: new Set(),
-  years: new Set(),
-  sets: new Set(),
-  setTypes: new Set(),
-  cards: new Map(),
+  originalities: new Set(),          // from Alluvial node clicks
+  rarities: new Set(),               // from Alluvial node clicks
+  originalityRarityPairs: new Set(), // from Alluvial link clicks / derived combos
+  colorIdentities: new Set(),        // from Icicle
+  numColors: new Set(),              // from Icicle counts
+  years: new Set(),                  // from Line Chart / Timeline Year
+  sets: new Set(),                   // from Timeline Set
+  setTypes: new Set(),               // from Timeline Set Type
+  cards: new Map(),                  // from Scatterplot (additive union)
 };
 
+// Global clear from outside: wipe all sources and reapply.
 onClearSelection(() => {
   activeSelections.originalities.clear();
   activeSelections.rarities.clear();
@@ -71,21 +100,23 @@ onClearSelection(() => {
   applySelectionToScatter();
 });
 
+// Dot radius adapts to zoom level for readability.
 const dotSizeByZoom = [
-  { threshold: 1, radius: 3.0 }, // zoom < 1 — never happens since min is 1
-  { threshold: 2, radius: 3.5 }, // 1 ≤ zoom < 4
-  { threshold: 4, radius: 4.5 }, // 4 ≤ zoom < 8
-  { threshold: 8, radius: 4.5 }, // 8 ≤ zoom < 14
-  { threshold: Infinity, radius: 4.5 }, // 14 ≤ zoom
+  { threshold: 1, radius: 3.0 },
+  { threshold: 2, radius: 3.5 },
+  { threshold: 4, radius: 4.5 },
+  { threshold: 8, radius: 4.5 },
+  { threshold: Infinity, radius: 4.5 },
 ];
 
 function getDotRadiusForZoom(zoomLevel) {
   for (const { threshold, radius } of dotSizeByZoom) {
     if (zoomLevel <= threshold) return radius;
   }
-  return 3; // fallback
+  return 3;
 }
 
+// Alluvial "clear" only wipes its own fields.
 onClearAlluvialSelections(() => {
   activeSelections.originalities.clear();
   activeSelections.rarities.clear();
@@ -93,12 +124,20 @@ onClearAlluvialSelections(() => {
   applySelectionToScatter();
 });
 
+// Icicle "clear" only wipes its own fields.
 onClearIcicleSelections(() => {
   activeSelections.colorIdentities.clear();
   activeSelections.numColors.clear();
   applySelectionToScatter();
 });
 
+// Grouping of selection keys by source chart.
+//
+// For each group:
+// - If ALL of its keys are empty → group is ignored.
+// - If ANY key has values → card must satisfy OR over that group's keys.
+// Then all active groups are AND-ed together in getCardsMatchingActiveSelections.
+//
 const filterGroups = {
   alluvial: ["originalityRarityPairs"],
   icicle: ["colorIdentities", "numColors"],
@@ -106,6 +145,15 @@ const filterGroups = {
   lineChart: ["years"],
 };
 
+/**
+ * Compute cards matching the cross-view filters (excluding manual cards).
+ *
+ * Semantics:
+ * - OR within a group (e.g. multiple set types, or multiple color identities).
+ * - AND across groups (Alluvial ∧ Icicle ∧ Timeline ∧ LineChart).
+ * - Groups with no active values are skipped.
+ * - Scatterplot manual selections (activeSelections.cards) are merged later.
+ */
 function getCardsMatchingActiveSelections(data) {
   const groupKeys = Object.keys(filterGroups);
 
@@ -113,22 +161,19 @@ function getCardsMatchingActiveSelections(data) {
     return groupKeys.every((groupName) => {
       const filters = filterGroups[groupName];
 
-      // Skip group if no sub-filters are active
+      // Check if this group is active at all.
       const hasAnyActive = filters.some(
         (key) => activeSelections[key]?.size > 0
       );
-      if (!hasAnyActive) return true;
+      if (!hasAnyActive) return true; // no constraint from this group
 
-      // OR logic within group
+      // Apply OR within the group: card must match at least one active sub-filter.
       return filters.some((key) => {
         const set = activeSelections[key];
         if (!set || set.size === 0) return false;
 
         switch (key) {
-          case "originalities":
-            return card.all_originalities?.some((o) => set.has(o));
-          case "rarities":
-            return set.has(card.rarity?.toLowerCase());
+          // Alluvial: we use encoded originality|rarity pairs as the actual filter.
           case "originalityRarityPairs":
             return Array.from(set).some((pair) => {
               const [o, r] = pair.split("|");
@@ -138,19 +183,34 @@ function getCardsMatchingActiveSelections(data) {
               );
             });
 
-          case "colorIdentities":
+          // Icicle: explicit color identity string.
+          case "colorIdentities": {
             const idKey = card.color_identity?.join("") || "Colorless";
             return set.has(idKey);
+          }
 
+          // Icicle: number-of-colors buckets.
+          case "numColors": {
+            const n = card.color_identity?.length || 0;
+            return set.has(n);
+          }
+
+          // Timeline: specific sets.
           case "sets":
             return card.all_sets?.some((s) => set.has(s.name));
+
+          // Timeline: set types.
           case "setTypes":
             return card.all_set_types?.some((t) => set.has(t.toLowerCase()));
 
-          case "years":
+          // Line Chart / Year-based: matches any selected year.
+          case "years": {
             const year = new Date(card.release_date).getFullYear();
             return set.has(year);
+          }
 
+          // We no longer use raw "originalities"/"rarities" here directly;
+          // they are folded into originalityRarityPairs.
           default:
             return false;
         }
@@ -159,21 +219,37 @@ function getCardsMatchingActiveSelections(data) {
   });
 }
 
+/**
+ * Apply current selection state to the scatterplot + shared hoveredCards.
+ *
+ * Rules:
+ * - If NO cross-view filters are active:
+ *     → show only manual scatterplot selections (cards map).
+ *
+ * - If ANY cross-view filters are active:
+ *     → take intersection result from getCardsMatchingActiveSelections(...)
+ *     → ADD (union) all manually selected cards on top.
+ *
+ * - Result is written into hoveredCards in global state, and
+ *   .selected-hover class is updated for the dots.
+ */
 function applySelectionToScatter() {
   const hasAnySelection = Object.entries(activeSelections)
-    .filter(([key]) => key !== "cards") // exclude manual card selection
+    .filter(([key]) => key !== "cards") // ignore manual selections here
     .some(([, set]) => set.size > 0);
 
   let hoveredCards;
 
   if (!hasAnySelection) {
-    // No filters: use only manually selected cards
+    // No cross-view filters: only manual scatterplot picks remain.
     hoveredCards = Array.from(activeSelections.cards.values());
   } else {
-    // Filters exist: get matches, then add manual cards
+    // Cross-view filters active:
+    // 1) Compute intersection across groups.
     const matching = getCardsMatchingActiveSelections(actualFIlteredData);
     const cardMap = new Map(matching.map((c) => [c.name, c]));
 
+    // 2) Union manual selections on top (additive).
     for (const [name, card] of activeSelections.cards) {
       cardMap.set(name, card);
     }
@@ -190,24 +266,31 @@ function applySelectionToScatter() {
   updateSelectedHoverClass();
 }
 
+/**
+ * Toggle helper for group sets.
+ * - Called from cross-view event handlers.
+ * - Within a single category, multiple values act as OR.
+ */
 function addActiveSelection(category, value) {
   const set = activeSelections[category];
   if (!set) return;
 
   if (set.has(value)) {
-    set.delete(value); // remove if already present
+    set.delete(value);
   } else {
-    set.add(value); // add if not present
+    set.add(value);
   }
 }
 
 function getSymbolFromAttribute(attr) {
+  if (!attr) return "";
   if (attr.includes("eur")) return "€";
   if (attr.includes("usd")) return "$";
   return "";
 }
 
 let ignoreNextBrushEnd = false;
+
 function getXMetricTooltipText() {
   if (xMetric === "release_date") {
     return "Cards are positioned along the X-axis by their first <b>release date</b>.";
@@ -221,11 +304,9 @@ function getXMetricTooltipText() {
   return "Cards are positioned by <b>average price</b>.";
 }
 
-function getActiveXScale() {
-  const svg = d3.select(".Scatterplot svg");
-  const { logXScale, timeXScale } = svg.node().__scales__ || {};
-  return xMetric === "avg_price" ? logXScale : timeXScale;
-}
+
+
+// Sync .selected-hover class with global hoveredCards from state.
 function updateSelectedHoverClass() {
   const hoveredCards = getState().hoveredCards || [];
   const hoveredMap = new Map(hoveredCards.map((c) => [c.name, c]));
@@ -243,28 +324,28 @@ function applySelectedHoverClass(hoveredMap, updatedNames) {
   dots.classed("selected-hover", (d) => hoveredMap.has(d.name));
   const t2 = performance.now();
 
+  // Perf logging left commented for debugging:
   // console.log(`[Perf] applySelectedHoverClass:
   //   • Select & filter dots: ${(t1 - t0).toFixed(2)} ms
   //   • Apply class toggle:   ${(t2 - t1).toFixed(2)} ms
   //   • TOTAL:                ${(t2 - t0).toFixed(2)} ms`);
 }
-function getScaleType(scale) {
-  if (typeof scale.base === "function") return "log";
-  if (scale.ticks && scale.ticks(1)[0] instanceof Date) return "time";
-  return "unknown";
-}
 
+
+// UI help: interaction cheat sheet for the info icon.
 const scatterTooltipText = `
 <strong>Scatterplot Interactions:</strong><br>
-• <strong>Hover on dots</strong>: view card details and highlight related data across views.<br>
-• <strong>Click</strong> on a card: toggle persistent highlight of a card.<br>
-• <strong>Brush</strong>: Toggle on/off persistent highlights of multiple cards.<br>
-• <strong>Hover on labels</strong>: view tooltip explanation.<br>
-• <strong>Scroll</strong>: Zoom in/out.<br>
-• <strong>Right-click drag</strong> or <strong>Ctrl + left-click drag</strong>: Pan the Scatterplot<br>
-• <strong>Double-Click</strong> background: Clears all selections made.<br>
+• <strong>Hover</strong> a dot: show card details & highlight related data across views.<br>
+• <strong>Click</strong> a dot: toggle persistent highlight of that card (additive).<br>
+• <strong>Brush</strong>: toggle persistent highlights of multiple cards (additive).<br>
+• <strong>Scroll</strong>: zoom in/out.<br>
+• <strong>Right-click drag</strong> or <strong>Ctrl + left-click drag</strong>: pan.<br>
+• <strong>Double-click</strong> empty background: clear all selections.<br>
 `;
 
+// === Cross-view selection wiring ========================================
+
+// Alluvial node click → toggle originalities/rarities, recompute pair space.
 onAlluvialClick(({ category, value }) => {
   const key =
     category.toLowerCase() === "originality" ? "originalities" : "rarities";
@@ -272,44 +353,64 @@ onAlluvialClick(({ category, value }) => {
   updateOriginalityRarityPairsFromSelections();
 });
 
-
+// Year click from dedicated Year component.
 onYearClick(({ year }) => {
   addActiveSelection("years", year);
   applySelectionToScatter();
 });
 
+// Timeline set click.
 onTimelineSetClick((setInfo) => {
   addActiveSelection("sets", setInfo.name);
   applySelectionToScatter();
 });
 
+// Timeline set-type click.
 onTimelineSetTypeClick(({ type }) => {
   addActiveSelection("setTypes", type.toLowerCase());
   applySelectionToScatter();
 });
 
-const ALL_ORIGINALITIES = new Set(["original", "reprint","functional reprint"]);
-const ALL_RARITIES = new Set(["common", "uncommon", "rare", "mythic", "special", "bonus"]);
+// Canonical universes for Alluvial pair combinations.
+const ALL_ORIGINALITIES = new Set([
+  "original",
+  "reprint",
+  "functional reprint",
+]);
+const ALL_RARITIES = new Set([
+  "common",
+  "uncommon",
+  "rare",
+  "mythic",
+  "special",
+  "bonus",
+]);
 
+// Alluvial link click → toggle specific originality|rarity pair.
 onAlluvialLinkClick(({ originality, rarity }) => {
   addPairSelection("originalityRarityPairs", originality, rarity);
   applySelectionToScatter();
 });
 
-
+/**
+ * Rebuild originalityRarityPairs from current originality/rarity selections.
+ *
+ * Behaves as:
+ * - OR within Alluvial (multiple pairs allowed).
+ * - If only one side is set, other side expands to full universe.
+ */
 function updateOriginalityRarityPairsFromSelections() {
   const originalitySet = activeSelections.originalities;
   const raritySet = activeSelections.rarities;
 
   const pairs = new Set();
 
-  // Fallbacks: if only one side is populated, pair with all known values
-  const originalities = originalitySet.size > 0
-    ? Array.from(originalitySet)
-    : Array.from(ALL_ORIGINALITIES); // define this globally
-  const rarities = raritySet.size > 0
-    ? Array.from(raritySet)
-    : Array.from(ALL_RARITIES); // define this globally
+  const originalities =
+    originalitySet.size > 0
+      ? Array.from(originalitySet)
+      : Array.from(ALL_ORIGINALITIES);
+  const rarities =
+    raritySet.size > 0 ? Array.from(raritySet) : Array.from(ALL_RARITIES);
 
   for (const o of originalities) {
     for (const r of rarities) {
@@ -321,11 +422,13 @@ function updateOriginalityRarityPairsFromSelections() {
   applySelectionToScatter();
 }
 
+// External: directly set Alluvial pairs (e.g. hover or sync).
 onAlluvialLink((pairSets) => {
-  activeSelections.originalityRarityPairs = new Set(pairSets)
+  activeSelections.originalityRarityPairs = new Set(pairSets);
   applySelectionToScatter();
 });
 
+// Toggle a single originality|rarity pair in a given category set.
 function addPairSelection(category, originality, rarity) {
   const set = activeSelections[category];
   if (!set) return;
@@ -338,24 +441,25 @@ function addPairSelection(category, originality, rarity) {
   }
 }
 
+// Icicle node click → toggle identity & track its numColors group.
 onIcicleClick(({ colorIdentity, numColors }) => {
   addActiveSelection("colorIdentities", colorIdentity);
-  activeSelections.numColors.add(numColors)
+  activeSelections.numColors.add(numColors);
   applySelectionToScatter();
 });
 
+// Icicle num-colors group click → toggle group & all child identities.
 onIcicleNumClick(({ numColors, colorIdentities }) => {
   const groupSet = activeSelections.numColors;
-
   const identitySet = activeSelections.colorIdentities;
 
   const isSelected = groupSet.has(numColors);
   if (isSelected) {
-    // Remove group and all children
+    // Remove group and its identities.
     groupSet.delete(numColors);
     colorIdentities.forEach((id) => identitySet.delete(id));
   } else {
-    // Add group and all children
+    // Add group and all children.
     groupSet.add(numColors);
     colorIdentities.forEach((id) => identitySet.add(id));
   }
@@ -363,36 +467,41 @@ onIcicleNumClick(({ numColors, colorIdentities }) => {
   applySelectionToScatter();
 });
 
-
+// Line chart click → toggle year.
 onLineChartClick(({ year }) => {
-  const targetYear = parseInt(year, 10); // Ensure it's a number
+  const targetYear = parseInt(year, 10);
   addActiveSelection("years", targetYear);
   applySelectionToScatter();
 });
 
+// Line chart brush → toggle multiple years.
 onLineChartBrush((entries) => {
-  const brushedYears = new Set(entries.map((e) => parseInt(e.year, 10))); // ⬅ convert years to numbers
-  brushedYears.forEach((e) => addActiveSelection("years", e));
+  const brushedYears = new Set(entries.map((e) => parseInt(e.year, 10)));
+  brushedYears.forEach((y) => addActiveSelection("years", y));
   applySelectionToScatter();
 });
 
+// Timeline brush → toggle multiple sets.
 onTimelineBrush((entries) => {
-  const brushedSetNames = new Set(entries.map((e) => e.name)); // e.g., ["Innistrad", "Zendikar", ...]
-  brushedSetNames.forEach((e) => addActiveSelection("sets", e));
+  const brushedSetNames = new Set(entries.map((e) => e.name));
+  brushedSetNames.forEach((name) => addActiveSelection("sets", name));
   applySelectionToScatter();
 });
 
+// Clear only timeline-derived set/setType filters (brush clear).
 onClearTimelineBrush(() => {
-  // Get the current state
   activeSelections.sets.clear();
   activeSelections.setTypes.clear();
   applySelectionToScatter();
 });
 
+// Clear only year filters (line brush clear).
 onClearLineChartBrush(() => {
   activeSelections.years.clear();
   applySelectionToScatter();
 });
+
+// === Cross-view hover wiring (purely visual, no persistent state) ========
 
 onSetHover((setInfo) => {
   highlightScatterDotsFromSet(setInfo.name);
@@ -446,16 +555,18 @@ onClearAlluvialLinkHover(() => {
   clearScatterHoverOnly();
 });
 
-export function hoverOnlyHighlightCard(card) {
-  emitHoverCard(card);
+// === Scatterplot-local hover helpers =====================================
 
-  // Add others if needed
+export function hoverOnlyHighlightCard(card) {
+  // Broadcast that a card is hovered here so other views can react.
+  emitHoverCard(card);
 }
 
 export function clearHoverOnlyHighlight() {
   emitClearHover();
-  // Add others if needed
 }
+
+// === Tooltip / visuals helpers ===========================================
 
 function getColorIdentityBackground(colorIdentity) {
   if (!Array.isArray(colorIdentity) || colorIdentity.length === 0)
@@ -471,7 +582,6 @@ function getColorIdentityBackground(colorIdentity) {
 
   const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };
 
-  // Sort identity based on defined order
   const sorted = [...colorIdentity].sort(
     (a, b) => mtgColorOrder[a] - mtgColorOrder[b]
   );
@@ -485,31 +595,33 @@ function getColorIdentityBackground(colorIdentity) {
     return `linear-gradient(to right, ${stops.join(", ")})`;
   }
 }
+
+// Get x-value based on current metric.
 function getXValue(d) {
   return xMetric === "avg_price" ? d.avg_price : new Date(d.release_date);
 }
 
+/**
+ * Update scales + axes when switching between price vs release_date X metric.
+ * Uses the current actualFilteredData and preserves zoom keypoints.
+ */
 function updateXMetricScale() {
   const svg = d3.select(".Scatterplot svg");
   const meta = svg.node().__scatterMeta__;
   const { yScale, xAxisG, updateAxes, logXScale, timeXScale } =
-    svg.node().__scales__;
+    svg.node().__scales__ || {};
 
   const data = actualFIlteredData;
-  if (!meta || !data) return;
+  if (!meta || !data || !yScale || !updateAxes) return;
 
-  const { chartWidth } = meta;
   data.forEach((d) => delete d.isZoomKey);
+
   if (xMetric === "avg_price") {
-    const newMin = Math.max(
-      0.001,
-      d3.min(data, (d) => d.avg_price)
-    );
+    const newMin = Math.max(0.001, d3.min(data, (d) => d.avg_price));
     const newMax = d3.max(data, (d) => d.avg_price);
     logXScale.domain([newMin, newMax]);
     tagZoomKeyPoints(data, logXScale, yScale);
-    const activeX = xMetric === "avg_price" ? logXScale : timeXScale;
-    updateAxes(getSymbolFromAttribute(lastPriceAttribute), activeX);
+    updateAxes(getSymbolFromAttribute(lastPriceAttribute), logXScale);
     updatePointPositions(logXScale, yScale);
   } else {
     const validDates = data
@@ -518,15 +630,16 @@ function updateXMetricScale() {
     const years = validDates.map((d) => d.getFullYear());
     const minYear = Math.min(...years);
     const maxYear = Math.max(...years);
-    const minDate = new Date(minYear, 0, 1); // Jan 1st
-    const maxDate = new Date(maxYear, 11, 31); // Dec 31st
+    const minDate = new Date(minYear, 0, 1);
+    const maxDate = new Date(maxYear, 11, 31);
     timeXScale.domain([minDate, maxDate]);
     tagZoomKeyPoints(data, timeXScale, yScale);
-    const activeX = xMetric === "avg_price" ? logXScale : timeXScale;
-    updateAxes(getSymbolFromAttribute(lastPriceAttribute), activeX);
+    updateAxes(getSymbolFromAttribute(lastPriceAttribute), timeXScale);
     updatePointPositions(timeXScale, yScale);
   }
 }
+
+// === Zoom / state ========================================================
 
 const ZOOM_THRESHOLD = 6;
 let currentZoomLevel = 1;
@@ -535,7 +648,7 @@ let wasZoomedOut = true;
 let isShowingFullData = false;
 let initialDownsampledData = null;
 let lastZoomedOut = currentZoomLevel < ZOOM_THRESHOLD;
-let actualFIlteredData = null; // Store the actual filtered data for updates
+let actualFIlteredData = null; // canonical data backing current plot
 let isBrushing = false;
 let brushOverlay = null;
 let zoom = null;
@@ -544,6 +657,7 @@ let shiftPressed = false;
 let lastPriceAttribute = null;
 let xMetric = "avg_price";
 
+// Return current zoomed X/Y scales based on stored transform.
 function getZoomedScales() {
   const svg = d3.select(".Scatterplot svg").node();
   const { logXScale, timeXScale, originalYScale } = svg.__scales__;
@@ -557,6 +671,7 @@ function getZoomedScales() {
   return { xScale, yScale };
 }
 
+// Mark a minimal set of "key" dots visible when zoomed out (density reduction).
 function tagZoomKeyPoints(data, xScale, yScale, cellSize = 6) {
   const grid = new Map();
 
@@ -565,7 +680,7 @@ function tagZoomKeyPoints(data, xScale, yScale, cellSize = 6) {
     const cy = Math.floor(yScale(d.complexity) / cellSize);
     const key = `${cx},${cy}`;
 
-    d.__x = cx * cellSize; // optionally cache scaled pos
+    d.__x = cx * cellSize;
     d.__y = cy * cellSize;
 
     if (!grid.has(key)) {
@@ -581,12 +696,15 @@ function tagZoomKeyPoints(data, xScale, yScale, cellSize = 6) {
 
 let globalDots = null;
 
+// === Dot interaction handlers ===========================================
+
 function mouseoverFn(event, d) {
   const symbol = getSymbolFromAttribute(getEffectivePriceAttribute(getState()));
   const formatDate = d3.timeFormat("%d %b %Y");
   const formattedDate = d.release_date
     ? formatDate(new Date(d.release_date))
     : "Unknown";
+
   d3
     .select("#tooltip")
     .style("display", "block")
@@ -613,6 +731,7 @@ function mouseoverFn(event, d) {
         </div>
       </div>
     `);
+
   d3.select(event.currentTarget).classed("hover-temp", true);
   hoverOnlyHighlightCard(d);
 }
@@ -621,24 +740,34 @@ function mousemoveFn(event) {
   const tooltipNode = d3.select("#tooltip").node();
   const tooltipWidth = tooltipNode.offsetWidth;
   const padding = 10;
+
   let left = event.pageX + padding;
   if (left + tooltipWidth > window.innerWidth) {
     left = event.pageX - tooltipWidth - padding;
   }
+
   d3.select("#tooltip")
     .style("left", `${left}px`)
     .style("top", `${event.pageY + padding}px`);
 }
 
-function mouseoutFn(event, d) {
-  d3.select("#tooltip")
+function mouseoutFn(event) {
+  d3
+    .select("#tooltip")
     .style("display", "none")
     .style("background", null)
     .style("color", null);
+
   d3.select(event.currentTarget).classed("hover-temp", false);
   clearHoverOnlyHighlight();
 }
 
+/**
+ * Dot click:
+ * - Toggle card in activeSelections.cards.
+ * - Recompute combined selection (intersection + additive manual picks).
+ * - Broadcast aggregated attributes to other views.
+ */
 function clickFn(event, d) {
   if (activeSelections.cards.has(d.name)) {
     activeSelections.cards.delete(d.name);
@@ -646,10 +775,11 @@ function clickFn(event, d) {
     activeSelections.cards.set(d.name, d);
   }
 
-  applySelectionToScatter(); // use updated selections
+  applySelectionToScatter();
   getAggregatedCardAttributesFromManualSelection();
 }
 
+// Card search behaves like manual selection toggle.
 onCardSearch((card) => {
   if (activeSelections.cards.has(card.name)) {
     activeSelections.cards.delete(card.name);
@@ -657,10 +787,14 @@ onCardSearch((card) => {
     activeSelections.cards.set(card.name, card);
   }
 
-  applySelectionToScatter(); // use updated selections
+  applySelectionToScatter();
   getAggregatedCardAttributesFromManualSelection();
 });
 
+/**
+ * Update dot positions + visibility after zoom/scale changes.
+ * Honors zoom threshold and "key dot" downsampling.
+ */
 function updatePointPositions(xScale, yScale) {
   if (!globalDots) return;
 
@@ -669,9 +803,6 @@ function updatePointPositions(xScale, yScale) {
   if (!meta) return;
 
   const { chartWidth, chartHeight } = meta;
-  const hoveredSet = new Set(
-    (getState().hoveredCards || []).map((c) => c.name)
-  );
 
   globalDots.each(function (d) {
     const cx = xScale(getXValue(d));
@@ -682,13 +813,16 @@ function updatePointPositions(xScale, yScale) {
     const showDot =
       isHovered || currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey;
 
-    // Only update if needed
     this.setAttribute("cx", cx);
     this.setAttribute("cy", cy);
     this.style.display = inBounds && showDot ? null : "none";
   });
 }
 
+/**
+ * Aggregate attributes of manually selected cards (scatter-only)
+ * and emit them for other coordinated views.
+ */
 function getAggregatedCardAttributesFromManualSelection() {
   const originalitySet = new Set();
   const raritySet = new Set();
@@ -697,33 +831,26 @@ function getAggregatedCardAttributesFromManualSelection() {
   const setNameSet = new Set();
 
   for (const card of activeSelections.cards.values()) {
-    // Originalities (array of strings)
     if (Array.isArray(card.all_originalities)) {
       for (const orig of card.all_originalities) {
         originalitySet.add(orig.toLowerCase());
       }
     }
 
-    // Rarity (single string)
     if (card.rarity) {
       raritySet.add(card.rarity.toLowerCase());
     }
 
-    // Color Identity (array of single letters like ['W', 'U'])
     if (Array.isArray(card.color_identity)) {
       const key = card.color_identity.join("");
       colorIdentitySet.add(key);
     }
 
-    // Year (from release_date)
     if (card.release_date) {
       const year = new Date(card.release_date).getFullYear();
-      if (!isNaN(year)) {
-        yearSet.add(year);
-      }
+      if (!isNaN(year)) yearSet.add(year);
     }
 
-    // All Set Names
     if (Array.isArray(card.all_sets)) {
       for (const s of card.all_sets) {
         if (s.name) setNameSet.add(s.name);
@@ -740,6 +867,7 @@ function getAggregatedCardAttributesFromManualSelection() {
   });
 }
 
+// Metadata lookup helper for tooltip image.
 export function getTooltipImageMetadata(card) {
   if (!card.tooltip_image || !Array.isArray(card.print_image_metadata))
     return null;
@@ -751,6 +879,12 @@ export function getTooltipImageMetadata(card) {
   );
 }
 
+/**
+ * Prepares aggregated scatter data:
+ * - Groups prints per card.
+ * - Computes avg_price per card.
+ * - Tracks all sets, types, years, originalities and print images.
+ */
 export function prepareScatterData(data, selectedPriceAttribute) {
   const excludedSetTypes = new Set(["memorabilia", "alchemy", "token"]);
   const excludedSetNames = ["Arena", "Alchemy", "Digital"];
@@ -759,7 +893,7 @@ export function prepareScatterData(data, selectedPriceAttribute) {
   const cardMap = new Map();
 
   for (const card of data) {
-    // Skip if digital or excluded
+    // Filter out undesired/digital entries.
     if (
       card.digital ||
       excludedSetTypes.has(card.set_type) ||
@@ -768,7 +902,6 @@ export function prepareScatterData(data, selectedPriceAttribute) {
     )
       continue;
 
-    // Initialize or retrieve card aggregate
     if (!cardMap.has(card.name)) {
       cardMap.set(card.name, {
         ...card,
@@ -785,15 +918,12 @@ export function prepareScatterData(data, selectedPriceAttribute) {
 
     const entry = cardMap.get(card.name);
 
-    // Track all set types
+    // Track all set types.
     entry.setTypes.set(card.set_name, card.set_type);
-    if (!entry.all_set_types) {
-      entry.all_set_types = new Set();
-    }
-    if (card.set_type) {
-      entry.all_set_types.add(card.set_type.toLowerCase());
-    }
-    // Track price
+    if (!entry.all_set_types) entry.all_set_types = new Set();
+    if (card.set_type) entry.all_set_types.add(card.set_type.toLowerCase());
+
+    // Track price for avg computation (only if complexity is numeric).
     const price =
       isNaN(card[selectedPriceAttribute]) ||
       card[selectedPriceAttribute] == null
@@ -803,26 +933,28 @@ export function prepareScatterData(data, selectedPriceAttribute) {
       entry.prices.push(price);
     }
 
+    // Track earliest release year/date.
     if (card.release_date) {
       const releaseDate = new Date(card.release_date);
       const year = releaseDate.getFullYear();
-
       if (!isNaN(year)) {
         entry.all_years.add(year);
 
-        // Track the earliest release date across all prints
         if (
           !entry.earliest_release_date ||
           releaseDate < new Date(entry.earliest_release_date)
         ) {
-          entry.earliest_release_date = releaseDate; // Store as YYYY-MM-DD string
+          entry.earliest_release_date = releaseDate;
         }
       }
     }
+
+    // Track originalities.
     if (card.originality) {
       entry.all_originalities.add(card.originality.toLowerCase());
     }
 
+    // Track print images + metadata; prefer original for tooltip.
     if (card.image_normal) {
       entry.printImages.push(card.image_normal);
       entry.printMetadata.push({
@@ -852,11 +984,9 @@ export function prepareScatterData(data, selectedPriceAttribute) {
         }
       }
     }
-
-    // Track image links for print
   }
 
-  // Finalize values
+  // Finalize aggregated structure.
   const result = [];
   for (const card of cardMap.values()) {
     card.all_sets = Array.from(card.setTypes.entries()).map(([name, type]) => ({
@@ -864,7 +994,6 @@ export function prepareScatterData(data, selectedPriceAttribute) {
       type,
     }));
     card.all_set_types = Array.from(card.all_set_types || []);
-
     card.all_years = Array.from(card.all_years);
     card.all_originalities = Array.from(card.all_originalities);
     card.all_print_images = card.printImages;
@@ -874,12 +1003,14 @@ export function prepareScatterData(data, selectedPriceAttribute) {
     const sum = card.prices.reduce((a, b) => a + b, 0);
     card.avg_price = card.prices.length > 0 ? sum / card.prices.length : 0;
     card.release_date = card.earliest_release_date || card.release_date;
+
     result.push(card);
   }
 
   return result;
 }
 
+// Map EDHREC rank into color bucket.
 function getGroupColor(rank) {
   if (rank === 0) return "#efefef";
   for (let group of colorGroups) {
@@ -890,6 +1021,11 @@ function getGroupColor(rank) {
   return colorGroups[colorGroups.length - 1].color;
 }
 
+/**
+ * Initial creation of scatterplot.
+ * - Builds scales, axes, zoom/brush, dots, legend, info icon.
+ * - Stores scales in svg.node().__scales__ for reuse.
+ */
 export function createScatterPlot(
   data,
   containerId,
@@ -900,12 +1036,11 @@ export function createScatterPlot(
   const hoveredCards = getState().hoveredCards || [];
   const hoveredSet = new Set(hoveredCards.map((c) => c.name));
 
-  lastPriceAttribute = selectedPriceAttribute; // Store the last used price attribute
+  lastPriceAttribute = selectedPriceAttribute;
 
   d3.select(containerId).selectAll("*").remove();
 
   const filteredData = data;
-
   const minPrice = d3.min(filteredData, (d) => d.avg_price);
   const maxPrice = d3.max(filteredData, (d) => d.avg_price);
 
@@ -921,6 +1056,7 @@ export function createScatterPlot(
     .attr("width", width)
     .attr("height", height);
 
+  // Block native context menu (we use right-drag for pan).
   d3.select(containerId).on("contextmenu", (event) => event.preventDefault());
 
   const iconX = width * 0.985;
@@ -932,10 +1068,11 @@ export function createScatterPlot(
     .append("g")
     .attr("transform", `translate(${margin.left - 8.5}, ${margin.top - 15})`);
 
+  // X scales: log price + time.
   const logXScale = d3
     .scaleLog()
     .domain([minPrice, maxPrice])
-    .range([10, chartWidth-2]);
+    .range([10, chartWidth - 2]);
 
   const validDates = filteredData
     .map((d) => new Date(d.release_date))
@@ -943,14 +1080,15 @@ export function createScatterPlot(
   const years = validDates.map((d) => d.getFullYear());
   const minYear = Math.min(...years);
   const maxYear = Math.max(...years);
-  const minDate = new Date(minYear, 0, 1); // Jan 1st
-  const maxDate = new Date(maxYear, 11, 31); // Dec 31st
+  const minDate = new Date(minYear, 0, 1);
+  const maxDate = new Date(maxYear, 11, 31);
 
   const timeXScale = d3
     .scaleTime()
     .domain([minDate, maxDate])
-    .range([10, chartWidth-2]);
+    .range([10, chartWidth - 2]);
 
+  // Y scale: complexity.
   const minComplexity = d3.min(filteredData, (d) => d.complexity);
   const maxComplexity = d3.max(filteredData, (d) => d.complexity);
   const yPadding = (maxComplexity - minComplexity) * 0.01;
@@ -962,8 +1100,10 @@ export function createScatterPlot(
 
   const yScale = originalYScale.copy();
   const xScale = xMetric === "avg_price" ? logXScale : timeXScale;
+
   tagZoomKeyPoints(filteredData, xScale, yScale);
-  actualFIlteredData = filteredData; // Store the actual filtered data for updates
+  actualFIlteredData = filteredData;
+
   const symbol = getSymbolFromAttribute(selectedPriceAttribute);
 
   const xAxisG = g
@@ -975,6 +1115,7 @@ export function createScatterPlot(
 
   const numTicks = 12;
 
+  // Draw axes for current metric.
   function updateAxes(symbol, customX = null) {
     const xS = customX || xScale;
 
@@ -994,64 +1135,49 @@ export function createScatterPlot(
           .tickValues(ticks)
           .tickFormat((d) => `${symbol}${d.toFixed(2)}`)
       );
-} else if (xMetric === "release_date") {
-  /*const d0 = (customX || xScale).domain()[0];
-  const d1 = (customX || xScale).domain()[1];
-  const minYear = d0.getFullYear();
-  const maxYear = d1.getFullYear();
+    } else if (xMetric === "release_date") {
+      const xScaleToUse = customX || xScale;
 
-  xAxisG.call(
-    d3.axisBottom(customX || xScale)
-      .ticks(d3.timeYear.every(1))
-      .tickFormat((d) => {
-        const y = d.getFullYear();
-        // Show 4 digits at the extremes, 2 digits elsewhere
-        return (y === minYear || y === maxYear) ? String(y) : String(y).slice(-2);
-      })
-  );*/
+      const tickDates = xScaleToUse.ticks(d3.timeYear.every(1));
+      const first = tickDates[0]?.getTime();
+      const last = tickDates[tickDates.length - 1]?.getTime();
 
-  const xS = customX || xScale;
+      xAxisG.call(
+        d3
+          .axisBottom(xScaleToUse)
+          .tickValues(tickDates)
+          .tickFormat((d) => {
+            const t = d.getTime();
+            const y = d.getFullYear();
+            if (tickDates.length <= 1) return String(y);
+            return t === first || t === last ? String(y) : String(y).slice(-2);
+          })
+      );
 
-  // Generate the exact ticks D3 will draw
-  const tickDates = xS.ticks(d3.timeYear.every(1));
-  const first = tickDates[0]?.getTime();
-  const last  = tickDates[tickDates.length - 1]?.getTime();
-
-  xAxisG.call(
-    d3.axisBottom(xS)
-      .tickValues(tickDates) // lock to these ticks so format aligns
-      .tickFormat((d) => {
-        const t = d.getTime();
-        const y = d.getFullYear();
-        // 4 digits on first/last visible ticks, 2 digits on the rest
-        if (tickDates.length <= 1) return String(y);
-        return (t === first || t === last) ? String(y) : String(y).slice(-2);
-      })
-  );
-
-  xAxisG.selectAll("text")
-    .style("text-anchor", "end")
-    .attr("dx", "-0.8em")
-    .attr("dy", "0.15em")
-    .attr("transform", "rotate(-45)");
-}
-
+      xAxisG
+        .selectAll("text")
+        .style("text-anchor", "end")
+        .attr("dx", "-0.8em")
+        .attr("dy", "0.15em")
+        .attr("transform", "rotate(-45)");
+    }
 
     yAxisG.call(d3.axisLeft(yScale).ticks(numTicks));
   }
 
   updateAxes(symbol);
 
+  // X metric dropdown (Average Price vs Release Date).
   svg
     .append("foreignObject")
-    .attr("x", chartWidth / 2 - 30) // Adjust as needed
+    .attr("x", chartWidth / 2 - 30)
     .attr("y", height - 30)
     .attr("width", 130)
     .attr("height", 30)
     .style("pointer-events", "none")
     .append("xhtml:div").html(`
     <select id="xMetricDropdown" style="
-    pointer-events: auto;
+      pointer-events: auto;
       font-size:14px;
       font-family: inherit;
       font-weight: bold;
@@ -1068,14 +1194,15 @@ export function createScatterPlot(
 
   const dropdown = document.getElementById("xMetricDropdown");
   if (dropdown) {
-    dropdown.value = xMetric; // Reflect current state
+    dropdown.value = xMetric;
     dropdown.addEventListener("change", function () {
       xMetric = this.value;
       updateXMetricScale();
     });
 
-    dropdown.addEventListener("mouseover", (event) => {
-      d3.select("#tooltip")
+    dropdown.addEventListener("mouseover", () => {
+      d3
+        .select("#tooltip")
         .style("display", "block")
         .html(getXMetricTooltipText);
     });
@@ -1104,6 +1231,7 @@ export function createScatterPlot(
     });
   }
 
+  // Y axis label with tooltip explanation.
   svg
     .append("text")
     .attr("class", "y-axis-label")
@@ -1114,8 +1242,9 @@ export function createScatterPlot(
     .style("font-weight", "bold")
     .style("cursor", "help")
     .text("Complexity")
-    .on("mouseover", (event) => {
-      d3.select("#tooltip")
+    .on("mouseover", () => {
+      d3
+        .select("#tooltip")
         .style("display", "block")
         .html(
           `An aggregated score representing the number <br> of non-flavor words a card has.`
@@ -1125,6 +1254,7 @@ export function createScatterPlot(
       const tooltip = d3.select("#tooltip");
       const tooltipWidth = tooltip.node().offsetWidth;
       const padding = 10;
+
       let left = event.pageX + padding;
       if (left + tooltipWidth > window.innerWidth) {
         left = event.pageX - tooltipWidth - padding;
@@ -1138,6 +1268,7 @@ export function createScatterPlot(
       d3.select("#tooltip").style("display", "none");
     });
 
+  // ClipPath to constrain dots & brush.
   svg
     .append("defs")
     .append("clipPath")
@@ -1155,12 +1286,13 @@ export function createScatterPlot(
 
   const gClip = gDot.append("g").attr("class", "clip-group");
 
-  const brushOverlay = g
+  brushOverlay = g
     .append("g")
     .attr("class", "brush-overlay")
     .attr("clip-path", "url(#chart-clip)");
 
-  const brush = d3
+  // Brush for additive manual card toggle.
+  brush = d3
     .brush()
     .extent([
       [0, -10],
@@ -1169,13 +1301,15 @@ export function createScatterPlot(
     .on("start", () => svg.on(".zoom", null))
     .on("end", function (event) {
       const t0 = performance.now();
-      svg.call(zoom); // Re-enable zoom
+      svg.call(zoom); // re-enable zoom
+
       if (ignoreNextBrushEnd) {
         ignoreNextBrushEnd = false;
         return;
       }
 
       if (!event.selection) {
+        // Empty brush → clear manual picks only.
         activeSelections.cards.clear();
         emitClearScatterplotBrush();
         applySelectionToScatter();
@@ -1183,13 +1317,12 @@ export function createScatterPlot(
       }
 
       const [[x0, y0], [x1, y1]] = event.selection;
-
-      const t1 = performance.now();
-      const { xScale, yScale } = getZoomedScales();
+      const { xScale: zx, yScale: zy } = getZoomedScales();
       const brushedNames = new Set();
+
       for (const d of filteredData) {
-        const cx = xScale(getXValue(d));
-        const cy = yScale(d.complexity);
+        const cx = zx(getXValue(d));
+        const cy = zy(d.complexity);
         if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) {
           brushedNames.add(d.name);
         }
@@ -1203,50 +1336,39 @@ export function createScatterPlot(
         brushOverlay.call(brush.move, null);
         return;
       }
-      const t2 = performance.now();
 
-      const actualCardMap = new Map(actualFIlteredData.map((c) => [c.name, c]));
-      // Add brushed cards to manual selection map
+      const actualCardMap = new Map(
+        actualFIlteredData.map((c) => [c.name, c])
+      );
+
+      // Toggle brushed names in manual selection map.
       for (const name of brushedNames) {
         const match = actualCardMap.get(name);
         if (activeSelections.cards.has(name)) {
-          activeSelections.cards.delete(name); // 💨 deselect
-        } else {
-          if (match) activeSelections.cards.set(name, match); // ✅ select
+          activeSelections.cards.delete(name);
+        } else if (match) {
+          activeSelections.cards.set(name, match);
         }
       }
 
-      const summary = getAggregatedCardAttributesFromManualSelection();
-      const t3 = performance.now();
-
-      // Now recompute hoveredCards based on current filters + manual cards
-      //emitScatterplotBrush(brushedCards);
+      getAggregatedCardAttributesFromManualSelection();
       applySelectionToScatter();
 
-      const t4 = performance.now();
-
       ignoreNextBrushEnd = true;
-      brushOverlay.call(brush.move, null); // Clear brush selection
+      brushOverlay.call(brush.move, null);
 
       const t5 = performance.now();
-
-      // console.log(`Brush Interaction Timing:
-      //   • Extract selection bounds:       ${(t1 - t0).toFixed(2)} ms
-      //   • Collect brushed names:          ${(t2 - t1).toFixed(2)} ms
-      //   • Toggle brushed cards:           ${(t3 - t2).toFixed(2)} ms
-      //   • Update state:                   ${(t4 - t3).toFixed(2)} ms
-      //   • Apply selected hover class:     ${(t5 - t4).toFixed(2)} ms
-      //   • Clear brush selection:          ${(t6 - t5).toFixed(2)} ms
-      //   • TOTAL:                          ${(t6 - t0).toFixed(2)} ms
-      // `);
+      // Perf logs omitted.
     });
 
   brushOverlay.call(brush).lower();
 
+  // Info icon with interaction help.
   const infoGroup = svg
     .append("g")
     .attr("class", "info-icon")
-    .attr("transform", `translate(${iconX},${iconY} )`);
+    .attr("transform", `translate(${iconX},${iconY})`);
+
   infoGroup
     .append("circle")
     .attr("r", iconRadius)
@@ -1263,10 +1385,10 @@ export function createScatterPlot(
     .text("?");
 
   infoGroup
-    .on("mouseover", function (event) {
+    .on("mouseover", () => {
       d3.select("#tooltip").style("display", "block").html(scatterTooltipText);
     })
-    .on("mousemove", function (event) {
+    .on("mousemove", (event) => {
       const tooltip = d3.select("#tooltip");
       const tooltipWidth = tooltip.node().offsetWidth;
       const tooltipHeight = tooltip.node().offsetHeight;
@@ -1283,12 +1405,14 @@ export function createScatterPlot(
 
       tooltip.style("left", `${x}px`).style("top", `${y}px`);
     })
-    .on("mouseout", function () {
+    .on("mouseout", () => {
       d3.select("#tooltip").style("display", "none");
     });
 
+  // Initial dots.
   const visibleData = filteredData;
   const initialRadius = getDotRadiusForZoom(currentZoomLevel);
+
   const dots = gClip
     .selectAll("circle")
     .data(visibleData, (d) => d.name)
@@ -1314,21 +1438,9 @@ export function createScatterPlot(
       currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey ? null : "none"
     );
 
-  filteredData.forEach((d, i) => {
-    if (
-      isNaN(d.avg_price) ||
-      d.avg_price <= 0 ||
-      typeof d.avg_price !== "number"
-    ) {
-    }
-  });
-
   globalDots = dots;
 
   updatePointPositions(xScale, yScale);
-
-  const tooltip = d3.select("#tooltip");
-  let hoverTimeout = null;
 
   dots
     .on("mouseover", mouseoverFn)
@@ -1336,8 +1448,8 @@ export function createScatterPlot(
     .on("mouseout", mouseoutFn)
     .on("click", clickFn);
 
-  const baseLegendSize = chartHeight * 0.05; // similar to your alluvial `0.097`
-
+  // EDHREC legend.
+  const baseLegendSize = chartHeight * 0.05;
   const legendItemDimensions = Math.min(baseLegendSize, 20);
   const legendX = margin.left + 30;
   const legendY = -10;
@@ -1346,10 +1458,9 @@ export function createScatterPlot(
   const legend = svg
     .append("g")
     .attr("class", "edhrec-legend")
+    .attr("transform", `translate(${legendX}, ${legendY})`)
+    .style("pointer-events", "none");
 
-    .attr("transform", `translate(${legendX}, ${legendY})`);
-
-  legend.style("pointer-events", "none");
   legend
     .append("text")
     .attr("x", 0)
@@ -1410,9 +1521,7 @@ export function createScatterPlot(
     .style("font-size", `${legendFontSize}px`)
     .attr("fill", "#000");
 
-  let zoomTimeout = null;
-  const ZOOM_DELAY = 0;
-
+  // Zoom behavior: wheel / right-drag / Ctrl+drag.
   const buffer = 100;
   zoom = d3
     .zoom()
@@ -1426,48 +1535,42 @@ export function createScatterPlot(
       [chartWidth, chartHeight],
     ])
     .filter((event) => {
-      // Allow wheel events
       if (event.type === "wheel") return true;
-
-      // Allow right-click
       if (event.type === "mousedown" && event.button === 2) return true;
-
-      // Allow if Ctrl key is pressed during any event
       if (event.ctrlKey) return true;
-
-      // Otherwise, ignore the event
       return false;
     })
-
     .on("zoom", (event) => {
       applyZoomTransform(event.transform);
     });
 
   function applyZoomTransform(transform) {
+    // Snap very close to identity back to exactly identity.
     if (Math.abs(transform.k - 1) < ZOOM_RESET_EPSILON) {
-      transform = d3.zoomIdentity; // 🔥 Reset to exact origin
+      transform = d3.zoomIdentity;
     }
 
     currentZoomTransform = transform;
     currentZoomLevel = transform.k;
 
-    const svg = d3.select(".Scatterplot svg");
+    const svgNode = d3.select(".Scatterplot svg").node();
     const { logXScale, timeXScale, yScale, originalYScale, updateAxes } =
-      svg.node().__scales__;
+      svgNode.__scales__;
 
-    const baseXScale = xMetric === "avg_price" ? logXScale : timeXScale;
-    const newX = transform.rescaleX(baseXScale);
+    const baseXScaleLocal =
+      xMetric === "avg_price" ? logXScale : timeXScale;
+    const newX = transform.rescaleX(baseXScaleLocal);
     const newY = transform.rescaleY(originalYScale);
 
-    // ✨ DON'T mutate base scale
+    // Mutate only the working yScale, not originalYScale.
     yScale.domain(newY.domain());
 
     updateAxes(getSymbolFromAttribute(lastPriceAttribute), newX);
 
     const newRadius = getDotRadiusForZoom(currentZoomLevel);
-    const gClip = d3.select(".clip-group");
+    const gClipLocal = d3.select(".clip-group");
 
-    gClip
+    gClipLocal
       .selectAll("circle")
       .attr("r", newRadius)
       .attr("cx", (d) => newX(getXValue(d)))
@@ -1476,28 +1579,29 @@ export function createScatterPlot(
         currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey ? null : "none"
       );
 
-    globalDots = gClip.selectAll("circle");
+    globalDots = gClipLocal.selectAll("circle");
   }
 
   svg.call(zoom);
 
+  // Restore previous transform if provided.
   if (savedTransform) {
     svg.call(zoom.transform, savedTransform);
   }
 
+  // Double-click blank background → clear all selections.
   svg.on("dblclick", function (event) {
     const target = d3.select(event.target);
     const tag = event.target.tagName?.toLowerCase();
 
-    const isDot = target.classed("dots");
+    const isDotGroup = target.classed("dots");
     const isCircleDot = tag === "circle" && target.classed("ci-");
-
     const isAxis = target.classed("x-axis") || target.classed("y-axis");
     const isLegend = target.node().closest(".edhrec-legend");
     const isInfoIcon = target.node().closest(".info-icon");
 
     const isInteractiveScatterElement =
-      isDot || isCircleDot || isAxis || isLegend || isInfoIcon;
+      isDotGroup || isCircleDot || isAxis || isLegend || isInfoIcon;
 
     if (!isInteractiveScatterElement) {
       emitClearSelection();
@@ -1505,6 +1609,7 @@ export function createScatterPlot(
     }
   });
 
+  // Persist scales in DOM for other helpers.
   svg.node().__scales__ = {
     yScale,
     xAxisG,
@@ -1528,15 +1633,19 @@ export function createScatterPlot(
 }
 
 let interactionsOn = true;
+
+/**
+ * Update existing scatterplot in-place when data or price attribute changes.
+ * Preserves zoom & selection model.
+ */
 export function updateScatterPlot(
   filteredData,
   selectedPriceAttribute = "price_eur"
 ) {
   interactionsOn = false;
+
   const t0 = performance.now();
   lastPriceAttribute = selectedPriceAttribute;
-  const hoveredCards = getState().hoveredCards || [];
-  const hoveredSet = new Set(hoveredCards.map((c) => c.name));
 
   const svg = d3.select(".Scatterplot svg");
   if (svg.empty()) return;
@@ -1554,14 +1663,9 @@ export function updateScatterPlot(
 
   const gClip = svg.select(".dots .clip-group");
 
-  const t1 = performance.now();
-
-  // Update X scale domain
+  // Update X-domain based on new data & current metric.
   if (xMetric === "avg_price") {
-    const newMin = Math.max(
-      0.001,
-      d3.min(filteredData, (d) => d.avg_price)
-    );
+    const newMin = Math.max(0.001, d3.min(filteredData, (d) => d.avg_price));
     const newMax = d3.max(filteredData, (d) => d.avg_price);
     logXScale.domain([newMin, newMax]);
   } else {
@@ -1574,8 +1678,6 @@ export function updateScatterPlot(
     timeXScale.domain([minDate, maxDate]);
   }
 
-  const t2 = performance.now();
-
   const baseXScale = xMetric === "avg_price" ? logXScale : timeXScale;
   const newX = currentZoomTransform
     ? currentZoomTransform.rescaleX(baseXScale)
@@ -1587,18 +1689,14 @@ export function updateScatterPlot(
   const symbol = getSymbolFromAttribute(selectedPriceAttribute);
   updateAxes(symbol, newX);
 
-  const t3 = performance.now();
-
-  // Recompute zoom keypoints
+  // Recompute zoom keypoints on updated data.
   filteredData.forEach((d) => delete d.isZoomKey);
   tagZoomKeyPoints(filteredData, baseXScale, yScale);
   actualFIlteredData = filteredData;
 
-  const t4 = performance.now();
-
-  // JOIN and update circles
-
   const initialRadius = getDotRadiusForZoom(currentZoomLevel);
+
+  // Data join for circles.
   const dots = gClip
     .selectAll("circle")
     .data(filteredData, (d) => d.name)
@@ -1622,7 +1720,6 @@ export function updateScatterPlot(
           .attr("fill", (d) =>
             +d.edhrec_rank > 0 ? getGroupColor(+d.edhrec_rank) : "transparent"
           )
-
           .attr("stroke", (d) => (+d.edhrec_rank > 0 ? "none" : "black"))
           .attr("stroke-width", (d) => (+d.edhrec_rank > 0 ? 0 : 1.2)),
       (update) => update,
@@ -1631,38 +1728,25 @@ export function updateScatterPlot(
 
   dots
     .attr("cx", (d) => newX(getXValue(d)))
+    .attr("cy", (d) => newY(d.complexity))
     .style("display", (d) =>
       currentZoomLevel >= ZOOM_THRESHOLD || d.isZoomKey ? null : "none"
-    )
-    .attr("cy", (d) => newY(d.complexity));
-
-  const t5 = performance.now();
+    );
 
   globalDots = gClip.selectAll("circle");
 
   updatePointPositions(baseXScale, yScale);
-
-  const t6 = performance.now();
-
   updateSelectedHoverClass();
 
-  const t7 = performance.now();
-
-  // console.log(`[Scatter Perf Breakdown]
-  // • Setup / scales:       ${(t1 - t0).toFixed(2)} ms
-  // • Update domains:       ${(t2 - t1).toFixed(2)} ms
-  // • Axes update:          ${(t3 - t2).toFixed(2)} ms
-  // • Tag zoom key points:  ${(t4 - t3).toFixed(2)} ms
-  // • D3 .join() and attrs: ${(t5 - t4).toFixed(2)} ms
-  // • Dot repositioning:    ${(t6 - t5).toFixed(2)} ms
-  // • Hover sync:           ${(t7 - t6).toFixed(2)} ms
-  // • TOTAL:                ${(t7 - t0).toFixed(2)} ms`);
   interactionsOn = true;
 }
 
+// === Hover highlighting helpers used from other views ====================
+
 function shouldShowHoverTemp(d, cx, cy, chartWidth, chartHeight) {
   const zoomedOut = currentZoomLevel < ZOOM_THRESHOLD;
-  const inBounds = cx >= 0 && cx <= chartWidth && cy >= 0 && cy <= chartHeight;
+  const inBounds =
+    cx >= 0 && cx <= chartWidth && cy >= 0 && cy <= chartHeight;
   return inBounds && (!zoomedOut || d.isZoomKey);
 }
 
@@ -1676,19 +1760,17 @@ export function highlightScatterDotsFromSet(setName) {
   const { chartWidth, chartHeight } = svg.node().__scatterMeta__;
   const xScale = xMetric === "avg_price" ? logXScale : timeXScale;
 
-  d3.selectAll(".dots circle")
+  d3
+    .selectAll(".dots circle")
     .filter((d) => d.all_sets?.some((s) => s.name === setName))
     .classed("hover-temp", function (d) {
       const cx = xScale(getXValue(d));
       const cy = yScale(d.complexity);
       const shouldShow = isInBounds(cx, cy, chartWidth, chartHeight);
-      if (shouldShow) {
-        this.style.display = null; // force visibility
-      }
+      if (shouldShow) this.style.display = null;
       return shouldShow;
     });
 }
-
 
 function highlightScatterDotsFromSetType(setType) {
   const lowerType = setType.toLowerCase();
@@ -1809,14 +1891,16 @@ function highlightScatterDotsFromAlluvialLink(originality, rarity) {
   });
 }
 
+/**
+ * Clear transient hover highlights and restore visibility consistent with
+ * zoom/keypoint logic.
+ */
 export function clearScatterHoverOnly() {
   d3.selectAll(".dots circle").classed("hover-temp", false);
 
-  // Reapply zoom/visibility logic
   const svg = d3.select(".Scatterplot svg");
   const { logXScale, timeXScale, yScale } = svg.node().__scales__;
   const xScale = xMetric === "avg_price" ? logXScale : timeXScale;
 
   updatePointPositions(xScale, yScale);
 }
-

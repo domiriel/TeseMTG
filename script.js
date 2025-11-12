@@ -1,3 +1,31 @@
+// main.js
+//
+// Purpose
+// -------
+// App bootstrap & orchestration:
+// • Loads dataset and (optionally) grouped-data cache from OPFS
+// • Builds + caches groupedData for fast filtering
+// • Wires global state + subscriptions + resize handling
+// • Computes filtered views and instantiates/updates all coordinated charts
+// • Manages price attribute resolution and “illegal” (unpriced) cards
+//
+// Key Concepts
+// ------------
+// groupedData: { [Category]: Map<Value, Card[]> } precomputed index to accelerate filtering
+// selectedFilters: { [Category]: Set<string> } active filter values per category
+// filterApplicationOrder: deterministic order to combine categories
+// filter logic: "AND-OR" (AND across categories, OR within) or "AND-AND"
+//
+// External Modules
+// ----------------
+// • state.js: global state (getState / updateState / subscribe / loadFiltersFromURL)
+// • idioms/*: chart modules (create*/update*), HiddenDrawer
+// • LoadingAnimation.js: showLoader/hideLoader
+//
+
+// -----------------------------------------------------------------------------
+
+
 import {
   getState,
   subscribe,
@@ -5,23 +33,15 @@ import {
   loadFiltersFromURL,
 } from "./state.js";
 // @ts-ignore
-import {
-  createIcicleChart,
-} from "./idioms/IcicleChart.js";
-import {
-  createAlluvialChart,
-} from "./idioms/AlluvialChart.js";
-import {
-  createTimelineView,
-} from "./idioms/TimelineView.js";
+import { createIcicleChart } from "./idioms/IcicleChart.js";
+import { createAlluvialChart } from "./idioms/AlluvialChart.js";
+import { createTimelineView } from "./idioms/TimelineView.js";
 import {
   createScatterPlot,
   updateScatterPlot,
   prepareScatterData,
 } from "./idioms/Scatterplot.js";
-import {
-  createStackedLineChart,
-} from "./idioms/LineChart.js";
+import { createStackedLineChart } from "./idioms/LineChart.js";
 import { createFilterPanel, updateFilterPanel } from "./idioms/FilterPanel.js";
 import {
   createHiddenDrawer,
@@ -30,6 +50,8 @@ import {
 } from "./idioms/HiddenDrawer.js";
 import { showLoader, hideLoader } from "./idioms/LoadingAnimation.js";
 
+// Deterministic category order for filter application.
+// (Across categories: AND; within a category: OR in AND-OR mode, AND in AND-AND mode)
 const filterApplicationOrder = [
   "FreeTextSearch",
   "Set Names",
@@ -44,7 +66,15 @@ const filterApplicationOrder = [
   "Types",
   "Subtypes",
 ];
+
+// Bump this when grouped-data schema changes to invalidate OPFS cache.
 const GROUPED_DATA_VERSION = "v7";
+
+/**
+ * Resolve the effective price attribute from state.
+ * - tix → price_tix
+ * - eur/usd (+ optional suffix) → price_{currency}{suffix}
+ */
 export function getEffectivePriceAttribute(state) {
   const { selectedPriceCurrency, selectedPriceSuffix } = state;
   return selectedPriceCurrency === "tix"
@@ -52,10 +82,14 @@ export function getEffectivePriceAttribute(state) {
     : `price_${selectedPriceCurrency}${selectedPriceSuffix}`;
 }
 
+/**
+ * Persist groupedData to OPFS (Origin Private File System) as a compact JSON,
+ * storing only card indices to reduce file size and hydration time.
+ */
 async function writeGroupedDataToOPFS(groupedData) {
   console.log("Saving grouped data to OPFS");
   const serializable = {
-    __version: GROUPED_DATA_VERSION, // Save the version
+    __version: GROUPED_DATA_VERSION,
     data: {},
   };
 
@@ -73,6 +107,10 @@ async function writeGroupedDataToOPFS(groupedData) {
   await writable.close();
 }
 
+/**
+ * Attempt to hydrate groupedData from OPFS cache.
+ * Returns `null` on cache miss or version mismatch (so we rebuild).
+ */
 async function readGroupedDataFromOPFS(originalData) {
   try {
     const root = await navigator.storage.getDirectory();
@@ -105,6 +143,7 @@ async function readGroupedDataFromOPFS(originalData) {
   }
 }
 
+/** Manually clear the OPFS groupedData cache (dev/force refresh). */
 async function clearOPFSCache() {
   const root = await navigator.storage.getDirectory();
   try {
@@ -115,12 +154,20 @@ async function clearOPFSCache() {
   }
 }
 
-let isUpdatingFilteredData = false;
+let isUpdatingFilteredData = false; // guard to avoid re-entrancy inside subscribe()
 const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };
 
+/**
+ * App entry point:
+ * 1) Load data & warm/hydrate groupedData (OPFS if possible)
+ * 2) Initialize global state and register listeners
+ * 3) Create all coordinated views
+ * 4) Set up reactive updates and responsive resize handling
+ */
 async function init() {
   showLoader();
 
+  // Ensure a single shared tooltip container exists (used by multiple views)
   if (!d3.select("#tooltip").node()) {
     d3.select("body")
       .append("div")
@@ -131,12 +178,14 @@ async function init() {
   }
 
   const t0 = performance.now();
+
+  // 1) Load raw dataset
   let originalData;
   const raw = await d3.json("./data/dataset_card_details.json");
   originalData = JSON.parse(JSON.stringify(raw));
 
+  // 2) Try to hydrate groupedData from OPFS; fallback to rebuilding
   let groupedData = await readGroupedDataFromOPFS(originalData);
-  //console.log(groupedData)
   if (!groupedData) {
     const raw = await d3.json("./data/dataset_card_details.json");
     originalData = JSON.parse(JSON.stringify(raw));
@@ -150,36 +199,17 @@ async function init() {
     console.log("Grouped data in", (tgrouped - t0).toFixed(2), "ms");
   }
 
+  // Make data available in global state
   updateState({ originalData, groupedData });
   const t1 = performance.now();
 
+  // 3) Reactive: when hoveredCards change, update the Drawer (and any cross-highlights)
   getState().onChange("hoveredCards", (hoveredCards) => {
     showLoader();
-
     const t0 = performance.now();
 
-    const t1 = performance.now();
-    const t2 = performance.now();
-
-    const t3 = performance.now();
-
-    
-    const t4 = performance.now();
-
-    //highlightLineChart(hoveredCards);
-    const t5 = performance.now();
-
+    // (Reserved timing checkpoints for other coordinated highlights)
     updateDrawer(hoveredCards);
-    const t6 = performance.now();
-
-    // Optional debug logging
-    // console.log(`Hover update timings:
-    // Alluvial: ${(t2 - t1).toFixed(2)}ms
-    // Icicle: ${(t3 - t2).toFixed(2)}ms
-    // Timeline: ${(t4 - t3).toFixed(2)}ms
-    // Line chart: ${(t5 - t4).toFixed(2)}ms
-    // Drawer: ${(t6 - t5).toFixed(2)}ms
-    // Total: ${(t6 - t0).toFixed(2)}ms`);
 
     requestAnimationFrame(() => {
       updateState({
@@ -188,9 +218,10 @@ async function init() {
       });
     });
 
-    hideLoader(); // Keep this if you want the loader to fade out slightly delayed
+    hideLoader(); // fade out the loader (kept slight delay for UX consistency)
   });
 
+  // 4) Initialize charts using either shared filters (URL) or current state
   const stateSnapshot = getState();
   const sharedFilters = loadFiltersFromURL();
 
@@ -198,6 +229,7 @@ async function init() {
   const freeTextSearch = stateSnapshot.freeTextSearch;
   let selectedFilters = sharedFilters || stateSnapshot.selectedFilters;
 
+  // Compute initial filtered dataset
   const filtered = getFilteredData(
     originalData,
     selectedFilters,
@@ -205,17 +237,14 @@ async function init() {
     freeTextSearch
   );
 
+  // Create all views (first render = !update)
   createIcicleChart(filtered, ".IcicleChart");
   createFilterPanel(originalData, filtered, ".FilterPanel", selectedFilters);
   updateFilterPanel(originalData, filtered, selectedFilters);
-  createAlluvialChart(
-    filtered,
-    ".AlluvialChart",
-    false,
-    selectedPriceAttribute
-  );
-  cardsInIllegalDrawer = computeIllegalCards(originalData);
+  createAlluvialChart(filtered, ".AlluvialChart", false, selectedPriceAttribute);
 
+  // Illegal (unpriced) drawer content (prepared for the scatter’s shape)
+  cardsInIllegalDrawer = computeIllegalCards(originalData);
   const processedIllegalData = prepareScatterData(
     cardsInIllegalDrawer,
     selectedPriceAttribute
@@ -223,22 +252,16 @@ async function init() {
 
   createIllegalDrawer(processedIllegalData, ".IllegalDrawerArea");
   createHiddenDrawer(".HiddenDrawerArea");
+
   createTimelineView(filtered, ".TimelineView");
-  const processedScatterData = prepareScatterData(
-    filtered,
-    selectedPriceAttribute
-  );
-  createScatterPlot(
-    processedScatterData,
-    ".Scatterplot",
-    false,
-    selectedPriceAttribute
-  );
+  const processedScatterData = prepareScatterData(filtered, selectedPriceAttribute);
+  createScatterPlot(processedScatterData, ".Scatterplot", false, selectedPriceAttribute);
   createStackedLineChart(filtered, ".LineChart");
 
-
+  // Start with an empty drawer
   updateDrawer([]);
 
+  // Cache baseline inputs to support “no-op” short-circuiting later
   updateState({
     lastFilterInputs: {
       selectedFilters: cloneFilters(selectedFilters),
@@ -258,35 +281,29 @@ async function init() {
 
   hideLoader(150);
 
+  // 5) Global state subscription — recompute + update all views when filters/price/search change
   subscribe((state) => {
     showLoader();
-    if (isUpdatingFilteredData) return;
-    if (state.isHoverUpdate) return;
+    if (isUpdatingFilteredData) return; // guard during own updates
+    if (state.isHoverUpdate) return;    // skip if only hover-side effects
 
     const t0 = performance.now();
     const context = state.updateContext || "default";
     const { selectedFilters, freeTextSearch } = state;
     const selectedPriceAttribute = getEffectivePriceAttribute(state);
 
-    const t1 = performance.now();
+    // Re-filter with current inputs
     const filteredData = getFilteredData(
       originalData,
       selectedFilters,
       selectedPriceAttribute,
       freeTextSearch
     );
-    const t2 = performance.now();
-    //console.log(`[t${(t2 - t1).toFixed(2)}ms] Filtered data`);
 
-    updateFilterPanel(
-      originalData,
-      filteredData,
-      selectedFilters,
-      ".FilterPanel"
-    );
-    const t3 = performance.now();
-    //console.log(`[t${(t3 - t2).toFixed(2)}ms] Updated filter panel`);
+    // Update filter panel counts + pills
+    updateFilterPanel(originalData, filteredData, selectedFilters, ".FilterPanel");
 
+    // Early exit: avoid redundant UI thrash if nothing material changed in default context
     if (
       window._prevFilteredLength === filteredData.length &&
       window._prevPriceAttribute === selectedPriceAttribute &&
@@ -299,46 +316,27 @@ async function init() {
     window._prevFilteredLength = filteredData.length;
     window._prevPriceAttribute = selectedPriceAttribute;
 
+    // Push updates to every coordinated view
     createIcicleChart(filteredData, ".IcicleChart", true);
-    const t4 = performance.now();
-    //console.log(`[t${(t4 - t3).toFixed(2)}ms] Icicle chart updated`);
-
     createTimelineView(filteredData, ".TimelineView", true);
-    const t5 = performance.now();
-    //console.log(`[t${(t5 - t4).toFixed(2)}ms] Timeline view updated`);
-
     createStackedLineChart(filteredData, ".LineChart", true);
-    const t6 = performance.now();
-    // console.log(`[t${(t6 - t5).toFixed(2)}ms] Line chart updated`);
+    createAlluvialChart(filteredData, ".AlluvialChart", true, selectedPriceAttribute);
 
-    createAlluvialChart(
-      filteredData,
-      ".AlluvialChart",
-      true,
-      selectedPriceAttribute
-    );
-    const t7 = performance.now();
-    //console.log(`[t${(t7 - t6).toFixed(2)}ms] Alluvial chart updated`);
-
-    const processedData = prepareScatterData(
-      filteredData,
-      selectedPriceAttribute
-    );
+    // Scatter needs pre-aggregation by card; then update only
+    const processedData = prepareScatterData(filteredData, selectedPriceAttribute);
     updateScatterPlot(processedData, selectedPriceAttribute);
-    const t8 = performance.now();
-    //console.log(`[t${(t8 - t7).toFixed(2)}ms] Scatterplot updated`);
 
+    // Keep drawer aligned with current hoveredCards
     const { hoveredCards } = getState();
     updateDrawer(hoveredCards);
-    const t9 = performance.now();
-    //console.log(`[t${(t9 - t8).toFixed(2)}ms] Highlights and drawer updated`);
 
-    const total = (t9 - t0).toFixed(2);
+    const total = (performance.now() - t0).toFixed(2);
     console.log(`[Total: ${total}ms] Full update cycle`);
 
     hideLoader(100);
   });
 
+  // 6) Responsive: rebuild/update charts on resize (keeps layout crisp)
   window.addEventListener("resize", () => {
     const { selectedFilters, freeTextSearch, hoveredCards } = getState();
     const selectedPriceAttribute = getEffectivePriceAttribute(getState());
@@ -348,41 +346,40 @@ async function init() {
       selectedPriceAttribute,
       freeTextSearch
     );
-    createAlluvialChart(
-      filteredData,
-      ".AlluvialChart",
-      true,
-      selectedPriceAttribute
-    );
+
+    // On resize we re-create charts that depend on container size,
+    // and update scatter (which caches scales/metadata)
+    createAlluvialChart(filteredData, ".AlluvialChart", true, selectedPriceAttribute);
     createTimelineView(filteredData, ".TimelineView", true);
     createStackedLineChart(filteredData, ".LineChart", true);
     createIcicleChart(filteredData, ".IcicleChart", true);
-    updateScatterPlot(
-      prepareScatterData(filteredData, selectedPriceAttribute),
-      selectedPriceAttribute
-    );
-    createFilterPanel(
-      originalData,
-      filteredData,
-      ".FilterPanel",
-      selectedFilters
-    );
+    updateScatterPlot(prepareScatterData(filteredData, selectedPriceAttribute), selectedPriceAttribute);
+
+    // Filter panel reflow (search inputs, option counts remain correct)
+    createFilterPanel(originalData, filteredData, ".FilterPanel", selectedFilters);
+
+    // Keep the drawer’s items visible
     updateDrawer(hoveredCards);
   });
 }
 
+/**
+ * Core filtering pipeline.
+ * - Applies category filters per filterApplicationOrder
+ * - Combines category matches per current logic mode
+ * - Applies FreeTextSearch as a final pass (card name)
+ * Returns a materialized array of cards.
+ */
 export function filterData(groupedData, selectedFilters, options = {}) {
   const { excludeCategory } = options;
   const mode = getState().filterLogicMode || "AND-OR";
-
   const applyAndWithin = mode.endsWith("AND");
 
   let filteredSet = new Set();
-
   const perCategoryMatches = [];
 
-  for (const category of filterApplicationOrder ||
-    Object.keys(selectedFilters)) {
+  // Respect the deterministic order. If missing, fallback to object keys.
+  for (const category of filterApplicationOrder || Object.keys(selectedFilters)) {
     if (excludeCategory && category === excludeCategory) continue;
 
     const values = selectedFilters[category];
@@ -394,6 +391,7 @@ export function filterData(groupedData, selectedFilters, options = {}) {
     let matched = new Set();
 
     if (applyAndWithin) {
+      // Strict AND within a category
       const sets = Array.from(values)
         .map((val) => group.get(val))
         .filter((set) => set);
@@ -406,6 +404,7 @@ export function filterData(groupedData, selectedFilters, options = {}) {
         matched = new Set();
       }
     } else {
+      // OR within a category
       values.forEach((val) => {
         const set = group.get(val);
         if (set) set.forEach((card) => matched.add(card));
@@ -415,12 +414,13 @@ export function filterData(groupedData, selectedFilters, options = {}) {
     perCategoryMatches.push(matched);
   }
 
+  // AND across categories (empty perCategoryMatches = "no filters" → start from originalData)
   filteredSet = perCategoryMatches.reduce(
     (a, b) => intersectSets(a, b),
     new Set(getState().originalData || [])
   );
 
-  // Apply free text search
+  // Free text search (simple name contains)
   const textTerms = selectedFilters["FreeTextSearch"];
   if (textTerms?.size > 0) {
     const searchTerms = Array.from(textTerms).map((t) => t.toLowerCase());
@@ -437,72 +437,17 @@ export function filterData(groupedData, selectedFilters, options = {}) {
   return Array.from(filteredSet);
 }
 
-// Helper to create a copy of selectedFilters omitting some categories
-
-// Helper for intersecting two sets
+/** Set intersection helper. */
 function intersectSets(setA, setB) {
   return new Set([...setA].filter((x) => setB.has(x)));
 }
 
-// Helper: test if a single card passes the filters (except those ignored)
-function shouldIncludeCard(card, selectedFilters) {
-  // IcicleColorGroups
-  if (selectedFilters["IcicleColorGroups"]?.size > 0) {
-    const groupLabel = (
-      card.number_of_colours >= 4
-        ? "+4 Colors"
-        : card.number_of_colours == 1
-        ? "1 Color"
-        : card.number_of_colours === 0
-        ? "Colorless"
-        : `${card.number_of_colours} Colors`
-    ).toLowerCase();
-    if (!selectedFilters["IcicleColorGroups"].has(groupLabel.toLowerCase()))
-      return false;
-  }
 
-  // IcicleColorIdentity
-  if (selectedFilters["IcicleColorIdentity"]?.size > 0) {
-    const identity = Array.isArray(card.color_identity)
-      ? card.color_identity.join("") || "Colorless"
-      : "Colorless";
-    if (!selectedFilters["IcicleColorIdentity"].has(identity)) return false;
-  }
 
-  // Year
-  if (selectedFilters["Year"]?.size > 0) {
-    const releaseYear = new Date(card.release_date).getFullYear().toString();
-    if (!selectedFilters["Year"].has(releaseYear)) return false;
-  }
-
-  // Other categories
-  for (const [category, values] of Object.entries(selectedFilters)) {
-    if (!values || values.size === 0) continue;
-
-    const cardValue = extractCardValue(card, category);
-    if (!cardValue) return false;
-
-    const isSplittable = [
-      "Supertypes",
-      "Types",
-      "Subtypes",
-      "Keywords",
-    ].includes(category);
-    const cardValues = Array.isArray(cardValue)
-      ? cardValue.map((v) => v.trim().toLowerCase())
-      : isSplittable
-      ? cardValue.split(/[\s/]+/).map((v) => v.trim().toLowerCase())
-      : [cardValue.trim().toLowerCase()];
-
-    const filterValues = new Set(
-      Array.from(values).map((v) => v.trim().toLowerCase())
-    );
-    if (!cardValues.some((v) => filterValues.has(v))) return false;
-  }
-
-  return true;
-}
-
+/**
+ * Precompute groupedData indexes for all supported categories.
+ * This runs once (or when OPFS cache invalidates).
+ */
 function buildGroupedData(data) {
   const grouped = {
     Originality: new Map(),
@@ -532,6 +477,7 @@ function buildGroupedData(data) {
   return grouped;
 }
 
+/** Extract *all* values for a category (for indexing). */
 function extractCardValues(card, category) {
   switch (category) {
     case "Originality":
@@ -564,22 +510,19 @@ function extractCardValues(card, category) {
       if (card.number_of_colours === 0) return ["colorless"];
       return [`${card.number_of_colours} colors`];
     case "Color Identity":
-      if (
-        !Array.isArray(card.color_identity) ||
-        card.color_identity.length === 0
-      )
+      if (!Array.isArray(card.color_identity) || card.color_identity.length === 0)
         return ["colorless"];
       const sortedColors = card.color_identity
         .slice()
         .sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b])
         .join("");
       return [sortedColors.toLowerCase()];
-
     default:
       return [];
   }
 }
 
+/** Extract a *single* value (string) for a category (for predicate checks). */
 function extractCardValue(card, category) {
   switch (category) {
     case "Keywords":
@@ -609,10 +552,7 @@ function extractCardValue(card, category) {
       return `${card.number_of_colours} colors`;
 
     case "Color Identity":
-      if (
-        !Array.isArray(card.color_identity) ||
-        card.color_identity.length === 0
-      ) {
+      if (!Array.isArray(card.color_identity) || card.color_identity.length === 0) {
         return "colorless";
       }
       return card.color_identity
@@ -625,6 +565,13 @@ function extractCardValue(card, category) {
       return null;
   }
 }
+
+/**
+ * Filter pipeline façade:
+ * - Short-circuits for “no filters” and common input-equality cases
+ * - Applies filterData + price-only constraint
+ * - Updates memo inputs in state to enable incremental performance wins
+ */
 export function getFilteredData(
   originalData,
   selectedFilters,
@@ -635,12 +582,14 @@ export function getFilteredData(
   const groupedData = state.groupedData || buildGroupedData(originalData);
 
   console.log("Filtering with", selectedFilters, freeTextSearch);
-  if (isFilterEmpty(selectedFilters) && freeTextSearch==="") {
+
+  // Case 1: No filters, no freetext → just filter by price availability
+  if (isFilterEmpty(selectedFilters) && freeTextSearch === "") {
     console.log("No filters applied, returning original data");
     return filterPriceOnly(originalData, selectedPriceAttribute);
-  }
+    }
 
-  // Case 2: Same as original, no change
+  // Case 2: Inputs identical to the original baseline → use originalFilteredData
   const currentPriceAttribute = getEffectivePriceAttribute(state);
   if (
     shallowCompareFilters(selectedFilters, state.originalSelectedFilters) &&
@@ -658,7 +607,7 @@ export function getFilteredData(
     );
   }
 
-  // Case 3: Same inputs as last time
+  // Case 3: Inputs equal to last invocation → reuse lastFilteredData
   const lastInputs = state.lastFilterInputs || {};
   const inputsMatch =
     shallowCompareFilters(selectedFilters, lastInputs.selectedFilters) &&
@@ -671,11 +620,12 @@ export function getFilteredData(
     return state.lastFilteredData;
   }
 
+  // Compute new filtered set
   isUpdatingFilteredData = true;
 
   const filtered = filterData(groupedData, selectedFilters);
-
   const cleaned = filterPriceOnly(filtered, selectedPriceAttribute);
+
   updateState({
     lastFilterInputs: {
       selectedFilters: cloneFilters(selectedFilters),
@@ -685,18 +635,20 @@ export function getFilteredData(
     },
     lastFilteredData: cleaned,
   });
+
   isUpdatingFilteredData = false;
 
   return cleaned;
 }
 
+/** Post-filter constraint: keep only cards with a positive numeric value in `priceAttr`. */
 export function filterPriceOnly(cards, priceAttr) {
   return cards.filter(
     (card) => typeof card[priceAttr] === "number" && card[priceAttr] > 0
   );
 }
 
-// Helper: shallow compare two filter sets
+/** Shallow compare two `{ [category]: Set }` maps. */
 function shallowCompareFilters(a, b) {
   if (!a || !b) return false;
   const aKeys = Object.keys(a);
@@ -713,11 +665,12 @@ function shallowCompareFilters(a, b) {
   });
 }
 
+/** True iff all categories are empty (no active filters). */
 export function isFilterEmpty(selectedFilters) {
   return Object.values(selectedFilters).every((set) => set.size === 0);
 }
 
-// Helper: deep clone filter sets
+/** Deep clone a `{ [category]: Set }` map (values remain strings). */
 function cloneFilters(filters) {
   const cloned = {};
   for (const key in filters) {
@@ -726,6 +679,7 @@ function cloneFilters(filters) {
   return cloned;
 }
 
+/** Predicate for “priceless” cards: no valid EUR/USD/TIX value > 0 across any variant. */
 function isCardPriceless(card) {
   return (
     typeof card.price_usd !== "number" ||
@@ -745,8 +699,10 @@ function isCardPriceless(card) {
 
 let cardsInIllegalDrawer = [];
 
+/** Extract all cards that fail the pricing requirement. */
 function computeIllegalCards(data) {
   return data.filter(isCardPriceless);
 }
 
+// Kick off the app
 init().catch(console.error);

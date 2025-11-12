@@ -1,3 +1,27 @@
+// FilterPanel.js
+//
+// Purpose
+// -------
+// Renders the left-side Filter Panel UI and keeps it in sync with global app state.
+// It supports:
+// • Quick card search (autocomplete) that selects a specific card in the scatterplot
+// • Scryfall-like free-text search (t:, kw:, r:, s:, st:), including inference for `t:`
+// • Collapsible filter sections with dynamic option counts
+// • AND-OR / AND-AND logic modes (across/within categories)
+// • Currency + price suffix selection (Regular/Foil/Etched depending on currency)
+// • Save / Load / Share filter presets
+// • Clear Filters (filter state only) and Clear Selections (cross-view persistent selections)
+// • Small helper search for Timeline sets (scrolls to a set rect)
+//
+// Selection semantics (recap):
+// - Within a category, multiple selected values are OR-ed (unless global mode is AND-AND).
+// - Across categories, groups are AND-ed.
+// - Dynamic counts recompute from currently active filter context, excluding the category itself
+//   when in AND-OR mode, or using the fully filtered set when in AND-AND mode.
+//
+
+// -----------------------------------------------------------------------------------------
+
 import {
   updateState,
   getState,
@@ -15,17 +39,32 @@ import {
 
 import { emitCardSearch, emitClearSelection } from "./Events.js";
 import { showLoader, hideLoader } from "./LoadingAnimation.js";
+
+// --- Constants & module-local registries ---------------------------------
+
+// We exclude certain set types from *display* (still present in data).
 const EXCLUDED_SET_TYPES = new Set(["alchemy", "minigame"]);
+
+// Track rendered option <div> nodes to quickly patch labels/counts without reflowing sections.
 const optionMap = new Map();
+
+// Track "pill" containers per category for rendering/removing active filter chips.
 const pillMap = new Map();
+
+// Color order used to normalize/format MTG color identity strings.
 const mtgColorOrder = { w: 0, u: 1, b: 2, r: 3, g: 4 };
+
+// Normalize keys used in optionMap so we don’t double-store "Colorless"/"colorless".
 function getNormalizedKey(category, value) {
   return category === "Color Identity" || category === "Nº of Colors"
     ? value.toLowerCase()
     : value;
 }
 
+// Used by the card-name datalist (lazy-filled during typing).
 let currentCardNames = [];
+
+// Fixed orders color-based categories.
 const numColorsOrder = [
   "colorless",
   "1 color",
@@ -34,6 +73,7 @@ const numColorsOrder = [
   "4 colors",
   "5 colors",
 ];
+
 const colorIdentityOrder = [
   "colorless",
   "w",
@@ -69,28 +109,32 @@ const colorIdentityOrder = [
   "wubrg",
 ];
 
+// --- Price suffix logic ---------------------------------------------------
+// EUR:     regular / foil
+// USD:     regular / foil / etched
+// TIX:     regular only
 function getSuffixOptionsForCurrency(currency) {
   if (currency === "eur") return ["", "_foil"];
   if (currency === "usd") return ["", "_foil", "_etched"];
   return [""]; // tix
 }
+
+// Display-friendly labels for a few categories.
 function formatDisplayLabel(category, value) {
   if (category === "Color Identity") {
     if (value.toLowerCase() === "colorless") return "Colorless";
-    return value.toUpperCase(); // WUB, UBR, etc.
+    return value.toUpperCase();
   }
-
   if (category === "Nº of Colors") {
-    // Capitalize each word, e.g., "1 color" → "1 Color", "+4 colors" → "+4 Colors"
     return value
       .split(" ")
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(" ");
   }
-
-  return value; // default fallback
+  return value;
 }
 
+// Categories visible in the panel (others might exist in groupedData but are hidden).
 const VISIBLE_FILTER_CATEGORIES = [
   "Keywords",
   "Supertypes",
@@ -105,10 +149,29 @@ const VISIBLE_FILTER_CATEGORIES = [
   "Color Identity",
 ];
 
+// Simple helpers
 function capitalizeFirst(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+// --- Scryfall-like search aids -------------------------------------------
+// Mapping: shorthand → candidate categories
+//  - t:, type:     → Types (and Supertypes/Subtypes for `t:` with inference)
+//  - kw:, keyword: → Keywords
+//  - r:            → Rarity
+//  - s:            → Set Names
+//  - st:           → Set Types
+const scryfallMap = {
+  t: ["Types", "Supertypes", "Subtypes"],
+  type: ["Types"],
+  kw: ["Keywords"],
+  keyword: ["Keywords"],
+  r: ["Rarity"],
+  s: ["Set Names"],
+  st: ["Set Types"],
+};
+
+// Infer which of Supertypes/Types/Subtypes a free token most likely belongs to.
 function inferFilterCategoryFromValue(
   value,
   data,
@@ -116,10 +179,7 @@ function inferFilterCategoryFromValue(
 ) {
   const valueLower = value.trim().toLowerCase();
   const counts = {};
-
-  candidates.forEach((category) => {
-    counts[category] = 0;
-  });
+  candidates.forEach((category) => (counts[category] = 0));
 
   data.forEach((card) => {
     candidates.forEach((category) => {
@@ -149,28 +209,16 @@ function inferFilterCategoryFromValue(
   return maxCategory;
 }
 
-const scryfallMap = {
-  t: ["Types", "Supertypes", "Subtypes"],
-  type: ["Types"],
-  kw: ["Keywords"],
-  keyword: ["Keywords"],
-  r: ["Rarity"],
-  s: ["Set Names"],
-  st: ["Set Types"],
-};
-function addToMap(map, key) {
-  if (!key) return;
-  const trimmed = key.trim();
-  if (!trimmed) return;
-  map.set(trimmed, (map.get(trimmed) || 0) + 1);
-}
-
+// Clone { [category]: Set(values) } safely.
 function cloneFilters(filters) {
   return Object.fromEntries(
     Object.entries(filters).map(([k, v]) => [k, new Set(v)])
   );
 }
 
+// --- Main: createFilterPanel ---------------------------------------------
+// Builds the entire panel DOM. Intended to be called on first render and when a
+// full rebuild is needed (e.g., switching datasets or large layout changes).
 export function createFilterPanel(
   data,
   filteredCards,
@@ -190,6 +238,7 @@ export function createFilterPanel(
     container.select(".filter-panel-wrapper").remove();
   }
 
+  // Wrapper (scrollable).
   const wrapper = container
     .append("div")
     .attr("class", "filter-panel-wrapper")
@@ -201,6 +250,7 @@ export function createFilterPanel(
 
   const selectedFilters = selectedFiltersFromState;
 
+  // --- PRICE SUFFIX SELECTOR --------------------------------------------
   const suffixWrapper = wrapper.append("div").style("margin-bottom", "12px");
 
   suffixWrapper
@@ -219,6 +269,7 @@ export function createFilterPanel(
     .style("border", "1px solid #ccc")
     .style("border-radius", "6px");
 
+  // Populate suffix options for current currency; rerender when currency changes.
   function renderSuffixOptions(currency) {
     const suffixOptions = getSuffixOptionsForCurrency(currency);
     suffixSelect.selectAll("option").remove();
@@ -240,15 +291,19 @@ export function createFilterPanel(
     updateState({ selectedPriceSuffix: this.value });
   });
 
+  // --- FILTER DATA SOURCE (groupedData) ---------------------------------
+  // groupedData is a { category: Map(value -> cards[]) } produced elsewhere.
+  // We only render categories listed in VISIBLE_FILTER_CATEGORIES.
   const groupedData = getState().groupedData;
 
-
+  // Prepare [category → [ [value, count], ... ]] to render option lists.
   const allFilters = Object.fromEntries(
     Object.entries(groupedData)
       .filter(([category]) => VISIBLE_FILTER_CATEGORIES.includes(category))
       .map(([category, map]) => {
         let entries = Array.from(map.entries());
 
+        // Exclude specific Set Types from the UI (visual affordance).
         if (category === "Set Types") {
           const excluded = new Set(["alchemy", "minigame"]);
           entries = entries.filter(
@@ -256,11 +311,12 @@ export function createFilterPanel(
           );
         }
 
+        // Stable sort per category.
         entries = entries.sort((a, b) => {
           if (category === "Nº of Colors") {
             const aIdx = numColorsOrder.indexOf(a[0]);
-  const bIdx = numColorsOrder.indexOf(b[0]);
-  return aIdx - bIdx;
+            const bIdx = numColorsOrder.indexOf(b[0]);
+            return aIdx - bIdx;
           }
           if (category === "Color Identity") {
             return (
@@ -281,122 +337,124 @@ export function createFilterPanel(
     )
   );
 
+  // --- CARD NAME AUTOCOMPLETE (LAZY) ------------------------------------
+  // We do not hydrate the datalist with thousands of options at once.
+  // Instead, we track currentCardNames and only render top 50 matches on input.
   const uniqueCardNames = Array.from(
     new Set(filteredCards.map((card) => card.name))
   ).sort();
 
   const inputId = "searchInput_" + Math.random().toString(36).substring(2);
 
-const searchInput = wrapper
-  .append("input")
-  .attr("type", "text")
-  .attr("list", inputId)
-  .attr("placeholder", "Select a card...")
-  .attr("title", "Type to select a card from the dataset")
-  .style("width", "85%")
-  .style("margin-bottom", "12px")
-  .style("padding", "6px")
-  .style("font-size", "16px");
+  const searchInput = wrapper
+    .append("input")
+    .attr("type", "text")
+    .attr("list", inputId)
+    .attr("placeholder", "Select a card...")
+    .attr("title", "Type to select a card from the dataset")
+    .style("width", "85%")
+    .style("margin-bottom", "12px")
+    .style("padding", "6px")
+    .style("font-size", "16px");
 
-const dataList = wrapper.append("datalist").attr("id", inputId);
+  const dataList = wrapper.append("datalist").attr("id", inputId);
 
-// 🚨 don’t render all options up front!
-// Instead, render only on input:
-searchInput.on("input", function () {
-  const query = this.value.toLowerCase();
+  // On type, rebuild at most 50 <option>s that match the substring.
+  searchInput.on("input", function () {
+    const query = this.value.toLowerCase();
     dataList.selectAll("option").remove();
-  const matches = currentCardNames
-    .filter((name) => name.toLowerCase().includes(query))
-    .slice(0, 50); // cap at 50 to keep DOM light
+    const matches = currentCardNames
+      .filter((name) => name.toLowerCase().includes(query))
+      .slice(0, 50);
 
-  dataList
-    .selectAll("option")
-    .data(matches, (d) => d)
-    .join("option")
-    .attr("value", (d) => d);
-});
+    dataList
+      .selectAll("option")
+      .data(matches, (d) => d)
+      .join("option")
+      .attr("value", (d) => d);
+  });
 
+  // --- Scryfall-like Free Text Search -----------------------------------
   wrapper
     .append("input")
     .attr("type", "text")
     .attr("placeholder", "Filter by card name or Scryfall Filters...")
-    .style("width", "85%")
     .attr(
       "title",
       "Filter by card name, or using Scryfall Filters (use e.g., t:Goblin or kw:Flying)"
     )
+    .style("width", "85%")
     .style("margin-bottom", "12px")
     .style("padding", "6px")
     .style("font-size", "16px")
     .on("keydown", function (event) {
-      if (event.key === "Enter") {
-        const searchText = this.value.trim().toLowerCase();
-        if (!searchText) return;
+      if (event.key !== "Enter") return;
 
-        const terms = searchText.match(/(?:\w+\s*:\s*[^ ]+)|(?:[^\s]+)/g) || [];
+      const searchText = this.value.trim().toLowerCase();
+      if (!searchText) return;
 
-        const currentFilters = cloneFilters(getState().selectedFilters);
+      // Split into tokens, preserving key:value chunks.
+      const terms = searchText.match(/(?:\w+\s*:\s*[^ ]+)|(?:[^\s]+)/g) || [];
 
-        if (!currentFilters["FreeTextSearch"])
-          currentFilters["FreeTextSearch"] = new Set();
+      const currentFilters = cloneFilters(getState().selectedFilters);
+      if (!currentFilters["FreeTextSearch"])
+        currentFilters["FreeTextSearch"] = new Set();
 
-        terms.forEach((rawTerm) => {
-          const term = rawTerm.replace(/\s+/g, ""); // Remove inner spaces like 't: goblin' → 't:goblin'
-          const match = term.match(/^(\w+):(.+)$/);
+      terms.forEach((rawTerm) => {
+        const term = rawTerm.replace(/\s+/g, ""); // normalize spaces: 't: goblin' → 't:goblin'
+        const match = term.match(/^(\w+):(.+)$/);
 
-          if (match) {
-            const key = match[1].toLowerCase();
-            const value = match[2].trim();
-            const categories = scryfallMap[key];
+        if (match) {
+          const key = match[1].toLowerCase();
+          const value = match[2].trim();
+          const categories = scryfallMap[key];
 
-            if (categories) {
-              let matched = false;
+          if (categories) {
+            let matched = false;
 
-              // Special case: t: → needs inference
-              if (key === "t") {
-                const inferredCat = inferFilterCategoryFromValue(value, data);
-                if (VISIBLE_FILTER_CATEGORIES.includes(inferredCat)) {
-                  if (!currentFilters[inferredCat])
-                    currentFilters[inferredCat] = new Set();
-                  currentFilters[inferredCat].add(capitalizeFirst(value));
-                  matched = true;
-                }
-              } else {
-                categories.forEach((cat) => {
-                  if (VISIBLE_FILTER_CATEGORIES.includes(cat)) {
-                    if (!currentFilters[cat]) currentFilters[cat] = new Set();
-                    currentFilters[cat].add(capitalizeFirst(value));
-                    matched = true;
-                  }
-                });
-              }
-
-              if (!matched) {
-                if (!currentFilters["FreeTextSearch"])
-                  currentFilters["FreeTextSearch"] = new Set();
-                currentFilters["FreeTextSearch"].add(term);
+            // t:VALUE → infer which of Supertypes/Types/Subtypes the value belongs to most.
+            if (key === "t") {
+              const inferredCat = inferFilterCategoryFromValue(value, data);
+              if (VISIBLE_FILTER_CATEGORIES.includes(inferredCat)) {
+                if (!currentFilters[inferredCat])
+                  currentFilters[inferredCat] = new Set();
+                currentFilters[inferredCat].add(capitalizeFirst(value));
+                matched = true;
               }
             } else {
-              if (!currentFilters["FreeTextSearch"])
-                currentFilters["FreeTextSearch"] = new Set();
+              // Direct mapping for kw/r/s/st/type
+              categories.forEach((cat) => {
+                if (VISIBLE_FILTER_CATEGORIES.includes(cat)) {
+                  if (!currentFilters[cat]) currentFilters[cat] = new Set();
+                  currentFilters[cat].add(capitalizeFirst(value));
+                  matched = true;
+                }
+              });
+            }
+
+            // If we couldn't map it to a visible category, keep it as a raw token.
+            if (!matched) {
               currentFilters["FreeTextSearch"].add(term);
             }
           } else {
-            if (!currentFilters["FreeTextSearch"])
-              currentFilters["FreeTextSearch"] = new Set();
+            // Unknown "key:" → keep token verbatim.
             currentFilters["FreeTextSearch"].add(term);
           }
-        });
+        } else {
+          // Bare token → keep as FreeTextSearch.
+          currentFilters["FreeTextSearch"].add(term);
+        }
+      });
 
-        updateState({
-          selectedFilters: currentFilters,
-          updateContext: "TextSearch",
-        });
+      updateState({
+        selectedFilters: currentFilters,
+        updateContext: "TextSearch",
+      });
 
-        this.value = ""; // Clear input after
-      }
+      this.value = ""; // Clear the input for next query.
     });
 
+  // --- Timeline Set Search (scrolls to match) ----------------------------
   wrapper
     .append("input")
     .attr("type", "text")
@@ -407,49 +465,47 @@ searchInput.on("input", function () {
     .style("padding", "6px")
     .style("font-size", "16px")
     .on("keydown", function (event) {
-      if (event.key === "Enter") {
-        const query = this.value.trim().toLowerCase();
-        if (!query) return;
+      if (event.key !== "Enter") return;
 
-        const matchedSet = getState().groupedData["Set Names"];
-        if (!matchedSet) return;
+      const query = this.value.trim().toLowerCase();
+      if (!query) return;
 
-        // Try exact match
-        const matched = Array.from(matchedSet.keys()).find(
-          (name) => name.toLowerCase() === query
-        );
-        if (!matched) return;
+      const matchedSet = getState().groupedData["Set Names"];
+      if (!matchedSet) return;
 
-        // Scroll to matching set in timeline (must be visible)
-        const setRects = d3.selectAll(".set-rect");
-        const target = setRects
-          .filter((d) => d.name.toLowerCase() === matched.toLowerCase())
-          .node();
+      // Exact match first (simple heuristic).
+      const matched = Array.from(matchedSet.keys()).find(
+        (name) => name.toLowerCase() === query
+      );
+      if (!matched) return;
 
-        if (target) {
-          const container = d3.select(".chart-container"); // must match your scroll container class
-          const bbox = target.getBoundingClientRect();
-          const containerBox = container.node().getBoundingClientRect();
+      // Find corresponding rect in the Timeline and scroll it into view.
+      const setRects = d3.selectAll(".set-rect");
+      const target = setRects
+        .filter((d) => d.name.toLowerCase() === matched.toLowerCase())
+        .node();
 
-          const offsetTop =
-            bbox.top - containerBox.top + container.node().scrollTop;
-          container.node().scrollTo({
-            top: offsetTop - 40,
-            behavior: "smooth",
-          });
+      if (target) {
+        const container = d3.select(".chart-container"); // must match your scroll container
+        const bbox = target.getBoundingClientRect();
+        const containerBox = container.node().getBoundingClientRect();
 
-          // Optional: flash match
-          d3.select(target).classed("search-match", true);
-          setTimeout(
-            () => d3.select(target).classed("search-match", false),
-            1000
-          );
-        }
+        const offsetTop =
+          bbox.top - containerBox.top + container.node().scrollTop;
+        container.node().scrollTo({
+          top: offsetTop - 40,
+          behavior: "smooth",
+        });
 
-        this.value = "";
+        // Optional flash to indicate result.
+        d3.select(target).classed("search-match", true);
+        setTimeout(() => d3.select(target).classed("search-match", false), 1000);
       }
+
+      this.value = "";
     });
 
+  // Free-text pills container (chips representing parsed tokens).
   const freeTextPillContainer = wrapper
     .append("div")
     .attr("class", "pill-container free-text-pills")
@@ -460,51 +516,50 @@ searchInput.on("input", function () {
 
   pillMap.set("FreeTextSearch", freeTextPillContainer);
 
-
+  // --- Card name search behavior (select card in scatterplot) ------------
   function searchByName(inputEl) {
-  const cardName = inputEl.value.trim();
-  if (!cardName) return;
+    const cardName = inputEl.value.trim();
+    if (!cardName) return;
 
-  const circle = d3
-    .selectAll(".Scatterplot .dots circle")
-    .filter((d) => d.name === cardName)
-    .node();
-  if (!circle) return;
+    const circle = d3
+      .selectAll(".Scatterplot .dots circle")
+      .filter((d) => d.name === cardName)
+      .node();
+    if (!circle) return;
 
-  const card = d3.select(circle).datum();
-  emitCardSearch(card);
+    const card = d3.select(circle).datum();
+    emitCardSearch(card);
+    // NOTE: we keep the text; browser shows chosen option.
+  }
 
-  // keep the text but highlight it so user can type over it
-}
-
- searchInput
-  .on("keydown", function (event) {
-    if (event.key === "Enter") {
-      event.preventDefault();
+  searchInput
+    .on("keydown", function (event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        searchByName(this);
+      }
+    })
+    .on("change", function () {
+      // Also fires when selecting from datalist with the mouse.
       searchByName(this);
-    }
-  })
-  .on("change", function () {
-    // still useful when selecting from the datalist with the mouse
-    searchByName(this);
-  });
+    });
 
+  // --- Price field discovery (not used here, but ready if needed) --------
   const priceFields = new Set();
   data.forEach((card) => {
     Object.keys(card).forEach((key) => {
-      if (key.startsWith("price_")) {
-        priceFields.add(key);
-      }
+      if (key.startsWith("price_")) priceFields.add(key);
     });
   });
-
   const sortedPriceFields = Array.from(priceFields).sort();
 
+  // --- Global action buttons ---------------------------------------------
   const resetWrapper = wrapper
     .append("div")
     .style("margin-bottom", "12px")
     .style("text-align", "left");
 
+  // Clear Filters → wipes only selectedFilters in state (keeps cross-view selections).
   resetWrapper
     .append("button")
     .text("Clear Filters")
@@ -521,10 +576,10 @@ searchInput.on("input", function () {
     .on("click", () => {
       const clearedFilters = {};
       for (const key in selectedFilters) clearedFilters[key] = new Set();
-      
-      updateState({ selectedFilters: clearedFilters, freeTextSearch:"" });
+      updateState({ selectedFilters: clearedFilters, freeTextSearch: "" });
     });
 
+  // Clear Selections → emits global event to clear cross-view persistent selections.
   resetWrapper
     .append("button")
     .text("Clear Selections")
@@ -543,6 +598,7 @@ searchInput.on("input", function () {
       emitClearSelection();
     });
 
+  // --- Category sections --------------------------------------------------
   Object.entries(filters).forEach(([category, values]) => {
     const section = wrapper
       .append("div")
@@ -550,29 +606,33 @@ searchInput.on("input", function () {
       .style("margin-top", "12px")
       .style("width", "95%");
 
-const header = section
-  .append("div")
-  .attr("class", "dropdown-header")
-  .style("background", "#B69677")
-  .style("padding", "6px 9px")
-  .style("border", "1px solid #ccc")
-  .style("border-radius", "6px")
-  .style("cursor", "pointer")
-  .style("font-weight", "bold")
-  .style("width", "100%")
-  .style("box-sizing", "border-box")
-  .style("display", "flex")
-  .style("align-items", "center")
-  .style("justify-content", "space-between");
+    // Header (toggleable).
+    const header = section
+      .append("div")
+      .attr("class", "dropdown-header")
+      .style("background", "#B69677")
+      .style("padding", "6px 9px")
+      .style("border", "1px solid #ccc")
+      .style("border-radius", "6px")
+      .style("cursor", "pointer")
+      .style("font-weight", "bold")
+      .style("width", "100%")
+      .style("box-sizing", "border-box")
+      .style("display", "flex")
+      .style("align-items", "center")
+      .style("justify-content", "space-between");
 
     header.append("span").text(category);
 
-// right: static caret
-header.append("span")
-  .attr("class", "dropdown-caret")
-  .style("font-size", "20px")
-  .style("margin-left", "auto") // pushes it all the way right
-  .text("▾");
+    // Static caret at the right.
+    header
+      .append("span")
+      .attr("class", "dropdown-caret")
+      .style("font-size", "20px")
+      .style("margin-left", "auto")
+      .text("▾");
+
+    // Content list: hidden by default. We patch counts inside it in updateFilterPanel.
     const content = section
       .append("div")
       .attr("class", "dropdown-content")
@@ -583,12 +643,13 @@ header.append("span")
       .style("border", "1px solid #ccc")
       .style("border-radius", "6px")
       .style("padding", "6px")
-      .style("width", "100%") // <- Not shown, but should be added
-.style("max-width", "100%")   // 🔒 never exceed parent
-.style("overflow-x", "hidden")
-.style("box-sizing", "border-box")
+      .style("width", "100%")
+      .style("max-width", "100%")
+      .style("overflow-x", "hidden")
+      .style("box-sizing", "border-box")
       .style("background", "#fff");
 
+    // Per-section search box (filters visible options client-side).
     const searchBox = section
       .insert("input", function () {
         return content.node();
@@ -611,12 +672,14 @@ header.append("span")
           );
       });
 
+    // Toggle open/closed.
     section.select(".dropdown-header").on("click", function () {
       const isVisible = content.style("display") === "block";
       content.style("display", isVisible ? "none" : "block");
       searchBox.style("display", isVisible ? "none" : "block");
     });
 
+    // Pills area (active chips for this category).
     const pillContainer = section
       .append("div")
       .attr("class", "pill-container")
@@ -626,10 +689,8 @@ header.append("span")
       .style("gap", "4px");
     pillMap.set(category, pillContainer);
 
-
-
-
-    const option = content
+    // Render initial list of options (counts will be patched live in updateFilterPanel).
+    content
       .selectAll("div")
       .data(values.map(([value, count]) => ({ category, value, count })))
       .enter()
@@ -640,39 +701,35 @@ header.append("span")
       .style("align-items", "center")
       .style("padding", "4px 2px")
       .style("font-size", "12.5px")
-      .style("width", "100%")        // 🔒 lock to parent width
-  .style("min-width", "0")       // 🔒 prevent flex children from stretching
-   //.style("word-break", "break-word")
-      .style("cursor", "pointer")   
+      .style("width", "100%")
+      .style("min-width", "0")
+      .style("cursor", "pointer")
       .style("box-sizing", "border-box")
       .attr("data-category", category)
       .attr("data-value", (d) => d.value)
       .on("click", function (event, d) {
-        let currentFilters = getState().selectedFilters;
-        const updatedFilters = cloneFilters(currentFilters);
-        const isSelected = updatedFilters[category].has(d.value);
-        if (isSelected) {
-          updatedFilters[category].delete(d.value);
-        } else {
-          updatedFilters[category].add(d.value);
-        }
-        updateState({ selectedFilters: updatedFilters });
+        // Toggle value in selectedFilters[category].
+        const currentFilters = getState().selectedFilters;
+        const updated = cloneFilters(currentFilters);
+        const set = updated[category] || new Set();
+        if (set.has(d.value)) set.delete(d.value);
+        else set.add(d.value);
+        updated[category] = set;
 
-        clearTimeout(window._filterPanelTimeout);
-      });
-
-    option
+        updateState({ selectedFilters: updated });
+      })
+      .each(function (d) {
+        // Register node for quick count/label updates later.
+        const key = `${category}|${getNormalizedKey(category, d.value)}`;
+        optionMap.set(key, d3.select(this));
+      })
       .append("span")
       .text((d) => `${formatDisplayLabel(d.category, d.value)} (${d.count})`)
       .attr("data-count", (d) => d.count)
       .style("margin-right", "10px");
-
-    option.each(function (d) {
-      const key = `${category}|${getNormalizedKey(category, d.value)}`;
-      optionMap.set(key, d3.select(this));
-    });
   });
 
+  // --- Settings (currency, logic mode, save/load/share) ------------------
   const settingsSection = wrapper
     .append("div")
     .attr("class", "filter-section")
@@ -708,7 +765,7 @@ header.append("span")
     settingsContent.style("display", isVisible ? "none" : "block");
   });
 
-  // PRICE SELECT
+  // Currency selector (updates suffix list & triggers price recalculation).
   const currencyWrapper = settingsContent
     .append("div")
     .style("margin-bottom", "12px");
@@ -730,7 +787,6 @@ header.append("span")
     .style("border-radius", "6px");
 
   const currencyOptions = ["eur", "usd", "tix"];
-
   currencySelect
     .selectAll("option")
     .data(currencyOptions)
@@ -746,7 +802,6 @@ header.append("span")
     const suffixOptions = getSuffixOptionsForCurrency(selectedCurrency);
     const currentSuffix = getState().selectedPriceSuffix;
 
-    // Update state
     updateState({
       selectedPriceCurrency: selectedCurrency,
       selectedPriceSuffix: suffixOptions.includes(currentSuffix)
@@ -755,10 +810,10 @@ header.append("span")
       priceAttributeChanged: true,
     });
 
-    // Re-render suffix dropdown
     renderSuffixOptions(selectedCurrency);
   });
 
+  // Logic mode switch: AND-OR (default) vs AND-AND.
   settingsContent
     .append("label")
     .text("Filter Logic Mode:")
@@ -785,12 +840,11 @@ header.append("span")
     .text((d) => d.replace("-", " across / ") + " within");
 
   logicSelect.property("value", getState().filterLogicMode || "AND-OR");
-
   logicSelect.on("change", function () {
     updateState({ filterLogicMode: this.value });
   });
 
-  // BUTTONS
+  // Preset buttons (save/load/share)
   settingsContent
     .append("button")
     .text("Save Filters")
@@ -823,6 +877,7 @@ header.append("span")
     .style("margin-top", "8px")
     .on("click", () => document.getElementById("loadFilterInput").click());
 
+  // Hidden file input for "Load Filters".
   wrapper
     .append("input")
     .attr("type", "file")
@@ -834,7 +889,7 @@ header.append("span")
       const reader = new FileReader();
       reader.onload = (e) => {
         try {
-          loadFilterSettings(e.target.result); // ✅ uses state.js logic
+          loadFilterSettings(e.target.result);
         } catch (err) {
           alert("Failed to load filters.");
         }
@@ -865,6 +920,7 @@ header.append("span")
         });
     });
 
+  // Branding / logo.
   wrapper
     .append("div")
     .attr("class", "ist-logo-wrapper")
@@ -877,6 +933,13 @@ header.append("span")
     .style("height", "auto");
 }
 
+// --- Live patching: updateFilterPanel ------------------------------------
+// Called whenever filters or data subsets change. It:
+// • Recomputes per-option counts (respecting AND-OR vs AND-AND)
+// • Patches labels and disables options with count=0 (unless already selected)
+// • Rebuilds active pills per category
+// • Refreshes the card-name datalist backing array (not DOM!)
+// • Clears per-section search boxes (so users see all options again)
 export function updateFilterPanel(
   originalData,
   filteredCards,
@@ -884,13 +947,15 @@ export function updateFilterPanel(
   containerId = ".FilterPanel"
 ) {
   const t0 = performance.now();
+
+  // Reset all per-section client-side search inputs to show options fully again.
   d3.select(containerId)
-  .selectAll(".filter-search-input")
-  .property("value", "")
-  .each(function () {
-    // re-run the filter to show everything again
-    this.dispatchEvent(new Event("input", { bubbles: true }));
-  });
+    .selectAll(".filter-search-input")
+    .property("value", "")
+    .each(function () {
+      this.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
   selectedFilters = selectedFilters || {};
 
   const groupedData = getState().groupedData;
@@ -900,6 +965,7 @@ export function updateFilterPanel(
   const mode = getState().filterLogicMode || "AND-OR";
   const applyAndWithin = mode.endsWith("AND");
 
+  // Ordering helpers reused for stable UI.
   const getOrderIndex = (category, value) => {
     if (category === "Nº of Colors") return numColorsOrder.indexOf(value);
     if (category === "Color Identity")
@@ -907,6 +973,7 @@ export function updateFilterPanel(
     return value;
   };
 
+  // Utility: compute the filtered set excluding a specific category (for AND-OR).
   const getFilteredSetExcluding = (categoryToIgnore, selectedFiltersArg) => {
     const filtered = filterData(groupedData, selectedFiltersArg, {
       excludeCategory: categoryToIgnore,
@@ -915,22 +982,26 @@ export function updateFilterPanel(
     return cleaned;
   };
 
+  // Cache for AND-AND mode so we compute once.
   let cachedFilteredSet = null;
-  const t1 = performance.now();
 
-  // --- FILTER COUNT COMPUTATION PER CATEGORY ---
+  // --- Compute counts for every visible category -------------------------
   VISIBLE_FILTER_CATEGORIES.forEach((category) => {
-    const tCatStart = performance.now();
-
     const categoryGroup = groupedData[category];
     if (!categoryGroup) return;
 
     let filteredSet;
     if (isFilterEmpty(selectedFilters)) {
+      // Nothing selected at all → counts reflect current filteredCards.
       filteredSet = filteredCards;
     } else if (!applyAndWithin) {
+      // AND across / OR within:
+      // When listing options in "category", exclude that category from the filter
+      // so counts represent what would happen if we add/remove from it.
       filteredSet = getFilteredSetExcluding(category, selectedFilters);
     } else {
+      // AND across / AND within:
+      // We keep the fully filtered set for every category panel.
       if (!cachedFilteredSet) {
         const allFiltered = filterData(groupedData, selectedFilters);
         cachedFilteredSet = filterPriceOnly(allFiltered, priceAttr);
@@ -949,31 +1020,25 @@ export function updateFilterPanel(
       optionCounts.set(value, count);
     });
 
+    // Stable sort.
     const sortedEntries = Array.from(optionCounts.entries()).sort((a, b) => {
       const aVal = getOrderIndex(category, a[0]);
       const bVal = getOrderIndex(category, b[0]);
-      if (typeof aVal === "number" && typeof bVal === "number")
-        return aVal - bVal;
+      if (typeof aVal === "number" && typeof bVal === "number") return aVal - bVal;
       return a[0].localeCompare(b[0]);
     });
 
     filters.set(category, new Map(sortedEntries));
-
-    const tCatEnd = performance.now();
-
   });
 
-  const t2 = performance.now();
-  console.log(`[updateFilterPanel] All category counts took ${(t2 - t1).toFixed(2)} ms`);
-
-  // --- UI PATCH FOR optionMap ---
-  const tPatchStart = performance.now();
+  // --- Patch option DOM (labels, opacity, interactivity) -----------------
   optionMap.forEach((el, key) => {
     const [category, value] = key.split("|");
     if (!filters.has(category)) return;
 
     const normValue = getNormalizedKey(category, value);
     const count = filters.get(category)?.get(normValue) || 0;
+
     const span = el.select("span");
     span
       .text(`${formatDisplayLabel(category, normValue)} (${count})`)
@@ -982,24 +1047,29 @@ export function updateFilterPanel(
     const selectedSet = selectedFilters[category] || new Set();
     const isSelected = selectedSet.has(value);
 
+    // Disable options that have zero results (unless already selected).
     el.style("opacity", count === 0 && !isSelected ? 0.4 : 1);
     el.style("pointer-events", count === 0 && !isSelected ? "none" : "auto");
     el.style("background-color", isSelected ? "#cce5ff" : "#fff");
   });
-  const tPatchEnd = performance.now();
 
-  // --- PILL UPDATE ---
-  const tPillStart = performance.now();
+  // --- Pills (active chips) ----------------------------------------------
   Object.entries(selectedFilters).forEach(([category, selectedSet]) => {
-    if (!VISIBLE_FILTER_CATEGORIES.includes(category) && category !== "FreeTextSearch") return;
+    if (
+      !VISIBLE_FILTER_CATEGORIES.includes(category) &&
+      category !== "FreeTextSearch"
+    )
+      return;
 
     const pillContainer = pillMap.get(category);
     if (!pillContainer) return;
 
     const values = Array.from(selectedSet || new Set());
-    const pills = pillContainer.selectAll(".pill").data(values, d => d);
+    const pills = pillContainer.selectAll(".pill").data(values, (d) => d);
 
-    const pillsEnter = pills.enter()
+    // Enter
+    const pillsEnter = pills
+      .enter()
       .append("div")
       .attr("class", "pill")
       .style("background", "#8A9CE4")
@@ -1008,16 +1078,19 @@ export function updateFilterPanel(
       .style("border-radius", "12px")
       .style("font-size", "12px");
 
-    pillsEnter.append("span")
+    pillsEnter
+      .append("span")
       .attr("class", "pill-label")
-      .text(d => formatDisplayLabel(category, d));
+      .text((d) => formatDisplayLabel(category, d));
 
-    pillsEnter.append("span")
+    pillsEnter
+      .append("span")
       .attr("class", "pill-close")
       .style("margin-left", "6px")
       .style("cursor", "pointer")
       .text("\u2715")
       .on("click", function (event, value) {
+        // Remove this value from the category set.
         const current = getState().selectedFilters;
         const updated = cloneFilters(current);
         if (!updated[category]) updated[category] = new Set();
@@ -1025,36 +1098,27 @@ export function updateFilterPanel(
         updateState({ selectedFilters: updated });
       });
 
+    // Exit
     pills.exit().remove();
   });
-  const tPillEnd = performance.now();
 
-  // --- CARD NAME AUTOCOMPLETE ---
-  const tAutoStart = performance.now();
-  const uniqueCardNames = Array.from(new Set(filteredCards.map((card) => card.name))).sort();
-  currentCardNames = Array.from(
-  new Set(filteredCards.map((card) => card.name))
-).sort();
-  const tTest = performance.now();
-  console.log(`[updateFilterPanel] Unique card names extraction took ${(tTest - tAutoStart).toFixed(2)} ms`);
-  const inputId = d3
-    .select(containerId)
-    .select('input[list]')
-    .attr("list");
-  const tInput = performance.now();
+  // --- Card-name autocomplete source update (no DOM flood) ----------------
+  currentCardNames = Array.from(new Set(filteredCards.map((c) => c.name))).sort();
+
+  // Clear and keep the datalist empty here; we fill it on-demand in createFilterPanel.on("input")
+  const inputId = d3.select(containerId).select("input[list]").attr("list");
   if (inputId) {
     const dataList = d3.select(`#${inputId}`);
     dataList.selectAll("option").remove();
-    const tDataList = performance.now();
   }
-  const tAutoEnd = performance.now();
-  console.log(`[updateFilterPanel] Datalist update took ${(tAutoEnd - tInput).toFixed(2)} ms`);
-  console.log(`[updateFilterPanel] Autocomplete update took ${(tAutoEnd - tAutoStart).toFixed(2)} ms`);
 
+  // Perf logs (optional)
   const tEnd = performance.now();
   console.log(`[updateFilterPanel] TOTAL time ${(tEnd - t0).toFixed(2)} ms`);
 }
 
+// --- Data extraction helper ----------------------------------------------
+// Maps "category" → value(s) from a raw card record for grouping & matching.
 function extractCardValue(card, category) {
   switch (category) {
     case "Keywords":
@@ -1078,26 +1142,23 @@ function extractCardValue(card, category) {
         ? new Date(card.release_date).getFullYear().toString()
         : null;
     case "Nº of Colors":
-  if (card.number_of_colours === 0) return "Colorless";
-  if (card.number_of_colours === 1) return "1 Color";
-  if (card.number_of_colours === 2) return "2 Colors";
-  if (card.number_of_colours === 3) return "3 Colors";
-  if (card.number_of_colours === 4) return "4 Colors";
-  if (card.number_of_colours === 5) return "5 Colors";
-  return null;
-
+      // Normalize to display strings used in the panel ordering lists.
+      if (card.number_of_colours === 0) return "Colorless";
+      if (card.number_of_colours === 1) return "1 Color";
+      if (card.number_of_colours === 2) return "2 Colors";
+      if (card.number_of_colours === 3) return "3 Colors";
+      if (card.number_of_colours === 4) return "4 Colors";
+      if (card.number_of_colours === 5) return "5 Colors";
+      return null;
     case "Color Identity":
-      if (
-        !Array.isArray(card.color_identity) ||
-        card.color_identity.length === 0
-      )
+      // Normalize color identity to sorted, lowercase compact string (e.g., "wub").
+      if (!Array.isArray(card.color_identity) || card.color_identity.length === 0)
         return "colorless";
       return card.color_identity
         .slice()
         .sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b])
         .join("")
         .toLowerCase();
-
     default:
       return null;
   }
