@@ -103,8 +103,8 @@ All modules share a unified schema and coordinate through the **global `state`**
 - [Line Chart](docs/line.md)
 - [Timeline](docs/timeline.md)
 - [Drawers](docs/hiddenDrawer.md)
-- [Main Script](docs/mainScript.md)
-- [Global State](docs/state.md)
+- [Main Script/Global State](docs/stateManager.md)
+- [Limitations/Future Work](docs/limitations.md)
 
 ---
 
@@ -112,8 +112,18 @@ All modules share a unified schema and coordinate through the **global `state`**
 Developed as part of a Master’s Thesis in Informatics Engineering, focused on **data visualization and interactive analysis tools** for *Magic: The Gathering* collections.  
 Special thanks to all testers who provided feedback during the user study.
 
+
+
 ---
 
+## 📬 Contacts
+
+If you have questions about the project, need clarification on the architecture, or are continuing the development in future academic years, feel free to reach out:
+
+📧 tiago.almeida.pereira@tecnico.ulisboa.pt
+
+
+---
 
 
 
