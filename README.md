@@ -51,7 +51,7 @@ The panel also displays **dynamic counts** for each filter option, recalculated 
 
 __*Global filters logic.*__
 
-<img src="./images/globalFilters.gif" width="50%">
+<img src="./images/globalFilters.gif" width="70%">
 
 __*Global filters Example.*__
 
@@ -66,7 +66,7 @@ Local filters are applied **directly through interactions within the visualizati
 
 __*Local filters logic.*__
 
-<img src="./images/LocalFilters.gif" width="50%">
+<img src="./images/LocalFilters.gif" width="70%">
 
 __*Local filters Example.*__
 
