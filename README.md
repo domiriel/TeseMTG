@@ -22,7 +22,7 @@ The dashboard integrates several coordinated visualizations built with **D3.js**
 | **Scatterplot** | Plots individual cards by **price** and metrics such as **complexity** and **release date**. |
 | **Line Chart** | Shows **aggregate temporal trends**, such as changes in average **mana value** across years. |
 | **Timeline View** | Illustrates the **chronological progression of card sets**. |
-| **Drawers** | Provide contextual details: the **right drawer** lists selected cards, while the **left drawer** displays cards **excluded for lacking price data**. |
+| **Drawers** | Provide contextual details: the **blue drawer** lists selected cards, while the **red drawer** displays cards **excluded for lacking price data**. |
 
 
 All modules communicate through a **shared event bus and global state**, ensuring that actions such as hovering, filtering, or selecting in one view propagate consistently across the entire interface.
@@ -37,7 +37,7 @@ Filtering is the central interaction mechanism of the dashboard. The system dist
 The **Filter Panel** provides centralized control over the global filters applied across all views.  
 Filters can be **toggled** in two ways:
 - **Directly from the Filter Panel**, by clicking on a category value (e.g., *Rarity*, *Set Type*, *Year*, *Color Identity*).
-- **Indirectly from any visualization**, by **right-clicking** on an element representing that attribute (for example, a node in the Alluvial chart or a segment in the Icicle chart).
+- **Indirectly from any visualization**, by **right-clicking** on an element representing that attribute (e.g., a node in the Alluvial chart or a segment in the Icicle chart).
 
 Each filter category corresponds to a dataset dimension, and selected values update all visualizations to reflect the active subset.  
 Multiple filters can be combined using different logic modes:
@@ -48,7 +48,12 @@ The panel also displays **dynamic counts** for each filter option, recalculated 
 
 
 ![Global Filters](./images/global-filters-logic.png)
-*Global filetrs logic.*
+
+__*Global filters logic.*__
+
+<img src="./images/globalFilters.gif" width="50%">
+
+__*Global filters Example.*__
 
 ### 2. Local Filters (Selections)
 Local filters are applied **directly through interactions within the visualizations**, allowing users to focus on specific subsets of cards without modifying the global filter state.
@@ -58,9 +63,12 @@ Local filters are applied **directly through interactions within the visualizati
 - **Hovering** over a visual element highlights the corresponding cards across all coordinated views, without applying any filter.  
 
 ![Local Filters](./images/local-filters-logic.png)
-*Local filetrs logic.*
 
+__*Local filters logic.*__
 
+<img src="./images/LocalFilters.gif" width="50%">
+
+__*Local filters Example.*__
 
 ---
 
@@ -120,7 +128,15 @@ Special thanks to all testers who provided feedback during the user study.
 
 If you have questions about the project, need clarification on the architecture, or are continuing the development in future academic years, feel free to reach out:
 
-📧 tiago.almeida.pereira@tecnico.ulisboa.pt
+- tiago.almeida.pereira@tecnico.ulisboa.pt
+
+- tiago.alm.pereira@gmail.com
+
+- joaopedro.moreira@protonmail.com
+
+- Tomas.Alves@iscte-iul.pt
+
+- daniel.j.goncalves@tecnico.ulisboa.pt
 
 
 ---
