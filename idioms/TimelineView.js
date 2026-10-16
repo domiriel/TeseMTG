@@ -1,58 +1,23 @@
-import { updateState, getState } from "../state.js";
+import { toggleGlobalFilter } from "../state.js";
+import { timelineAggregate } from "../core/index.js";
 import {
-  // Hover emits
-  emitSetHover,
-  emitSetTypeHover,
-  emitClearSetHover,
-  emitLineYearHover,
-
-  // Selection emits
-  emitTimelineSetClick,
-  emitTimelineSetTypeClick,
-  emitTimelineBrush,
-  emitClearTimelineBrush,
-  emitClearTimelineSelections,
-  emitYearClick, // (if used elsewhere)
-  emitClearSelection,
-
-  // Line chart sync
-  emitLineChartClick,
-  emitClearLineYearHover,
-
-  // Incoming events (other views → Timeline)
-  onHoverCard,
-  onClearHover,
-  onRectHover,
-  onClearRectHover,
-  onNumColorsHover,
-  onClearNumColorsHover,
-  onLineYearHover,
-  onClearLineYearHover,
-  onAlluvialHover,
-  onClearAlluvialHover,
-  onAlluvialClick,
-  onAlluvialLinkClick,
-  onAlluvialLink,
-  onAlluvialLinkHover,
-  onClearAlluvialLinkHover,
-  onScatterplotCards,
-  onClearScatterplotBrush,
-  onLineChartClick,
-  onLineChartBrush,
-  onClearLineChartBrush,
-  onIcicleClick,
-  onIcicleNumClick,
-  onClearAlluvialSelections,
-  onClearIcicleSelections,
-  onClearTimelineSelections,
-  onClearSelection,
-} from "./Events.js";
+  toggleSelected,
+  setSelected,
+  clearSelection,
+  getSourcePredicate,
+  setHover,
+  clearHover,
+  onSelectionChange,
+  onHoverChange,
+  getSelectionSummary,
+  getHoverSummary,
+} from "./Linking.js";
+import { moveTooltip, getDiscreteColor, getHighlightedColor, getSelectedColor } from "./ui.js";
 
 /* =========================================================================
  *  CONSTANTS & CONFIG
  * ========================================================================= */
 
-const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };
 
 /** Tooltip copy kept close to interactions. */
 const timelineTooltipText = `
@@ -70,49 +35,12 @@ const timelineTooltipText = `
  *  COLOR HELPERS (quintile-based)
  * ========================================================================= */
 
-function getDiscreteColor(percentage) {
-  if (percentage < 20) return "#ffd394";
-  if (percentage < 40) return "#d3ae7c";
-  if (percentage < 60) return "#a98b66";
-  if (percentage < 80) return "#806a4f";
-  return "#594a3a";
-}
 
-function getHighlightedColor(percentage) {
-  if (percentage < 20) return "#ffca00";
-  if (percentage < 40) return "#e7b006";
-  if (percentage < 60) return "#ce970b";
-  if (percentage < 80) return "#b5800d";
-  return "#9b690d";
-}
 
-function getSelectedColor(percentage) {
-  if (percentage < 20) return "#c7daff";
-  if (percentage < 40) return "#a2b1d3";
-  if (percentage < 60) return "#7d89a8";
-  if (percentage < 80) return "#5b6380";
-  return "#3a4059";
-}
 
 /* =========================================================================
  *  SHARED STATE
  * ========================================================================= */
-
-/**
- * yearStats:
- *   Aggregated data per year for hover/selection and cross-view sync.
- *   key: "2020"
- *   val: { totalCardCount, rarities, originalities, colorIdentities, numColorsPresent, setNames }
- */
-const yearStats = new Map();
-
-/**
- * setTypeStats:
- *   Aggregated data per set type.
- *   key: setType string
- *   val: { totalCardCount, rarities, originalities, colorIdentities, numColorsPresent, setNames, releaseDates }
- */
-const setTypeStats = new Map();
 
 /**
  * uniqueSets:
@@ -121,533 +49,67 @@ const setTypeStats = new Map();
  */
 let uniqueSets = null;
 
-/**
- * activeTimelineSelections:
- *   Unified selection model for timeline view.
- *   - fromAlluvial*: filters coming from alluvial nodes/links
- *   - fromIcicle*: filters from icicle identity/group
- *   - fromYears: year selections (from Line or Timeline)
- *   - sets, setTypes: explicit selections on the timeline
- *   - setsFromScatterplot: from Scatterplot -> Timeline mapping
- */
-const activeTimelineSelections = {
-  fromAlluvialOriginality: new Set(),
-  fromAlluvialRarity: new Set(),
-  fromAlluvialLinkPairs: new Set(),
-  fromIcicleIdentity: new Set(),
-  fromIcicleColors: new Set(),
-  fromYears: new Set(),
-  sets: new Set(),
-  setTypes: new Set(),
-  setsFromScatterplot: new Set(),
-};
-
 let ignoreNextBrushEnd = false;
+
+// Zoom and vertical scroll survive re-renders (filter changes, resize).
+let savedZoom = null;
+let savedScrollTop = 0;
 
 /* =========================================================================
  *  GENERIC HELPERS
  * ========================================================================= */
 
-function getClonedFilters() {
-  const currentState = getState();
-  const cloned = {};
-  for (const key in currentState.selectedFilters) {
-    cloned[key] = new Set(currentState.selectedFilters[key]);
-  }
-  return cloned;
-}
 
 /* =========================================================================
- *  HOVER HELPERS (Timeline rects + cross-view)
- * ========================================================================= */
-
-function highlightTimelineSetsHoverOnly(card) {
-  if (!card?.all_sets) return;
-
-  const hoveredSetNames = new Set(
-    card.all_sets.map((set) => set.name.toLowerCase())
-  );
-
-  d3.selectAll(".set-rect")
-    .filter((d) => hoveredSetNames.has(d.name.toLowerCase()))
-    .attr("fill", (d) => d.highlightColor)
-    .classed("hover-temp", true);
-}
-
-export function clearTimelineHoverOnly() {
-  d3.selectAll(".set-rect").each(function (d) {
-    const rect = d3.select(this);
-    rect.classed("hover-temp", false);
-
-    const isSelected = rect.classed("selectedHovered");
-    rect.attr("fill", isSelected ? d.selectedColor : d.baseColor);
-  });
-}
-
-function highlightTimelineSetsFromIcicle(rectInfo) {
-  const [targetIdentity] = [...(rectInfo.colorIdentities || [])];
-  if (targetIdentity === undefined) return;
-
-  const actualIdentity = targetIdentity === "" ? "Colorless" : targetIdentity;
-
-  d3.selectAll(".set-rect")
-    .filter((d) => {
-      const ids = d.colorIdentities || new Set();
-      return ids.has(actualIdentity);
-    })
-    .classed("hover-temp", true)
-    .attr("fill", (d) => d.highlightColor);
-}
-
-function highlightTimelineSetsFromNumColors(numColors) {
-  if (numColors === undefined) return;
-
-  d3.selectAll(".set-rect")
-    .filter((d) => d.numColorsPresent?.has(numColors))
-    .classed("hover-temp", true)
-    .attr("fill", (d) => d.highlightColor);
-}
-
-function highlightTimelineSetsFromAlluvialCategory(category, value) {
-  if (!category || !value) return;
-
-  const lower = value.toLowerCase();
-
-  d3.selectAll(".set-rect")
-    .filter((d) => {
-      if (category === "Originality") {
-        return [...(d.originalities || [])].includes(lower);
-      }
-      if (category === "Rarity") {
-        return [...(d.rarities || [])].includes(lower);
-      }
-      return false;
-    })
-    .classed("hover-temp", true)
-    .attr("fill", (d) => d.highlightColor);
-}
-
-function highlightTimelineSetsFromAlluvialLink(originality, rarity) {
-  if (!originality || !rarity) return;
-
-  const o = originality.toLowerCase();
-  const r = rarity.toLowerCase();
-
-  d3.selectAll(".set-rect")
-    .filter((d) => {
-      const origMatch = [...(d.originalities || [])].includes(o);
-      const rarityMatch = [...(d.rarities || [])].includes(r);
-      return origMatch && rarityMatch;
-    })
-    .classed("hover-temp", true)
-    .attr("fill", (d) => d.highlightColor);
-}
-
-function highlightTimelineSetsFromYearInfo(yearInfo) {
-  if (!yearInfo || !yearInfo.year) return;
-  const targetYear = yearInfo.year.getFullYear();
-
-  d3.selectAll(".set-rect")
-    .filter((d) => d.releaseDate.getFullYear() === targetYear)
-    .classed("hover-temp", true)
-    .attr("fill", (d) => d.highlightColor);
-}
-
-/* =========================================================================
- *  CROSS-VIEW HIGHLIGHT EMITS
- * ========================================================================= */
-
-function highlightAllViewsForSet(setName) {
-  const entry = uniqueSets?.find((d) => d.name === setName);
-  if (!entry) return;
-
-  emitSetHover({
-    name: entry.name,
-    releaseDate: entry.releaseDate,
-    setType: entry.setType,
-    cardCount: entry.cardCount,
-    originalities: new Set(entry.originalities),
-    rarities: new Set(entry.rarities),
-    colorIdentities: new Set(entry.colorIdentities),
-    numColorsPresent: new Set(entry.numColorsPresent),
-  });
-}
-
-function highlightAllViewsForSetType(setType) {
-  const info = setTypeStats.get(setType);
-  if (!info) return;
-
-  emitSetTypeHover({
-    name: setType,
-    releaseDates: info.releaseDates,
-    originalities: new Set(info.originalities),
-    rarities: new Set(info.rarities),
-    colorIdentities: new Set(info.colorIdentities),
-    numColorsPresent: new Set(info.numColorsPresent),
-  });
-}
-
-function highlightAllViewsForYear(yearStr) {
-  const yearInfo = yearStats.get(yearStr);
-  if (!yearInfo) return;
-
-  const dateObj = new Date(+yearStr, 0, 1);
-
-  emitLineYearHover({
-    year: dateObj,
-    originalities: yearInfo.originalities,
-    rarities: yearInfo.rarities,
-    colorIdentities: yearInfo.colorIdentities,
-    numColorsPresent: yearInfo.numColorsPresent,
-    source: "timeline",
-  });
-}
-
-function clearAllViewsHoverOnly() {
-  emitClearSetHover();
-}
-
-/* =========================================================================
- *  SELECTION LOGIC
+ *  SELECTION & HOVER PAINTING (shared model, see Linking.js)
  * ========================================================================= */
 
 /**
- * Combine all activeTimelineSelections into final set highlights.
- *
- * Logic:
- * - OR within each chart:
- *   • Alluvial: originality ∨ rarity ∨ link pair
- *   • Icicle: color identities / color groups
- *   • Timeline: sets ∨ set types
- *   • Line: years
- * - AND across charts:
- *   • A set must satisfy all active non-empty charts simultaneously.
- * - Scatterplot:
- *   • Always applied as an additive union on top of the intersection
- *     (anything selected via Scatterplot stays highlighted even if other filters wouldn't include it).
+ * A set square is selected / hovered if any selected / hovered printing is in
+ * that set. Year ticks and set-type labels show what is selected *here*
+ * (the "years" and "timeline" sources). Hover wins over selection.
  */
+function paintTimeline() {
+  const sel = getSelectionSummary();
+  const hov = getHoverSummary();
 
-function updateTimelineSelections() {
-  const allRects = d3.selectAll(".set-rect").nodes();
-
-  const noSelections =
-    activeTimelineSelections.fromAlluvialOriginality.size === 0 &&
-    activeTimelineSelections.fromAlluvialRarity.size === 0 &&
-    activeTimelineSelections.fromAlluvialLinkPairs.size === 0 &&
-    activeTimelineSelections.fromIcicleIdentity.size === 0 &&
-    activeTimelineSelections.fromYears.size === 0 &&
-    activeTimelineSelections.sets.size === 0 &&
-    activeTimelineSelections.setTypes.size === 0 &&
-    activeTimelineSelections.setsFromScatterplot.size === 0;
-
-  if (noSelections) {
-    d3.selectAll(".set-rect")
-      .classed("selectedHovered", false)
-      .attr("fill", (d) => d.baseColor);
-    d3.selectAll(".year-tick-timeline").classed("selected", false);
-    d3.selectAll(".set-type-label").classed("selected", false);
-    return;
-  }
-
-  const onlyScatterplotActive =
-    activeTimelineSelections.fromAlluvialOriginality.size === 0 &&
-    activeTimelineSelections.fromAlluvialRarity.size === 0 &&
-    activeTimelineSelections.fromAlluvialLinkPairs.size === 0 &&
-    activeTimelineSelections.fromIcicleIdentity.size === 0 &&
-    activeTimelineSelections.fromYears.size === 0 &&
-    activeTimelineSelections.sets.size === 0 &&
-    activeTimelineSelections.setTypes.size === 0 &&
-    activeTimelineSelections.setsFromScatterplot.size > 0;
-
-  // Only scatterplot-driven sets: just color those
-  if (onlyScatterplotActive) {
-    for (const rect of allRects) {
-      const d = d3.select(rect).datum();
-      const isSel = activeTimelineSelections.setsFromScatterplot.has(d.name);
-      d3.select(rect)
-        .classed("selectedHovered", isSel)
-        .attr("fill", isSel ? d.selectedColor : d.baseColor);
-    }
-    return;
-  }
-
-  const alluvialMatches = new Set();
-  const icicleMatches = new Set();
-  const yearMatches = new Set();
-  const timelineMatches = new Set();
-  const scatterMatches = new Set();
-
-  for (const rect of allRects) {
-    const d = d3.select(rect).datum();
-
-    // --- ALLUVIAL GROUP ---
-    const hasOrig = [...activeTimelineSelections.fromAlluvialOriginality].some(
-      (o) => [...(d.originalities || [])].includes(o)
-    );
-    const hasRare = [...activeTimelineSelections.fromAlluvialRarity].some(
-      (r) => [...(d.rarities || [])].includes(r)
-    );
-    const hasLink = [...activeTimelineSelections.fromAlluvialLinkPairs].some(
-      (pair) => {
-        const [o, r] = pair.split("|");
-        return (
-          [...(d.originalities || [])].includes(o) &&
-          [...(d.rarities || [])].includes(r)
-        );
-      }
-    );
-
-    const alluvialMatch =
-      hasOrig ||
-      hasRare ||
-      hasLink ||
-      (activeTimelineSelections.fromAlluvialOriginality.size === 0 &&
-        activeTimelineSelections.fromAlluvialRarity.size === 0 &&
-        activeTimelineSelections.fromAlluvialLinkPairs.size === 0);
-
-    if (alluvialMatch) alluvialMatches.add(rect);
-
-    // --- ICICLE GROUP ---
-    const identityMatch =
-      activeTimelineSelections.fromIcicleIdentity.size === 0 ||
-      [...activeTimelineSelections.fromIcicleIdentity].some((id) =>
-        d.colorIdentities?.has(id)
-      );
-    if (identityMatch) icicleMatches.add(rect);
-
-    // --- YEAR GROUP ---
-    const yearStr = d.releaseDate.getFullYear().toString();
-    const inYears =
-      activeTimelineSelections.fromYears.size === 0 ||
-      activeTimelineSelections.fromYears.has(yearStr);
-    if (inYears) yearMatches.add(rect);
-
-    // --- TIMELINE GROUP (sets / setTypes) ---
-    const timelineMatch =
-      (activeTimelineSelections.sets.size === 0 &&
-        activeTimelineSelections.setTypes.size === 0) ||
-      activeTimelineSelections.sets.has(d.name) ||
-      activeTimelineSelections.setTypes.has(d.setType);
-    if (timelineMatch) timelineMatches.add(rect);
-
-    // --- SCATTERPLOT GROUP ---
-    if (activeTimelineSelections.setsFromScatterplot.has(d.name)) {
-      scatterMatches.add(rect);
-    }
-  }
-
-  // Intersection of logical groups:
-  const intersected = new Set(
-    [...allRects].filter(
-      (rect) =>
-        alluvialMatches.has(rect) &&
-        icicleMatches.has(rect) &&
-        yearMatches.has(rect) &&
-        timelineMatches.has(rect)
-    )
-  );
-
-  // Union with scatterplot:
-  const finalSelected = new Set([...intersected, ...scatterMatches]);
-
-  // Apply fills
-  for (const rect of allRects) {
-    const d = d3.select(rect).datum();
-    const isSel = finalSelected.has(rect);
-    d3.select(rect)
+  d3.selectAll(".TimelineView .set-rect").each(function (d) {
+    const isSel = sel.active && sel.has("sets", d.name);
+    const isHov = hov.count > 0 && hov.has("sets", d.name);
+    if (this.__sel === isSel && this.__hov === isHov) return;
+    this.__sel = isSel;
+    this.__hov = isHov;
+    d3.select(this)
       .classed("selectedHovered", isSel)
-      .attr("fill", isSel ? d.selectedColor : d.baseColor);
-  }
-
-  // Year tick styling
-  d3.selectAll(".year-tick-timeline").classed("selected", (d) =>
-    activeTimelineSelections.fromYears.has(d.getFullYear().toString())
-  );
-
-  // Set type label styling
-  d3.selectAll(".set-type-label").classed("selected", (d) =>
-    activeTimelineSelections.setTypes.has(d)
-  );
-}
-
-/* =========================================================================
- *  CROSS-VIEW EVENT WIRING
- * ========================================================================= */
-
-/** Card hover → Timeline */
-onHoverCard((card) => {
-  highlightTimelineSetsHoverOnly(card);
-});
-onClearHover(clearTimelineHoverOnly);
-
-/** Icicle hover */
-onRectHover((rectInfo) => {
-  highlightTimelineSetsFromIcicle(rectInfo);
-});
-onClearRectHover(clearTimelineHoverOnly);
-
-/** NumColors hover */
-onNumColorsHover(({ numColors }) => {
-  highlightTimelineSetsFromNumColors(numColors);
-});
-onClearNumColorsHover(clearTimelineHoverOnly);
-
-/** Line year hover */
-onLineYearHover((yearInfo) => {
-  highlightTimelineSetsFromYearInfo(yearInfo);
-});
-onClearLineYearHover(clearTimelineHoverOnly);
-
-/** Alluvial hovers */
-onAlluvialHover(({ category, value }) => {
-  highlightTimelineSetsFromAlluvialCategory(category, value);
-});
-onAlluvialLinkHover(({ originality, rarity }) => {
-  highlightTimelineSetsFromAlluvialLink(originality, rarity);
-});
-onClearAlluvialHover(clearTimelineHoverOnly);
-onClearAlluvialLinkHover(clearTimelineHoverOnly);
-
-/** Global hover clear */
-function globalHoverClear() {
-  clearTimelineHoverOnly();
-}
-
-/** Scatterplot → Timeline hover already covered via onScatterplotCards for selects */
-
-/* --- Selection resets --- */
-
-onClearSelection(() => {
-  activeTimelineSelections.fromAlluvialOriginality.clear();
-  activeTimelineSelections.fromAlluvialRarity.clear();
-  activeTimelineSelections.fromAlluvialLinkPairs.clear();
-  activeTimelineSelections.fromIcicleIdentity.clear();
-  activeTimelineSelections.fromIcicleColors.clear();
-  activeTimelineSelections.fromYears.clear();
-  activeTimelineSelections.sets.clear();
-  activeTimelineSelections.setTypes.clear();
-  activeTimelineSelections.setsFromScatterplot.clear();
-  updateTimelineSelections();
-});
-
-onClearAlluvialSelections(() => {
-  activeTimelineSelections.fromAlluvialOriginality.clear();
-  activeTimelineSelections.fromAlluvialRarity.clear();
-  activeTimelineSelections.fromAlluvialLinkPairs.clear();
-  updateTimelineSelections();
-});
-
-onClearIcicleSelections(() => {
-  activeTimelineSelections.fromIcicleIdentity.clear();
-  activeTimelineSelections.fromIcicleColors.clear();
-  updateTimelineSelections();
-});
-
-onClearTimelineSelections(() => {
-  activeTimelineSelections.sets.clear();
-  activeTimelineSelections.setTypes.clear();
-  updateTimelineSelections();
-});
-
-/** Scatterplot → Timeline selections */
-onScatterplotCards(({ setNames }) => {
-  activeTimelineSelections.setsFromScatterplot = new Set(setNames);
-  updateTimelineSelections();
-});
-onClearScatterplotBrush(() => {
-  activeTimelineSelections.setsFromScatterplot.clear();
-  updateTimelineSelections();
-});
-
-/** Alluvial → Timeline selections */
-onAlluvialClick(({ category, value }) => {
-  if (!category || !value) return;
-
-  const key = value.toLowerCase();
-  let target = null;
-
-  if (category === "Originality") {
-    target = activeTimelineSelections.fromAlluvialOriginality;
-  } else if (category === "Rarity") {
-    target = activeTimelineSelections.fromAlluvialRarity;
-  }
-
-  if (!target) return;
-
-  target.has(key) ? target.delete(key) : target.add(key);
-  updateTimelineSelections();
-});
-
-onAlluvialLinkClick(({ originality, rarity }) => {
-  const key = `${originality}|${rarity}`;
-  const set = activeTimelineSelections.fromAlluvialLinkPairs;
-  set.has(key) ? set.delete(key) : set.add(key);
-  updateTimelineSelections();
-});
-
-onAlluvialLink((pairSets) => {
-  activeTimelineSelections.fromAlluvialLinkPairs = new Set(pairSets);
-  updateTimelineSelections();
-});
-
-/** Line Chart → Timeline selections */
-onLineChartClick(({ year }) => {
-  if (!year) return;
-  const yearStr = year.toString();
-  const set = activeTimelineSelections.fromYears;
-  set.has(yearStr) ? set.delete(yearStr) : set.add(yearStr);
-  updateTimelineSelections();
-});
-
-onLineChartBrush((entries) => {
-  const set = activeTimelineSelections.fromYears;
-  entries.forEach(({ year }) => {
-    if (!year) return;
-    set.has(year) ? set.delete(year) : set.add(year);
+      .classed("hover-temp", isHov)
+      .attr("fill", isHov ? d.highlightColor : isSel ? d.selectedColor : d.baseColor);
   });
-  updateTimelineSelections();
-});
 
-onClearLineChartBrush(() => {
-  activeTimelineSelections.fromYears.clear();
-  updateTimelineSelections();
-});
+  const years = getSourcePredicate("years")?.years || new Set();
+  const types = getSourcePredicate("timeline")?.setTypes || new Set();
+  d3.selectAll(".TimelineView .year-tick-timeline").classed("selected", (d) => years.has(d.getFullYear()));
+  d3.selectAll(".TimelineView .set-type-label").classed("selected", (d) => types.has(d.toLowerCase()));
+}
 
-/** Icicle → Timeline selections */
-onIcicleClick(({ colorIdentity, numColors }) => {
-  if (!colorIdentity) return;
+onSelectionChange(paintTimeline);
+onHoverChange(paintTimeline);
 
-  const idSet = activeTimelineSelections.fromIcicleIdentity;
-  const numSet = activeTimelineSelections.fromIcicleColors;
-
-  if (idSet.has(colorIdentity)) {
-    idSet.delete(colorIdentity);
-    if (idSet.size === 0) numSet.clear();
+/** Toggle a set type together with all of its sets (as before). */
+function toggleSetType(type) {
+  const pred = getSourcePredicate("timeline") || {};
+  const types = new Set(pred.setTypes || []);
+  const sets = new Set(pred.sets || []);
+  const lower = type.toLowerCase();
+  const members = uniqueSets.filter((s) => s.setType === type).map((s) => s.name);
+  if (types.has(lower)) {
+    types.delete(lower);
+    members.forEach((n) => sets.delete(n));
   } else {
-    idSet.add(colorIdentity);
-    numSet.add(numColors);
+    types.add(lower);
+    members.forEach((n) => sets.add(n));
   }
-
-  updateTimelineSelections();
-});
-
-onIcicleNumClick(({ numColors, colorIdentities }) => {
-  if (!numColors || !colorIdentities) return;
-
-  const groupSet = activeTimelineSelections.fromIcicleColors;
-  const idSet = activeTimelineSelections.fromIcicleIdentity;
-  const isSelected = groupSet.has(numColors);
-
-  if (isSelected) {
-    groupSet.delete(numColors);
-    colorIdentities.forEach((id) => idSet.delete(id));
-  } else {
-    groupSet.add(numColors);
-    colorIdentities.forEach((id) => idSet.add(id));
-  }
-
-  updateTimelineSelections();
-});
+  setSelected("timeline", { sets, setTypes: types });
+}
 
 /* =========================================================================
  *  MAIN: CREATE TIMELINE VIEW
@@ -660,56 +122,9 @@ export function createTimelineView(data, containerId, isUpdate = false) {
   container.selectAll("*").remove();
   container.on("contextmenu", (event) => event.preventDefault());
 
-  // Pre-parse dates
-  data.forEach((card) => {
-    if (!card._parsedDate) card._parsedDate = new Date(card.release_date);
-  });
-
-  // Aggregate per set
-  const setMap = new Map();
-  yearStats.clear();
-  setTypeStats.clear();
-
-  data.forEach((card) => {
-    const setName = card.set_name;
-    if (!setMap.has(setName)) {
-      setMap.set(setName, {
-        name: setName,
-        releaseDate: card._parsedDate,
-        setType: card.set_type,
-        cardCount: 0,
-        originalities: new Set(),
-        rarities: new Set(),
-        colorIdentities: new Set(),
-        numColorsPresent: new Set(),
-      });
-    }
-
-    const setEntry = setMap.get(setName);
-    setEntry.cardCount += 1;
-
-    if (card.originality)
-      setEntry.originalities.add(card.originality.toLowerCase());
-    if (card.rarity)
-      setEntry.rarities.add(card.rarity.toLowerCase());
-
-    let identity;
-    if (!card.color_identity || card.color_identity.length === 0) {
-      identity = "Colorless";
-      setEntry.numColorsPresent.add(0);
-    } else {
-      identity = card.color_identity
-        .slice()
-        .sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b])
-        .join("");
-      setEntry.numColorsPresent.add(identity.length);
-    }
-    setEntry.colorIdentities.add(identity);
-  });
-
-  uniqueSets = Array.from(setMap.values()).sort(
-    (a, b) => a.releaseDate - b.releaseDate
-  );
+  // Aggregate per set (core/aggregates.js — tested against the previous
+  // inline version), sorted by release date.
+  uniqueSets = timelineAggregate(data);
 
   if (uniqueSets.length === 0) return;
 
@@ -773,47 +188,6 @@ export function createTimelineView(data, containerId, isUpdate = false) {
     // Type totals
     if (!typeCounts.has(type)) typeCounts.set(type, 0);
     typeCounts.set(type, typeCounts.get(type) + 1);
-
-    // Year-level stats
-    if (!yearStats.has(year)) {
-      yearStats.set(year, {
-        totalCardCount: 0,
-        rarities: new Set(),
-        originalities: new Set(),
-        colorIdentities: new Set(),
-        numColorsPresent: new Set(),
-        setNames: new Set(),
-      });
-    }
-    const ys = yearStats.get(year);
-    ys.totalCardCount += set.cardCount;
-    set.rarities.forEach((r) => ys.rarities.add(r));
-    set.originalities.forEach((o) => ys.originalities.add(o));
-    set.colorIdentities.forEach((c) => ys.colorIdentities.add(c));
-    set.numColorsPresent.forEach((n) => ys.numColorsPresent.add(n));
-    ys.setNames.add(set.name);
-
-    // Set-type-level stats
-    if (!setTypeStats.has(type)) {
-      setTypeStats.set(type, {
-        totalCardCount: 0,
-        rarities: new Set(),
-        originalities: new Set(),
-        colorIdentities: new Set(),
-        numColorsPresent: new Set(),
-        setNames: new Set(),
-        releaseDates: new Set(),
-      });
-    }
-
-    const st = setTypeStats.get(type);
-    st.totalCardCount += set.cardCount;
-    set.rarities.forEach((r) => st.rarities.add(r));
-    set.originalities.forEach((o) => st.originalities.add(o));
-    set.colorIdentities.forEach((c) => st.colorIdentities.add(c));
-    set.numColorsPresent.forEach((n) => st.numColorsPresent.add(n));
-    st.setNames.add(set.name);
-    st.releaseDates.add(set.releaseDate);
   });
 
   // Limit visible set types if needed
@@ -874,17 +248,7 @@ export function createTimelineView(data, containerId, isUpdate = false) {
         .style("display", "block")
         .html(timelineTooltipText);
     })
-    .on("mousemove", (event) => {
-      const node = tooltip.node();
-      const w = node.offsetWidth;
-      const h = node.offsetHeight;
-      const pad = 10;
-      let x = event.pageX + pad;
-      let y = event.pageY + pad;
-      if (x + w > window.innerWidth) x = window.innerWidth - w - 10;
-      if (y + h > window.innerHeight) y = window.innerHeight - h - 10;
-      tooltip.style("left", `${x}px`).style("top", `${y}px`);
-    })
+    .on("mousemove", moveTooltip)
     .on("mouseout", () => {
       tooltip.style("display", "none");
     });
@@ -940,31 +304,11 @@ export function createTimelineView(data, containerId, isUpdate = false) {
     .style("text-anchor", "middle")
     .style("cursor", "pointer")
     .on("click", (event, d) => {
-      const yearStr = d.getFullYear().toString();
-      const info = yearStats.get(yearStr);
-      if (!info) return;
-
-      emitLineChartClick({
-        year: yearStr,
-        originalities: info.originalities,
-        rarities: info.rarities,
-        source: "timeline",
-      });
+      toggleSelected("years", "years", [d.getFullYear()]);
     })
     .on("contextmenu", (event, d) => {
       event.preventDefault();
-      const yearStr = d.getFullYear().toString();
-      const updated = getClonedFilters();
-      if (!updated["Year"]) updated["Year"] = new Set();
-
-      updated["Year"].has(yearStr)
-        ? updated["Year"].delete(yearStr)
-        : updated["Year"].add(yearStr);
-
-      updateState({
-        selectedFilters: updated,
-        updateContext: "TimelineFilter",
-      });
+      toggleGlobalFilter("Year", d.getFullYear().toString());
     })
     .on("mouseover", (event, d) => {
       const yearStr = d.getFullYear().toString();
@@ -977,7 +321,7 @@ export function createTimelineView(data, containerId, isUpdate = false) {
         );
       }
 
-      highlightAllViewsForYear(yearStr);
+      setHover("timeline", { years: new Set([d.getFullYear()]) });
 
       const tooltipHtml = types
         ? `<strong>${yearStr}</strong><br><strong>Total Sets: ${totalSets}</strong><br>${Array.from(
@@ -989,28 +333,11 @@ export function createTimelineView(data, containerId, isUpdate = false) {
 
       tooltip.style("display", "block").html(tooltipHtml);
 
-      const node = tooltip.node();
-      const w = node.offsetWidth;
-      const h = node.offsetHeight;
-      const pad = 10;
-
-      let left = event.pageX + pad;
-      if (left + w > window.innerWidth) {
-        left = event.pageX - w - pad;
-      }
-      if (left < 0) left = pad;
-
-      let top = event.pageY + pad;
-      if (top + h > window.innerHeight) {
-        top = event.pageY - h - pad;
-      }
-      if (top < 0) top = pad;
-
-      tooltip.style("left", `${left}px`).style("top", `${top}px`);
+      moveTooltip(event);
     })
     .on("mouseout", () => {
       tooltip.style("display", "none");
-      emitClearLineYearHover();
+      clearHover();
     });
 
   /* ---- Scroll container + SVG ---- */
@@ -1058,6 +385,9 @@ export function createTimelineView(data, containerId, isUpdate = false) {
     .on("zoom", zoomed);
 
   svg.call(zoom);
+  scrollContainer.on("scroll", function () {
+    savedScrollTop = this.scrollTop;
+  });
 
   const chartGroup = svg
     .append("g")
@@ -1178,11 +508,6 @@ export function createTimelineView(data, containerId, isUpdate = false) {
           .attr("stroke", "black")
           .attr("fill", (d) => d.baseColor)
           .on("mouseover", function (event, d) {
-            const rect = d3.select(this);
-            rect
-              .attr("fill", d.highlightColor)
-              .classed("hover-temp", true);
-
             tooltip
               .style("display", "block")
               .html(`
@@ -1192,70 +517,20 @@ export function createTimelineView(data, containerId, isUpdate = false) {
                 Cards in Set: ${d.cardCount}
               `);
 
-            const node = tooltip.node();
-            const w = node.offsetWidth;
-            const h = node.offsetHeight;
-            const pad = 10;
+            moveTooltip(event);
 
-            let left = event.pageX + pad;
-            if (left + w > window.innerWidth) {
-              left = event.pageX - w - pad;
-            }
-            if (left < 0) left = pad;
-
-            let top = event.pageY + pad;
-            if (top + h > window.innerHeight) {
-              top = event.pageY - h - pad;
-            }
-            if (top < 0) top = pad;
-
-            tooltip.style("left", `${left}px`).style("top", `${top}px`);
-
-            highlightAllViewsForSet(d.name);
+            setHover("timeline", { sets: new Set([d.name]) });
           })
-          .on("mouseout", function (event, d) {
-            const rect = d3.select(this);
-            rect.classed("hover-temp", false);
-
-            const isSel = rect.classed("selectedHovered");
-            rect.attr("fill", isSel ? d.selectedColor : d.baseColor);
-
+          .on("mouseout", function () {
             tooltip.style("display", "none");
-            clearAllViewsHoverOnly();
+            clearHover();
           })
           .on("click", function (event, d) {
-            const sel = activeTimelineSelections.sets;
-            sel.has(d.name)
-              ? sel.delete(d.name)
-              : sel.add(d.name);
-
-            updateTimelineSelections();
-
-            emitTimelineSetClick({
-              name: d.name,
-              releaseDate: d.releaseDate,
-              setType: d.setType,
-              cardCount: d.cardCount,
-              originalities: new Set(d.originalities),
-              rarities: new Set(d.rarities),
-              colorIdentities: new Set(d.colorIdentities),
-            });
+            toggleSelected("timeline", "sets", [d.name]);
           })
           .on("contextmenu", function (event, d) {
             event.preventDefault();
-            const updated = getClonedFilters();
-            if (!updated["Set Names"]) {
-              updated["Set Names"] = new Set();
-            }
-
-            updated["Set Names"].has(d.name)
-              ? updated["Set Names"].delete(d.name)
-              : updated["Set Names"].add(d.name);
-
-            updateState({
-              selectedFilters: updated,
-              updateContext: "TimelineFilter",
-            });
+            toggleGlobalFilter("Set Names", d.name);
           }),
       (update) => update,
       (exit) => exit.remove()
@@ -1278,80 +553,24 @@ export function createTimelineView(data, containerId, isUpdate = false) {
           .attr("font-size", "12px")
           .attr("fill", "black")
           .text((d) => d)
-          .on("click", (event, type) => {
-            const typeSet = activeTimelineSelections.setTypes;
-            const setSet = activeTimelineSelections.sets;
-
-            if (typeSet.has(type)) {
-              typeSet.delete(type);
-              uniqueSets.forEach((s) => {
-                if (s.setType === type) setSet.delete(s.name);
-              });
-            } else {
-              typeSet.add(type);
-              uniqueSets.forEach((s) => {
-                if (s.setType === type) setSet.add(s.name);
-              });
-            }
-
-            const info = setTypeStats.get(type);
-
-            emitTimelineSetTypeClick({
-              type,
-              releaseDates: info?.releaseDates || new Set(),
-              originalities: info?.originalities || new Set(),
-              rarities: info?.rarities || new Set(),
-              colorIdentities: info?.colorIdentities || new Set(),
-            });
-
-            updateTimelineSelections();
-          })
+          .on("click", (event, type) => toggleSetType(type))
           .on("contextmenu", (event, type) => {
             event.preventDefault();
-            const updated = getClonedFilters();
-            if (!updated["Set Types"]) {
-              updated["Set Types"] = new Set();
-            }
-
-            updated["Set Types"].has(type)
-              ? updated["Set Types"].delete(type)
-              : updated["Set Types"].add(type);
-
-            updateState({
-              selectedFilters: updated,
-              updateContext: "TimelineFilter",
-            });
+            toggleGlobalFilter("Set Types", type);
           })
           .on("mouseover", (event, type) => {
             const count = typeCounts.get(type) || 0;
-            highlightAllViewsForSetType(type);
+            setHover("timeline", { setTypes: new Set([type.toLowerCase()]) });
 
             tooltip
               .style("display", "block")
               .html(`<strong>${type}</strong><br>${count} sets`);
 
-            const node = tooltip.node();
-            const w = node.offsetWidth;
-            const h = node.offsetHeight;
-            const pad = 10;
-
-            let left = event.pageX + pad;
-            if (left + w > window.innerWidth) {
-              left = event.pageX - w - pad;
-            }
-            if (left < 0) left = pad;
-
-            let top = event.pageY + pad;
-            if (top + h > window.innerHeight) {
-              top = event.pageY - h - pad;
-            }
-            if (top < 0) top = pad;
-
-            tooltip.style("left", `${left}px`).style("top", `${top}px`);
+            moveTooltip(event);
           })
           .on("mouseout", () => {
             tooltip.style("display", "none");
-            clearAllViewsHoverOnly();
+            clearHover();
           }),
       (update) => update,
       (exit) => exit.remove()
@@ -1362,6 +581,7 @@ export function createTimelineView(data, containerId, isUpdate = false) {
 
   function zoomed(event) {
     const transform = event.transform;
+    savedZoom = transform;
 
     let newX;
     if (transform.k === 1) {
@@ -1404,57 +624,30 @@ export function createTimelineView(data, containerId, isUpdate = false) {
     }
 
     if (!event.selection) {
-      activeTimelineSelections.sets.clear();
-      activeTimelineSelections.setTypes.clear();
-      emitClearTimelineBrush();
-      updateTimelineSelections();
+      clearSelection("timeline");
       return;
     }
 
     const [[x0, y0], [x1, y1]] = event.selection;
-    const brushedSets = [];
+    const brushed = [];
 
-    d3.selectAll(".set-rect").each(function (d) {
-      const rect = d3.select(this);
-      const x = +rect.attr("x");
-      const y = +rect.attr("y");
-      const w = +rect.attr("width");
-      const h = +rect.attr("height");
-
-      const intersects =
-        x + w >= x0 &&
-        x <= x1 &&
-        y + h >= y0 &&
-        y <= y1;
-
-      if (intersects) {
-        brushedSets.push({
-          name: d.name,
-          originalities: new Set(d.originalities),
-          rarities: new Set(d.rarities),
-          colorIdentities: new Set(d.colorIdentities),
-          releaseDate: d.releaseDate,
-        });
-      }
+    squares.each(function (d) {
+      const x = +this.getAttribute("x");
+      const y = +this.getAttribute("y");
+      const w = +this.getAttribute("width");
+      const h = +this.getAttribute("height");
+      if (x + w >= x0 && x <= x1 && y + h >= y0 && y <= y1) brushed.push(d.name);
     });
 
-    if (brushedSets.length === 0) {
-      activeTimelineSelections.sets.clear();
-      activeTimelineSelections.setTypes.clear();
-      emitClearTimelineBrush();
-      updateTimelineSelections();
-      ignoreNextBrushEnd = true;
-      chartGroup.select(".brush").call(brush.move, null);
-      return;
+    if (brushed.length === 0) {
+      clearSelection("timeline");
+    } else {
+      // Each brushed set toggles individually.
+      const pred = getSourcePredicate("timeline") || {};
+      const sets = new Set(pred.sets || []);
+      brushed.forEach((n) => (sets.has(n) ? sets.delete(n) : sets.add(n)));
+      setSelected("timeline", { ...pred, sets });
     }
-
-    brushedSets.forEach((s) => {
-      const set = activeTimelineSelections.sets;
-      set.has(s.name) ? set.delete(s.name) : set.add(s.name);
-    });
-
-    updateTimelineSelections();
-    emitTimelineBrush(brushedSets);
 
     ignoreNextBrushEnd = true;
     chartGroup.select(".brush").call(brush.move, null);
@@ -1472,13 +665,14 @@ export function createTimelineView(data, containerId, isUpdate = false) {
       target.classed("timeline-info-icon") ||
       target.node().closest?.(".timeline-info-icon");
 
-    if (!isSetRect && !isYearTick && !isTypeLabel && !isInfo) {
-      emitClearSelection();
-      updateTimelineSelections();
-    }
+    if (!isSetRect && !isYearTick && !isTypeLabel && !isInfo) clearSelection();
   });
 
-  /* ---- Initial selection render ---- */
+  /* ---- Restore zoom/scroll, then the selection ---- */
 
-  updateTimelineSelections();
+  if (isUpdate && savedZoom && savedZoom.k !== 1) svg.call(zoom.transform, savedZoom);
+  if (isUpdate) scrollContainer.node().scrollTop = savedScrollTop;
+
+
+  paintTimeline();
 }

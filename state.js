@@ -16,18 +16,11 @@ const state = {
     selectedPriceCurrency: "eur",            // One of "eur", "usd", or "tix"
     selectedPriceSuffix: "",                 // "", "_foil", or "_etched"
     hoveredCards: [],
-    updateContext: null,
     originalData: null,
-    groupedData: null,
-    freeTextSearch: "",
-
-    originalFilteredData: null,
-    originalSelectedFilters: null,
-    previousFilteredData: null,
-    lastFilterInputs: null,
-    lastFilteredData: null,
+    filterEngine: null,   // core/filtering.js engine (index + memoized run())
+    scatterPrep: null,    // core/scatter.js per-name aggregation
+    groupedData: null,    // filterEngine.index: { category: Map<value, Int32Array> }
     filterLogicMode: "AND-OR",
-    isHoverUpdate: false,
   };
   
   const globalListeners = new Set();      // .subscribe()
@@ -54,9 +47,7 @@ const state = {
       }
     }
   
-    if (!newPartialState.suppressGlobalNotify) {
     globalListeners.forEach(cb => cb(state));
-  }
   }
   
   export function getState() {
@@ -89,10 +80,7 @@ export function loadFilterSettings(serializedString) {
       newFilters[key] = new Set(parsed[key]);
     }
 
-    updateState({
-      selectedFilters: newFilters,
-      updateContext: "LoadedFilterSettings"
-    });
+    updateState({ selectedFilters: { ...emptyFilters(), ...newFilters } });
   } catch (e) {
     console.error("Failed to load filters:", e);
   }
@@ -134,15 +122,36 @@ export function loadFiltersFromURL() {
   }
 }
 
-export function resetState() {
-  
-  updateState({
-    selectedFilters: getState().originalSelectedFilters , 
-    selectedPriceCurrency: "eur",            
-    selectedPriceSuffix: "",                 
-    hoveredCards: [],
-    updateContext: null,
-    lastFilterInputs: null,
-    lastFilteredData: null
-  });
+/** A selectedFilters object with every category present and empty. */
+export function emptyFilters() {
+  const out = {};
+  for (const key in state.selectedFilters) out[key] = new Set();
+  return out;
+}
+
+/**
+ * Resolve the effective price attribute from state.
+ * - tix → price_tix
+ * - eur/usd (+ optional suffix) → price_{currency}{suffix}
+ */
+export function getEffectivePriceAttribute(s) {
+  const { selectedPriceCurrency, selectedPriceSuffix } = s;
+  return selectedPriceCurrency === "tix"
+    ? "price_tix"
+    : `price_${selectedPriceCurrency}${selectedPriceSuffix}`;
+}
+
+/** Copy of the current selectedFilters (fresh Sets, safe to modify). */
+export function cloneSelectedFilters() {
+  const out = {};
+  for (const key in state.selectedFilters) out[key] = new Set(state.selectedFilters[key]);
+  return out;
+}
+
+/** Add or remove one value of a global filter (right-click on chart elements). */
+export function toggleGlobalFilter(category, value) {
+  const next = cloneSelectedFilters();
+  const set = next[category] || (next[category] = new Set());
+  set.has(value) ? set.delete(value) : set.add(value);
+  updateState({ selectedFilters: next });
 }

@@ -25,22 +25,33 @@
 import {
   updateState,
   getState,
+  cloneSelectedFilters,
   saveFilterSettings,
   loadFilterSettings,
   generateFilterShareURL,
-  resetState,
+  emptyFilters,
 } from "../state.js";
-import {
-  filterData,
-  filterPriceOnly,
-  getEffectivePriceAttribute,
-  isFilterEmpty,
-} from "../script.js";
+import { inferTypeCategory, VISIBLE_FILTER_CATEGORIES } from "../core/index.js";
 
-import { emitCardSearch, emitClearSelection } from "./Events.js";
-import { showLoader, hideLoader } from "./LoadingAnimation.js";
+import { toggleSelected, clearSelection } from "./Linking.js";
+import { findScatterCard } from "./Scatterplot.js";
 
 // --- Constants & module-local registries ---------------------------------
+
+// Order of the category sections in the panel.
+const PANEL_SECTION_ORDER = [
+  "Originality",
+  "Keywords",
+  "Rarity",
+  "Supertypes",
+  "Types",
+  "Subtypes",
+  "Set Types",
+  "Set Names",
+  "Year",
+  "Nº of Colors",
+  "Color Identity",
+];
 
 // We exclude certain set types from *display* (still present in data).
 const EXCLUDED_SET_TYPES = new Set(["alchemy", "minigame"]);
@@ -50,9 +61,6 @@ const optionMap = new Map();
 
 // Track "pill" containers per category for rendering/removing active filter chips.
 const pillMap = new Map();
-
-// Color order used to normalize/format MTG color identity strings.
-const mtgColorOrder = { w: 0, u: 1, b: 2, r: 3, g: 4 };
 
 // Normalize keys used in optionMap so we don’t double-store "Colorless"/"colorless".
 function getNormalizedKey(category, value) {
@@ -134,21 +142,6 @@ function formatDisplayLabel(category, value) {
   return value;
 }
 
-// Categories visible in the panel (others might exist in groupedData but are hidden).
-const VISIBLE_FILTER_CATEGORIES = [
-  "Keywords",
-  "Supertypes",
-  "Types",
-  "Subtypes",
-  "Set Types",
-  "Set Names",
-  "Originality",
-  "Rarity",
-  "Year",
-  "Nº of Colors",
-  "Color Identity",
-];
-
 // Simple helpers
 function capitalizeFirst(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
@@ -171,57 +164,12 @@ const scryfallMap = {
   st: ["Set Types"],
 };
 
-// Infer which of Supertypes/Types/Subtypes a free token most likely belongs to.
-function inferFilterCategoryFromValue(
-  value,
-  data,
-  candidates = ["Supertypes", "Types", "Subtypes"]
-) {
-  const valueLower = value.trim().toLowerCase();
-  const counts = {};
-  candidates.forEach((category) => (counts[category] = 0));
-
-  data.forEach((card) => {
-    candidates.forEach((category) => {
-      const raw = extractCardValue(card, category);
-      if (!raw) return;
-
-      const isSplittable = ["Supertypes", "Types", "Subtypes"].includes(
-        category
-      );
-      const values = Array.isArray(raw)
-        ? raw.map((v) => v.trim().toLowerCase())
-        : isSplittable
-        ? raw.split(/[\s/]+/).map((v) => v.trim().toLowerCase())
-        : [raw.trim().toLowerCase()];
-
-      if (values.includes(valueLower)) {
-        counts[category]++;
-      }
-    });
-  });
-
-  const maxCategory = Object.entries(counts).reduce(
-    (a, b) => (b[1] > a[1] ? b : a),
-    ["", 0]
-  )[0];
-
-  return maxCategory;
-}
-
-// Clone { [category]: Set(values) } safely.
-function cloneFilters(filters) {
-  return Object.fromEntries(
-    Object.entries(filters).map(([k, v]) => [k, new Set(v)])
-  );
-}
-
 // --- Main: createFilterPanel ---------------------------------------------
-// Builds the entire panel DOM. Intended to be called on first render and when a
-// full rebuild is needed (e.g., switching datasets or large layout changes).
+// Builds the entire panel DOM once. Later changes go through updateFilterPanel,
+// which patches counts/pills in place.
+//   result: filterEngine.run(...) output ({ cards, counts })
 export function createFilterPanel(
-  data,
-  filteredCards,
+  result,
   containerId,
   selectedFiltersFromState,
   isUpdate = false
@@ -291,23 +239,22 @@ export function createFilterPanel(
     updateState({ selectedPriceSuffix: this.value });
   });
 
-  // --- FILTER DATA SOURCE (groupedData) ---------------------------------
-  // groupedData is a { category: Map(value -> cards[]) } produced elsewhere.
+  // --- FILTER OPTIONS ------------------------------------------------------
+  // Values come from the filter engine's index, counts from `result.counts`.
   // We only render categories listed in VISIBLE_FILTER_CATEGORIES.
-  const groupedData = getState().groupedData;
+  const engine = getState().filterEngine;
 
   // Prepare [category → [ [value, count], ... ]] to render option lists.
   const allFilters = Object.fromEntries(
-    Object.entries(groupedData)
-      .filter(([category]) => VISIBLE_FILTER_CATEGORIES.includes(category))
-      .map(([category, map]) => {
-        let entries = Array.from(map.entries());
+    PANEL_SECTION_ORDER.filter((category) => engine.index[category])
+      .map((category) => {
+        const counts = result.counts.get(category);
+        let entries = engine.values(category).map((value) => [value, counts?.get(value) ?? 0]);
 
         // Exclude specific Set Types from the UI (visual affordance).
         if (category === "Set Types") {
-          const excluded = new Set(["alchemy", "minigame"]);
           entries = entries.filter(
-            ([value]) => !excluded.has(value.toLowerCase())
+            ([value]) => !EXCLUDED_SET_TYPES.has(value.toLowerCase())
           );
         }
 
@@ -340,10 +287,6 @@ export function createFilterPanel(
   // --- CARD NAME AUTOCOMPLETE (LAZY) ------------------------------------
   // We do not hydrate the datalist with thousands of options at once.
   // Instead, we track currentCardNames and only render top 50 matches on input.
-  const uniqueCardNames = Array.from(
-    new Set(filteredCards.map((card) => card.name))
-  ).sort();
-
   const inputId = "searchInput_" + Math.random().toString(36).substring(2);
 
   const searchInput = wrapper
@@ -396,7 +339,7 @@ export function createFilterPanel(
       // Split into tokens, preserving key:value chunks.
       const terms = searchText.match(/(?:\w+\s*:\s*[^ ]+)|(?:[^\s]+)/g) || [];
 
-      const currentFilters = cloneFilters(getState().selectedFilters);
+      const currentFilters = cloneSelectedFilters();
       if (!currentFilters["FreeTextSearch"])
         currentFilters["FreeTextSearch"] = new Set();
 
@@ -414,7 +357,7 @@ export function createFilterPanel(
 
             // t:VALUE → infer which of Supertypes/Types/Subtypes the value belongs to most.
             if (key === "t") {
-              const inferredCat = inferFilterCategoryFromValue(value, data);
+              const inferredCat = inferTypeCategory(engine, value);
               if (VISIBLE_FILTER_CATEGORIES.includes(inferredCat)) {
                 if (!currentFilters[inferredCat])
                   currentFilters[inferredCat] = new Set();
@@ -448,7 +391,6 @@ export function createFilterPanel(
 
       updateState({
         selectedFilters: currentFilters,
-        updateContext: "TextSearch",
       });
 
       this.value = ""; // Clear the input for next query.
@@ -470,11 +412,8 @@ export function createFilterPanel(
       const query = this.value.trim().toLowerCase();
       if (!query) return;
 
-      const matchedSet = getState().groupedData["Set Names"];
-      if (!matchedSet) return;
-
       // Exact match first (simple heuristic).
-      const matched = Array.from(matchedSet.keys()).find(
+      const matched = engine.values("Set Names").find(
         (name) => name.toLowerCase() === query
       );
       if (!matched) return;
@@ -521,14 +460,9 @@ export function createFilterPanel(
     const cardName = inputEl.value.trim();
     if (!cardName) return;
 
-    const circle = d3
-      .selectAll(".Scatterplot .dots circle")
-      .filter((d) => d.name === cardName)
-      .node();
-    if (!circle) return;
-
-    const card = d3.select(circle).datum();
-    emitCardSearch(card);
+    const card = findScatterCard(cardName);
+    if (!card) return;
+    toggleSelected("scatter", "names", [card.name]);
     // NOTE: we keep the text; browser shows chosen option.
   }
 
@@ -543,15 +477,6 @@ export function createFilterPanel(
       // Also fires when selecting from datalist with the mouse.
       searchByName(this);
     });
-
-  // --- Price field discovery (not used here, but ready if needed) --------
-  const priceFields = new Set();
-  data.forEach((card) => {
-    Object.keys(card).forEach((key) => {
-      if (key.startsWith("price_")) priceFields.add(key);
-    });
-  });
-  const sortedPriceFields = Array.from(priceFields).sort();
 
   // --- Global action buttons ---------------------------------------------
   const resetWrapper = wrapper
@@ -574,9 +499,7 @@ export function createFilterPanel(
     .style("width", "95%")
     .style("cursor", "pointer")
     .on("click", () => {
-      const clearedFilters = {};
-      for (const key in selectedFilters) clearedFilters[key] = new Set();
-      updateState({ selectedFilters: clearedFilters, freeTextSearch: "" });
+      updateState({ selectedFilters: emptyFilters() });
     });
 
   // Clear Selections → emits global event to clear cross-view persistent selections.
@@ -595,7 +518,7 @@ export function createFilterPanel(
     .style("cursor", "pointer")
     .style("text-align", "left")
     .on("click", () => {
-      emitClearSelection();
+      clearSelection();
     });
 
   // --- Category sections --------------------------------------------------
@@ -709,8 +632,7 @@ export function createFilterPanel(
       .attr("data-value", (d) => d.value)
       .on("click", function (event, d) {
         // Toggle value in selectedFilters[category].
-        const currentFilters = getState().selectedFilters;
-        const updated = cloneFilters(currentFilters);
+        const updated = cloneSelectedFilters();
         const set = updated[category] || new Set();
         if (set.has(d.value)) set.delete(d.value);
         else set.add(d.value);
@@ -807,7 +729,6 @@ export function createFilterPanel(
       selectedPriceSuffix: suffixOptions.includes(currentSuffix)
         ? currentSuffix
         : "",
-      priceAttributeChanged: true,
     });
 
     renderSuffixOptions(selectedCurrency);
@@ -934,23 +855,22 @@ export function createFilterPanel(
 }
 
 // --- Live patching: updateFilterPanel ------------------------------------
-// Called whenever filters or data subsets change. It:
-// • Recomputes per-option counts (respecting AND-OR vs AND-AND)
-// • Patches labels and disables options with count=0 (unless already selected)
+// Called whenever the filtered result changes. It:
+// • Patches option labels/opacity from `result.counts` (computed by the filter
+//   engine in the same pass as the filtering) — only nodes whose count or
+//   selection changed are touched
 // • Rebuilds active pills per category
 // • Refreshes the card-name datalist backing array (not DOM!)
 // • Clears per-section search boxes (so users see all options again)
-export function updateFilterPanel(
-  originalData,
-  filteredCards,
-  selectedFilters,
-  containerId = ".FilterPanel"
-) {
+export function updateFilterPanel(result, selectedFilters, containerId = ".FilterPanel") {
   const t0 = performance.now();
 
-  // Reset all per-section client-side search inputs to show options fully again.
+  // Reset per-section search inputs that hold a query, so all options show again.
   d3.select(containerId)
     .selectAll(".filter-search-input")
+    .filter(function () {
+      return this.value !== "";
+    })
     .property("value", "")
     .each(function () {
       this.dispatchEvent(new Event("input", { bubbles: true }));
@@ -958,94 +878,24 @@ export function updateFilterPanel(
 
   selectedFilters = selectedFilters || {};
 
-  const groupedData = getState().groupedData;
-  const priceAttr = getEffectivePriceAttribute(getState());
-
-  const filters = new Map();
-  const mode = getState().filterLogicMode || "AND-OR";
-  const applyAndWithin = mode.endsWith("AND");
-
-  // Ordering helpers reused for stable UI.
-  const getOrderIndex = (category, value) => {
-    if (category === "Nº of Colors") return numColorsOrder.indexOf(value);
-    if (category === "Color Identity")
-      return colorIdentityOrder.indexOf(value.toLowerCase());
-    return value;
-  };
-
-  // Utility: compute the filtered set excluding a specific category (for AND-OR).
-  const getFilteredSetExcluding = (categoryToIgnore, selectedFiltersArg) => {
-    const filtered = filterData(groupedData, selectedFiltersArg, {
-      excludeCategory: categoryToIgnore,
-    });
-    const cleaned = filterPriceOnly(filtered, priceAttr);
-    return cleaned;
-  };
-
-  // Cache for AND-AND mode so we compute once.
-  let cachedFilteredSet = null;
-
-  // --- Compute counts for every visible category -------------------------
-  VISIBLE_FILTER_CATEGORIES.forEach((category) => {
-    const categoryGroup = groupedData[category];
-    if (!categoryGroup) return;
-
-    let filteredSet;
-    if (isFilterEmpty(selectedFilters)) {
-      // Nothing selected at all → counts reflect current filteredCards.
-      filteredSet = filteredCards;
-    } else if (!applyAndWithin) {
-      // AND across / OR within:
-      // When listing options in "category", exclude that category from the filter
-      // so counts represent what would happen if we add/remove from it.
-      filteredSet = getFilteredSetExcluding(category, selectedFilters);
-    } else {
-      // AND across / AND within:
-      // We keep the fully filtered set for every category panel.
-      if (!cachedFilteredSet) {
-        const allFiltered = filterData(groupedData, selectedFilters);
-        cachedFilteredSet = filterPriceOnly(allFiltered, priceAttr);
-      }
-      filteredSet = cachedFilteredSet;
-    }
-
-    const filteredIds = new Set(filteredSet.map((c) => c.index));
-    const optionCounts = new Map();
-
-    categoryGroup.forEach((cards, value) => {
-      const count = cards.reduce(
-        (acc, card) => acc + filteredIds.has(card.index),
-        0
-      );
-      optionCounts.set(value, count);
-    });
-
-    // Stable sort.
-    const sortedEntries = Array.from(optionCounts.entries()).sort((a, b) => {
-      const aVal = getOrderIndex(category, a[0]);
-      const bVal = getOrderIndex(category, b[0]);
-      if (typeof aVal === "number" && typeof bVal === "number") return aVal - bVal;
-      return a[0].localeCompare(b[0]);
-    });
-
-    filters.set(category, new Map(sortedEntries));
-  });
-
   // --- Patch option DOM (labels, opacity, interactivity) -----------------
   optionMap.forEach((el, key) => {
     const [category, value] = key.split("|");
-    if (!filters.has(category)) return;
+    const categoryCounts = result.counts.get(category);
+    if (!categoryCounts) return;
 
     const normValue = getNormalizedKey(category, value);
-    const count = filters.get(category)?.get(normValue) || 0;
+    const count = categoryCounts.get(normValue) || 0;
+    const isSelected = (selectedFilters[category] || new Set()).has(value);
 
-    const span = el.select("span");
-    span
+    const node = el.node();
+    if (node.__count === count && node.__selected === isSelected) return;
+    node.__count = count;
+    node.__selected = isSelected;
+
+    el.select("span")
       .text(`${formatDisplayLabel(category, normValue)} (${count})`)
       .attr("data-count", count);
-
-    const selectedSet = selectedFilters[category] || new Set();
-    const isSelected = selectedSet.has(value);
 
     // Disable options that have zero results (unless already selected).
     el.style("opacity", count === 0 && !isSelected ? 0.4 : 1);
@@ -1091,8 +941,7 @@ export function updateFilterPanel(
       .text("\u2715")
       .on("click", function (event, value) {
         // Remove this value from the category set.
-        const current = getState().selectedFilters;
-        const updated = cloneFilters(current);
+        const updated = cloneSelectedFilters();
         if (!updated[category]) updated[category] = new Set();
         updated[category].delete(value);
         updateState({ selectedFilters: updated });
@@ -1103,7 +952,7 @@ export function updateFilterPanel(
   });
 
   // --- Card-name autocomplete source update (no DOM flood) ----------------
-  currentCardNames = Array.from(new Set(filteredCards.map((c) => c.name))).sort();
+  currentCardNames = Array.from(new Set(result.cards.map((c) => c.name))).sort();
 
   // Clear and keep the datalist empty here; we fill it on-demand in createFilterPanel.on("input")
   const inputId = d3.select(containerId).select("input[list]").attr("list");
@@ -1115,51 +964,4 @@ export function updateFilterPanel(
   // Perf logs (optional)
   const tEnd = performance.now();
   console.log(`[updateFilterPanel] TOTAL time ${(tEnd - t0).toFixed(2)} ms`);
-}
-
-// --- Data extraction helper ----------------------------------------------
-// Maps "category" → value(s) from a raw card record for grouping & matching.
-function extractCardValue(card, category) {
-  switch (category) {
-    case "Keywords":
-      return Array.isArray(card.keywords) ? card.keywords : null;
-    case "Supertypes":
-      return card.supertype;
-    case "Types":
-      return card.type;
-    case "Subtypes":
-      return card.subtype;
-    case "Set Types":
-      return card.set_type;
-    case "Originality":
-      return card.originality;
-    case "Rarity":
-      return card.rarity;
-    case "Set Names":
-      return card.set_name;
-    case "Year":
-      return card.release_date
-        ? new Date(card.release_date).getFullYear().toString()
-        : null;
-    case "Nº of Colors":
-      // Normalize to display strings used in the panel ordering lists.
-      if (card.number_of_colours === 0) return "Colorless";
-      if (card.number_of_colours === 1) return "1 Color";
-      if (card.number_of_colours === 2) return "2 Colors";
-      if (card.number_of_colours === 3) return "3 Colors";
-      if (card.number_of_colours === 4) return "4 Colors";
-      if (card.number_of_colours === 5) return "5 Colors";
-      return null;
-    case "Color Identity":
-      // Normalize color identity to sorted, lowercase compact string (e.g., "wub").
-      if (!Array.isArray(card.color_identity) || card.color_identity.length === 0)
-        return "colorless";
-      return card.color_identity
-        .slice()
-        .sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b])
-        .join("")
-        .toLowerCase();
-    default:
-      return null;
-  }
 }

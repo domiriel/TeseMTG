@@ -33,15 +33,6 @@ let illegalBtnHover = false;
 
 // --- Utilities ------------------------------------------------------------
 
-// Clone current filters from global state to avoid mutating Sets by reference.
-function getClonedFilters() {
-  const currentState = getState();
-  const cloned = {};
-  for (const key in currentState.selectedFilters) {
-    cloned[key] = new Set(currentState.selectedFilters[key]);
-  }
-  return cloned;
-}
 
 // Update the Selected Cards button label: shows arrow and (count) when open or hovered.
 function updateDrawerButtonLabel() {
@@ -65,8 +56,9 @@ function updateIllegalButtonLabel() {
 
 // --- Imports --------------------------------------------------------------
 
-import { updateState, getState } from "../state.js";
-import { emitCardSearch, emitClearSelection } from "./Events.js";
+import { updateState, getState, cloneSelectedFilters } from "../state.js";
+import { clearSelection } from "./Linking.js";
+import { moveTooltip, colorIdentityBackground } from "./ui.js";
 
 // --- Selected Cards Drawer ------------------------------------------------
 
@@ -108,9 +100,9 @@ export function createHiddenDrawer(containerSelector = "body") {
       tooltip
         .style("display", "block")
         .html("Cards that match the current selections");
-      positionTooltip(event, tooltip);
+      moveTooltip(event);
     })
-    .on("mousemove", (event) => positionTooltip(event))
+    .on("mousemove", (event) => moveTooltip(event))
     .on("mouseout", () => d3.select("#tooltip").style("display", "none"));
 
   // Toggle button for the selected drawer
@@ -126,12 +118,12 @@ export function createHiddenDrawer(containerSelector = "body") {
         tooltip
           .style("display", "block")
           .html("Cards that match the current selections");
-        positionTooltip(event, tooltip);
+        moveTooltip(event);
       }
       updateDrawerButtonLabel();
     })
     .on("mousemove", (event) => {
-      if (!drawerContainer.classed("visible")) positionTooltip(event);
+      if (!drawerContainer.classed("visible")) moveTooltip(event);
     })
     .on("mouseout", () => {
       drawerBtnHover = false;
@@ -159,8 +151,7 @@ export function createHiddenDrawer(containerSelector = "body") {
     .style("border-radius", "4px")
     .style("cursor", "pointer")
     .on("click", () => {
-      updateState({ hoveredCards: [], isHoverUpdate: true });
-      emitClearSelection();
+      clearSelection();
     });
 
   // Cards area styling
@@ -181,7 +172,9 @@ export function createHiddenDrawer(containerSelector = "body") {
 export function updateDrawer(cards = []) {
   if (!drawerContainer) return;
 
-  // Cache + button label
+  // A new selection starts on the first page; re-renders of the same list
+  // (pagination clicks) keep the page, clamped to the available pages.
+  if (cards !== cardsInDrawer) currentPage = 0;
   cardsInDrawer = cards;
   updateDrawerButtonLabel();
 
@@ -189,6 +182,7 @@ export function updateDrawer(cards = []) {
 
   // Pagination window
   const totalPages = Math.ceil(cards.length / pageSize) || 1;
+  currentPage = Math.min(currentPage, totalPages - 1);
   const visibleCards = cards.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
 
   // Data join on card wrappers
@@ -286,21 +280,6 @@ export function updateDrawer(cards = []) {
               : "Unknown Set"
           );
 
-        // Sync scatter tooltip (if opened) with the newly selected print
-        const dot = d3
-          .selectAll(".dots circle")
-          .filter((d) => d.name === card.name)
-          .datum();
-        if (dot) {
-          dot.tooltip_image = card.tooltip_image;
-          const tooltip = d3.select("#tooltip");
-          if (!tooltip.empty() && tooltip.style("display") !== "none") {
-            // Reuse the scatter's mouseover renderer if globally available
-            // (Ensure mouseoverFn is in scope if you want this behavior.)
-            try { mouseoverFn(null, dot); } catch {}
-          }
-        }
-
         wrapper.select("img").attr("src", card.tooltip_image);
       });
 
@@ -331,7 +310,7 @@ export function updateDrawer(cards = []) {
     wrapper
       .select("img")
       .on("mouseover", (event) => showCompactTooltip(card, event))
-      .on("mousemove", (event) => positionTooltip(event))
+      .on("mousemove", (event) => moveTooltip(event))
       .on("mouseout", () =>
         d3.select("#tooltip").style("display", "none").style("background", null).style("color", null)
       );
@@ -350,7 +329,7 @@ export function updateDrawer(cards = []) {
       .style("cursor", "pointer")
       .on("click", () => {
         if (!Array.isArray(card.all_sets)) return;
-        const updatedFilters = getClonedFilters();
+        const updatedFilters = cloneSelectedFilters();
         if (!updatedFilters["Set Names"]) updatedFilters["Set Names"] = new Set();
         card.all_sets.forEach((set) => updatedFilters["Set Names"].add(set.name));
 
@@ -360,7 +339,6 @@ export function updateDrawer(cards = []) {
 
         updateState({
           selectedFilters: newSelectedFilters,
-          updateContext: "TimelineFilter",
         });
       });
   });
@@ -427,9 +405,9 @@ export function createIllegalDrawer(cards, containerSelector = "body") {
       tooltip
         .style("display", "block")
         .html("These cards are not shown in the visualizations because they have no price data in EUR, USD, or TIX.");
-      positionTooltip(event, tooltip);
+      moveTooltip(event);
     })
-    .on("mousemove", (event) => positionTooltip(event))
+    .on("mousemove", (event) => moveTooltip(event))
     .on("mouseout", () => d3.select("#tooltip").style("display", "none"));
 
   // Header layout
@@ -507,12 +485,12 @@ export function createIllegalDrawer(cards, containerSelector = "body") {
         tooltip
           .style("display", "block")
           .html("These cards are not shown in the visualizations because they have no price data in EUR, USD, or TIX.");
-        positionTooltip(event, tooltip);
+        moveTooltip(event);
       }
       updateIllegalButtonLabel();
     })
     .on("mousemove", (event) => {
-      if (!illegalDrawer.classed("visible")) positionTooltip(event);
+      if (!illegalDrawer.classed("visible")) moveTooltip(event);
     })
     .on("mouseout", () => {
       illegalBtnHover = false;
@@ -672,7 +650,7 @@ export function updateIllegalDrawer(cards = []) {
     wrapper
       .select("img")
       .on("mouseover", (event) => showCompactTooltip(card, event))
-      .on("mousemove", (event) => positionTooltip(event))
+      .on("mousemove", (event) => moveTooltip(event))
       .on("mouseout", () =>
         d3.select("#tooltip").style("display", "none").style("background", null).style("color", null)
       );
@@ -716,7 +694,7 @@ export function updateIllegalDrawer(cards = []) {
 // A small, shared card tooltip used in both drawers.
 function showCompactTooltip(card, event = null) {
   const tooltip = d3.select("#tooltip");
-  const colorBg = getColorIdentityBackground(card.color_identity);
+  const colorBg = colorIdentityBackground(card.color_identity);
   const formatDate = d3.timeFormat("%d %b %Y");
   const formattedDate = card.release_date ? formatDate(new Date(card.release_date)) : "Unknown";
 
@@ -741,48 +719,6 @@ function showCompactTooltip(card, event = null) {
       </div>
     `);
 
-  if (event) positionTooltip(event, tooltip);
+  if (event) moveTooltip(event);
 }
 
-// Keeps tooltip on-screen near the cursor.
-function positionTooltip(event, tooltip = d3.select("#tooltip")) {
-  const tooltipWidth = tooltip.node().offsetWidth;
-  const tooltipHeight = tooltip.node().offsetHeight;
-  const padding = 10;
-  let x = event.pageX + padding;
-  let y = event.pageY + padding;
-
-  if (x + tooltipWidth > window.innerWidth) {
-    x = event.pageX - tooltipWidth - padding;
-  }
-  if (y + tooltipHeight > window.innerHeight) {
-    y = event.pageY - tooltipHeight - padding;
-  }
-
-  tooltip.style("left", `${x}px`).style("top", `${y}px`);
-}
-
-// Generates a simple background (solid or gradient) from a MTG color identity array.
-function getColorIdentityBackground(colorIdentity) {
-  if (!Array.isArray(colorIdentity) || colorIdentity.length === 0) return "#888";
-
-  const colorMap = {
-    W: "#f6f1d5",
-    U: "#b3d9ff",
-    R: "#f8b3a0",
-    B: "#c8b4c0",
-    G: "#b6d7b3",
-  };
-  const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };
-
-  const sorted = [...colorIdentity].sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b]);
-  const colors = sorted.map((c) => colorMap[c]).filter(Boolean);
-
-  if (colors.length === 1) {
-    return colors[0];
-  } else {
-    const step = 100 / (colors.length - 1);
-    const stops = colors.map((color, i) => `${color} ${i * step}%`);
-    return `linear-gradient(to right, ${stops.join(", ")})`;
-  }
-}

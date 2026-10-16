@@ -1,50 +1,23 @@
-import { updateState, getState } from "../state.js";
-// @ts-ignore
-import { showLoader, hideLoader, showPopup } from "./LoadingAnimation.js";
+import { updateState, cloneSelectedFilters } from "../state.js";
+import { icicleAggregate } from "../core/index.js";
+import { showPopup } from "./LoadingAnimation.js";
 import {
-  // Emits
-  emitIcicleRectHover,
-  emitClearRectHover,
-  emitIcicleClick,
-  emitClearNumColorsHover,
-  emitNumColorsHover,
-  emitIcicleNumClick,
-  emitClearIcicleSelections,
-  emitClearSelection,
-
-  // Incoming (other views → Icicle)
-  onLineChartClick,
-  onLineChartBrush,
-  onHoverCard,
-  onScatterplotCards,
-  onClearScatterplotBrush,
-  onClearHover,
-  onClearSelection,
-  onSetHover,
-  onSetTypeHover,
-  onClearSetHover,
-  onClearLineYearHover,
-  onAlluvialClick,
-  onAlluvialLinkClick,
-  onAlluvialLink,
-  onAlluvialLinkHover,
-  onClearAlluvialLinkHover,
-  onLineYearHover,
-  onAlluvialHover,
-  onClearAlluvialHover,
-  onTimelineSetClick,
-  onTimelineBrush,
-  onClearAlluvialSelections,
-  onClearTimelineSelections,
-  onClearTimelineBrush,
-  onClearLineChartBrush,
-  onTimelineSetTypeClick,
-} from "./Events.js";
+  toggleSelected,
+  clearSelection,
+  setHover,
+  clearHover,
+  onSelectionChange,
+  onHoverChange,
+  getSelectionSummary,
+  getHoverSummary,
+} from "./Linking.js";
+import { moveTooltip, addInfoIcon } from "./ui.js";
 
 /* =========================================================================
  *  CONSTANTS
  * ========================================================================= */
 
+// WUBRG order, used to sort identities within a color group.
 const mtgColorOrder = { W: 0, U: 1, B: 2, R: 3, G: 4 };
 
 const COLOR_NAMES = {
@@ -152,22 +125,6 @@ let panStartX = null;
 let panStartDomain = null;
 let wasPanning = false;
 
-/**
- * Centralized selection sources that influence Icicle highlighting.
- * Each key tracks constraints coming from a specific view or interaction.
- */
-const activeSelections = {
-  fromAlluvialOriginality: new Set(),
-  fromAlluvialRarity: new Set(),
-  fromAlluvialLinkPairs: new Set(),
-  fromIcicleIdentity: new Set(),
-  fromIcicleColors: new Set(),
-  fromYears: new Set(),
-  colorIdentitiesFromTimelineSets: new Map(),
-  colorIdentitiesFromTimelineSetsTypes: new Map(),
-  colorIdentitiesFromScatterplot: new Set(),
-};
-
 /* =========================================================================
  *  UTILITY FUNCTIONS
  * ========================================================================= */
@@ -250,377 +207,41 @@ function validateFilterCombination(filters) {
   return false;
 }
 
-/**
- * Return true if there is any active non-empty selection affecting Icicle.
- */
-function hasActiveIcicleSelections() {
-  return (
-    activeSelections.fromAlluvialOriginality.size > 0 ||
-    activeSelections.fromAlluvialRarity.size > 0 ||
-    activeSelections.fromAlluvialLinkPairs.size > 0 ||
-    activeSelections.fromIcicleIdentity.size > 0 ||
-    activeSelections.fromIcicleColors.size > 0 ||
-    activeSelections.fromYears.size > 0 ||
-    activeSelections.colorIdentitiesFromTimelineSets.size > 0 ||
-    activeSelections.colorIdentitiesFromTimelineSetsTypes.size > 0 ||
-    activeSelections.colorIdentitiesFromScatterplot.size > 0
-  );
-}
-
 /* =========================================================================
- *  SELECTION LOGIC
+ *  SELECTION & HOVER PAINTING (shared model, see Linking.js)
  * ========================================================================= */
 
 /**
- * Clear all Icicle-related selections.
+ * Paint every rect from the shared selection/hover summaries:
+ *   identity rect (depth 2): its identity has selected / hovered printings
+ *   group rect (depth 1):    any of its identities does
+ * Hover wins over selection.
  */
-function clearAllIcicleSelectionsState() {
-  activeSelections.fromAlluvialOriginality.clear();
-  activeSelections.fromAlluvialRarity.clear();
-  activeSelections.fromAlluvialLinkPairs.clear();
-  activeSelections.fromIcicleIdentity.clear();
-  activeSelections.fromIcicleColors.clear();
-  activeSelections.fromYears.clear();
-  activeSelections.colorIdentitiesFromTimelineSets.clear();
-  activeSelections.colorIdentitiesFromTimelineSetsTypes.clear();
-  activeSelections.colorIdentitiesFromScatterplot.clear();
-}
-
-/**
- * Core: recompute which Icicle rects are selected based on activeSelections.
- *
- * Logic:
- * - OR within Icicle:
- *   • Multiple identities / numColors are inclusive.
- * - AND across charts:
- *   • Icicle matches are intersected with active Alluvial, Timeline, and Line constraints.
- * - Scatterplot:
- *   • Contributes as an additive union: rects hit by Scatterplot criteria stay selected
- *     even if they fail other chart constraints.
- */
-
-function updateIcicleSelections() {
-  const allRects = d3.selectAll("rect.icicle-rect").nodes();
-  const depth2Rects = allRects.filter((r) => d3.select(r).datum().depth === 2);
-  const depth1Rects = allRects.filter((r) => d3.select(r).datum().depth === 1);
-
-  const onlyScatterplotActive =
-    activeSelections.fromAlluvialOriginality.size === 0 &&
-    activeSelections.fromAlluvialRarity.size === 0 &&
-    activeSelections.fromAlluvialLinkPairs.size === 0 &&
-    activeSelections.fromIcicleIdentity.size === 0 &&
-    activeSelections.fromIcicleColors.size === 0 &&
-    activeSelections.colorIdentitiesFromTimelineSets.size === 0 &&
-    activeSelections.colorIdentitiesFromTimelineSetsTypes.size === 0 &&
-    activeSelections.fromYears.size === 0 &&
-    activeSelections.colorIdentitiesFromScatterplot.size > 0;
-
-  // No selections at all → reset to base colors.
-  if (!hasActiveIcicleSelections()) {
-    d3.selectAll("rect.icicle-rect")
-      .classed("selectedHovered", false)
-      .attr("fill", (d) => d.data.color);
-    return;
-  }
-
-  // Scatterplot-only: highlight matching identities, derive group highlighting.
-  if (onlyScatterplotActive) {
-    for (const rect of depth2Rects) {
-      const d = d3.select(rect).datum();
-      const identity = d.data.name;
-      const isColorless = identity === "Colorless";
-      const isSelected =
-        activeSelections.colorIdentitiesFromScatterplot.has(identity) ||
-        (isColorless &&
-          activeSelections.colorIdentitiesFromScatterplot.has(""));
-
-      d3.select(rect)
-        .classed("selectedHovered", isSelected)
-        .attr("fill", isSelected ? d.data.selectedColor : d.data.color);
-    }
-
-    for (const rect of depth1Rects) {
-      const d = d3.select(rect).datum();
-      const anyChildSelected = d.children?.some((child) => {
-        return depth2Rects.some((r) => {
-          const rd = d3.select(r).datum();
-          return (
-            rd.data.name === child.data.name &&
-            d3.select(r).classed("selectedHovered")
-          );
-        });
-      });
-
-      d3.select(rect)
-        .classed("selectedHovered", anyChildSelected)
-        .attr("fill", anyChildSelected ? d.data.selectedColor : d.data.color);
-    }
-
-    return;
-  }
-
-  // General case: compute selected depth-2 rects based on all constraints.
-  const selectedDepth2Rects = new Set();
-
-  for (const rect of depth2Rects) {
-    const d = d3.select(rect).datum();
-    const identity = d.data.name;
-    const numColors = d.data.numColors;
-    const isColorless = identity === "Colorless";
-
-    let match = true;
-
-    // Alluvial-origin constraints
-    const hasOrig = [...activeSelections.fromAlluvialOriginality].some((o) =>
-      d.data.originalities?.includes(o)
-    );
-    const hasRarity = [...activeSelections.fromAlluvialRarity].some((r) =>
-      d.data.rarities?.includes(r)
-    );
-    const hasLink = [...activeSelections.fromAlluvialLinkPairs].some((pair) => {
-      const [orig, rare] = pair.split("|");
-      return (
-        d.data.originalities?.includes(orig) && d.data.rarities?.includes(rare)
-      );
-    });
-
-    const alluvialEmpty =
-      activeSelections.fromAlluvialOriginality.size === 0 &&
-      activeSelections.fromAlluvialRarity.size === 0 &&
-      activeSelections.fromAlluvialLinkPairs.size === 0;
-
-    const matchAlluvial = alluvialEmpty || hasOrig || hasRarity || hasLink;
-
-    // Icicle-origin (direct identity)
-    const matchIdentity =
-      activeSelections.fromIcicleIdentity.size === 0 ||
-      activeSelections.fromIcicleIdentity.has(identity);
-
-    // Timeline (sets & set types → color identities)
-    let matchTimeline = true;
-    if (
-      activeSelections.colorIdentitiesFromTimelineSets.size > 0 ||
-      activeSelections.colorIdentitiesFromTimelineSetsTypes.size > 0
-    ) {
-      const matchesSets = [
-        ...activeSelections.colorIdentitiesFromTimelineSets.values(),
-      ].some((set) => set.has(identity) || (isColorless && set.has("")));
-      const matchesTypes = [
-        ...activeSelections.colorIdentitiesFromTimelineSetsTypes.values(),
-      ].some((set) => set.has(identity) || (isColorless && set.has("")));
-      matchTimeline = matchesSets || matchesTypes;
-    }
-
-    // Year constraints (line chart)
-    let matchYear = true;
-    if (activeSelections.fromYears.size > 0) {
-      matchYear = [...activeSelections.fromYears].some((y) =>
-        d.data.years?.includes(y)
-      );
-    }
-
-    // Scatterplot constraints (union overlay)
-    const matchScatter =
-      activeSelections.colorIdentitiesFromScatterplot.has(identity) ||
-      (isColorless && activeSelections.colorIdentitiesFromScatterplot.has(""));
-
-    if (matchAlluvial && matchIdentity && matchTimeline && matchYear) {
-      selectedDepth2Rects.add(rect);
-    }
-    if (matchScatter) {
-      selectedDepth2Rects.add(rect);
-    }
-  }
-
-  // Apply to depth-2 rects
-  for (const rect of depth2Rects) {
-    const isSelected = selectedDepth2Rects.has(rect);
-    const d = d3.select(rect).datum();
-    d3.select(rect)
-      .classed("selectedHovered", isSelected)
-      .attr("fill", isSelected ? d.data.selectedColor : d.data.color);
-  }
-
-  // Propagate to depth-1 rects if any child is selected
-  for (const rect of depth1Rects) {
-    const d = d3.select(rect).datum();
-    const anyChildSelected = d.children?.some((child) => {
-      return selectedDepth2Rects.has(
-        depth2Rects.find(
-          (r) => d3.select(r).datum().data.name === child.data.name
-        )
-      );
-    });
-
-    d3.select(rect)
-      .classed("selectedHovered", anyChildSelected)
-      .attr("fill", anyChildSelected ? d.data.selectedColor : d.data.color);
-  }
-}
-
-/* =========================================================================
- *  HIGHLIGHT & HOVER HELPERS
- * ========================================================================= */
-
-/**
- * Hover from cards table → highlight matching color identity rect.
- */
-function highlightIcicleRectHoverOnly(card) {
-  if (!card || !card.color_identity) return;
-
-  const identityKey = card.color_identity.length
-    ? card.color_identity
-        .slice()
-        .sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b])
-        .join("")
-    : "Colorless";
-
-  d3.select(".IcicleChart")
-    .selectAll("rect.icicle-rect")
-    .filter((d) => d.data?.name === identityKey && d.depth === 2)
-    .each(function (d) {
-      const rect = d3.select(this);
-      rect.attr("fill", d.data.highlightColor);
-      rect.classed("hover-temp", true);
-    });
-}
-
-/**
- * Clear hover-only paints, preserve selection styles.
- */
-function clearIcicleHoverOnly() {
-  d3.select(".IcicleChart")
-    .selectAll("rect.icicle-rect")
-    .classed("hover-temp", false)
-    .attr("fill", function (d) {
-      const rect = d3.select(this);
-      if (rect.classed("selectedHovered") || rect.classed("selected"))
-        return d.data.selectedColor;
-      return d.data.color;
-    });
-}
-
-/**
- * Hover from Set/SetType → highlight corresponding groups & identities.
- */
-function highlightIcicleRectHoverOnlyFromSet(colorIdentities, numColors) {
-  d3.selectAll("rect.icicle-rect")
-    .filter(
-      (d) =>
-        (d.depth === 2 && colorIdentities.has(d.data.name)) ||
-        (d.depth === 1 && numColors.has(d.data.numColors))
-    )
-    .each(function (d) {
-      const rect = d3.select(this);
-      rect.attr("fill", d.data.highlightColor);
-      rect.classed("hover-temp", true);
-    });
-}
-
-/**
- * Hover from year (line chart) → same logic as Set/SetType hover.
- */
-export function highlightIcicleRectHoverOnlyFromYear(
-  colorIdentities,
-  numColors
-) {
-  d3.selectAll("rect.icicle-rect")
-    .filter(
-      (d) =>
-        (d.depth === 2 && colorIdentities.has(d.data.name)) ||
-        (d.depth === 1 && numColors.has(d.data.numColors))
-    )
-    .each(function (d) {
-      const rect = d3.select(this);
-      rect.attr("fill", d.data.highlightColor);
-      rect.classed("hover-temp", true);
-    });
-}
-
-/**
- * When hovering an Icicle rect, propagate hover info to other views.
- */
-function highlightAllViewsForRect(rectName) {
+function paintIcicle() {
   if (!globalRects) return;
+  const sel = getSelectionSummary();
+  const hov = getHoverSummary();
+  const hit = (summary, d) =>
+    d.depth === 2
+      ? summary.has("identities", d.data.name)
+      : (d.children || []).some((c) => summary.has("identities", c.data.name));
 
-  const rectDatum = globalRects.data().find((d) => d.data?.name === rectName);
-  if (!rectDatum) return;
-
-  if (rectDatum.depth === 2 || rectDatum.data.name === "Colorless") {
-    // Identity-level
-    emitIcicleRectHover({
-      name: rectDatum.data.name,
-      isGroup: false,
-      colorIdentities: new Set([
-        rectDatum.data.name === "Colorless" ? "Colorless" : rectDatum.data.name,
-      ]),
-      numColors: undefined,
-      originalities: new Set(rectDatum.data.originalities || []),
-      rarities: new Set(rectDatum.data.rarities || []),
-      years: new Set(rectDatum.data.years || []),
-    });
-  } else if (rectDatum.depth === 1) {
-    // Group-level (N colors)
-    emitNumColorsHover({
-      numColors: rectDatum.data.numColors,
-      originalities: new Set(rectDatum.data.originalities || []),
-      rarities: new Set(rectDatum.data.rarities || []),
-      years: new Set(rectDatum.data.years || []),
-    });
-  }
+  globalRects.each(function (d) {
+    const isSelected = sel.active && hit(sel, d);
+    const isHover = hov.count > 0 && hit(hov, d);
+    const node = this;
+    if (node.__sel === isSelected && node.__hov === isHover) return;
+    node.__sel = isSelected;
+    node.__hov = isHover;
+    d3.select(node)
+      .classed("selectedHovered", isSelected)
+      .classed("hover-temp", isHover)
+      .attr("fill", isHover ? d.data.highlightColor : isSelected ? d.data.selectedColor : d.data.color);
+  });
 }
 
-/**
- * Hover from Alluvial node.
- */
-function highlightIcicleRectHoverOnlyFromAlluvial(category, value) {
-  const lowerValue = value.toLowerCase();
-
-  d3.selectAll("rect.icicle-rect")
-    .filter((d) => {
-      if (!d) return false;
-      if (category === "Originality") {
-        return d.data.originalities?.includes(lowerValue);
-      } else if (category === "Rarity") {
-        return d.data.rarities?.includes(lowerValue);
-      }
-      return false;
-    })
-    .each(function (d) {
-      const rect = d3.select(this);
-      rect.attr("fill", d.data.highlightColor);
-      rect.classed("hover-temp", true);
-    });
-}
-
-/**
- * Hover from Alluvial link pair.
- */
-function highlightIcicleRectHoverOnlyFromAlluvialLink(originality, rarity) {
-  const lowerOrig = originality.toLowerCase();
-  const lowerRarity = rarity.toLowerCase();
-
-  d3.selectAll("rect.icicle-rect")
-    .filter(
-      (d) =>
-        d &&
-        d.data.originalities?.includes(lowerOrig) &&
-        d.data.rarities?.includes(lowerRarity)
-    )
-    .each(function (d) {
-      const rect = d3.select(this);
-      rect.attr("fill", d.data.highlightColor);
-      rect.classed("hover-temp", true);
-    });
-}
-
-/**
- * Clear hover-only in other views based on Icicle hover.
- */
-function clearAllViewsHoverOnly() {
-  emitClearRectHover();
-  emitClearNumColorsHover();
-}
+onSelectionChange(paintIcicle);
+onHoverChange(paintIcicle);
 
 /* =========================================================================
  *  LEGEND RENDERING
@@ -647,7 +268,7 @@ function renderLegend(
     .attr("class", "legend")
     .attr("transform", `translate(${legendX}, ${legendY})`);
 
-  const showPatterns = hasActiveIcicleSelections();
+  const showPatterns = getSelectionSummary().active;
   const reversedColorScale = colorScale.slice().reverse();
   const reversedSelectedScale = colorScaleSelected.slice().reverse();
 
@@ -734,163 +355,6 @@ function renderLegend(
 }
 
 /* =========================================================================
- *  CROSS-VIEW EVENT WIRING
- * ========================================================================= */
-
-// Card table hovers
-onHoverCard((card) => {
-  highlightIcicleRectHoverOnly(card);
-});
-onClearHover(clearIcicleHoverOnly);
-
-// Set / SetType hovers
-onSetHover((setInfo) => {
-  highlightIcicleRectHoverOnlyFromSet(
-    setInfo.colorIdentities,
-    setInfo.numColorsPresent
-  );
-});
-onSetTypeHover((setInfo) => {
-  highlightIcicleRectHoverOnlyFromSet(
-    setInfo.colorIdentities,
-    setInfo.numColorsPresent
-  );
-});
-onClearSetHover(clearIcicleHoverOnly);
-
-// Year hovers
-onLineYearHover((yearInfo) => {
-  highlightIcicleRectHoverOnlyFromYear(
-    yearInfo.colorIdentities,
-    yearInfo.numColorsPresent
-  );
-});
-onClearLineYearHover(clearIcicleHoverOnly);
-
-// Alluvial hovers
-onAlluvialHover(({ category, value }) => {
-  highlightIcicleRectHoverOnlyFromAlluvial(category, value);
-});
-onClearAlluvialHover(clearIcicleHoverOnly);
-
-onAlluvialLinkHover(({ originality, rarity }) => {
-  highlightIcicleRectHoverOnlyFromAlluvialLink(originality, rarity);
-});
-onClearAlluvialLinkHover(clearIcicleHoverOnly);
-
-// Global clear from other views
-onClearSelection(() => {
-  clearAllIcicleSelectionsState();
-  updateIcicleSelections();
-});
-onClearAlluvialSelections(() => {
-  activeSelections.fromAlluvialOriginality.clear();
-  activeSelections.fromAlluvialRarity.clear();
-  activeSelections.fromAlluvialLinkPairs.clear();
-  updateIcicleSelections();
-});
-onClearTimelineSelections(() => {
-  activeSelections.colorIdentitiesFromTimelineSetsTypes.clear();
-  activeSelections.colorIdentitiesFromTimelineSets.clear();
-  updateIcicleSelections();
-});
-
-// Line chart selections
-onLineChartClick(({ year }) => {
-  const set = activeSelections.fromYears;
-  if (!year) return;
-  set.has(year) ? set.delete(year) : set.add(year);
-  updateIcicleSelections();
-});
-
-onLineChartBrush((entries) => {
-  const set = activeSelections.fromYears;
-  entries.forEach(({ year }) => {
-    if (!year) return;
-    set.has(year) ? set.delete(year) : set.add(year);
-  });
-  updateIcicleSelections();
-});
-
-onClearLineChartBrush(() => {
-  activeSelections.fromYears.clear();
-  updateIcicleSelections();
-});
-
-// Timeline selections (sets / set types / brush)
-onTimelineSetClick(({ name, colorIdentities }) => {
-  if (!name || !colorIdentities) return;
-  const store = activeSelections.colorIdentitiesFromTimelineSets;
-  store.has(name)
-    ? store.delete(name)
-    : store.set(name, new Set(colorIdentities));
-  updateIcicleSelections();
-});
-
-onTimelineSetTypeClick(({ type, colorIdentities }) => {
-  if (!type || !colorIdentities) return;
-  const store = activeSelections.colorIdentitiesFromTimelineSetsTypes;
-  store.has(type)
-    ? store.delete(type)
-    : store.set(type, new Set(colorIdentities));
-  updateIcicleSelections();
-});
-
-onTimelineBrush((entries) => {
-  const store = activeSelections.colorIdentitiesFromTimelineSets;
-  entries.forEach(({ name, colorIdentities }) => {
-    if (!name || !colorIdentities) return;
-    store.has(name)
-      ? store.delete(name)
-      : store.set(name, new Set(colorIdentities));
-  });
-  updateIcicleSelections();
-});
-
-onClearTimelineBrush(() => {
-  activeSelections.colorIdentitiesFromTimelineSets.clear();
-  activeSelections.colorIdentitiesFromTimelineSetsTypes.clear();
-  updateIcicleSelections();
-});
-
-// Scatterplot selections
-onScatterplotCards(({ colorIdentities }) => {
-  activeSelections.colorIdentitiesFromScatterplot = new Set(colorIdentities);
-  updateIcicleSelections();
-});
-
-onClearScatterplotBrush(() => {
-  activeSelections.colorIdentitiesFromScatterplot.clear();
-  updateIcicleSelections();
-});
-
-// Alluvial selections (nodes / links)
-onAlluvialClick(({ category, value }) => {
-  if (!category || !value) return;
-  const key = value.toLowerCase();
-  if (category === "Originality") {
-    const set = activeSelections.fromAlluvialOriginality;
-    set.has(key) ? set.delete(key) : set.add(key);
-  } else if (category === "Rarity") {
-    const set = activeSelections.fromAlluvialRarity;
-    set.has(key) ? set.delete(key) : set.add(key);
-  }
-  updateIcicleSelections();
-});
-
-onAlluvialLinkClick(({ originality, rarity }) => {
-  const pairKey = `${originality}|${rarity}`;
-  const set = activeSelections.fromAlluvialLinkPairs;
-  set.has(pairKey) ? set.delete(pairKey) : set.add(pairKey);
-  updateIcicleSelections();
-});
-
-onAlluvialLink((pairSets) => {
-  activeSelections.fromAlluvialLinkPairs = new Set(pairSets);
-  updateIcicleSelections();
-});
-
-/* =========================================================================
  *  ICICLE CHART CREATION
  * ========================================================================= */
 
@@ -898,88 +362,8 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
   d3.select(containerId).selectAll("*").remove();
 
   /* ---- 1. Aggregate data into color groups & identities ---- */
-
-  const groupedData = [];
-  const groupMap = new Map();
-
-  data.forEach((card) => {
-    const colors = Array.isArray(card.color_identity)
-      ? card.color_identity
-      : [];
-    let numColors = colors.length;
-    if (numColors > 5) numColors = 5;
-
-    const colorKey =
-      colors
-        .slice()
-        .sort((a, b) => mtgColorOrder[a] - mtgColorOrder[b])
-        .join("") || "Colorless";
-
-    const colorGroupName =
-      numColors === 0
-        ? "Colorless"
-        : numColors === 1
-        ? "1 Color"
-        : `${numColors} Colors`;
-
-    let group = groupMap.get(colorGroupName);
-    if (!group) {
-      group = {
-        name: colorGroupName,
-        numColors,
-        originalCount: 0,
-        reprintCount: 0,
-        functionalReprintCount: 0,
-        children: [],
-        originalities: new Set(),
-        rarities: new Set(),
-        years: new Set(),
-      };
-      groupMap.set(colorGroupName, group);
-      groupedData.push(group);
-    }
-
-    let identityEntry = group.children.find((c) => c.name === colorKey);
-    if (!identityEntry) {
-      identityEntry = {
-        name: colorKey,
-        value: 0,
-        numColors,
-        originalCount: 0,
-        reprintCount: 0,
-        functionalReprintCount: 0,
-        originalities: new Set(),
-        rarities: new Set(),
-        years: new Set(),
-      };
-      group.children.push(identityEntry);
-    }
-
-    // Update counts
-    identityEntry.value += 1;
-    if (card.originality === "original") identityEntry.originalCount += 1;
-    if (card.originality === "reprint") identityEntry.reprintCount += 1;
-    if (card.originality === "functional reprint")
-      identityEntry.functionalReprintCount += 1;
-
-    // Metadata for coordination
-    const cardOriginality = card.originality?.toLowerCase();
-    const cardRarity = card.rarity?.toLowerCase();
-    const cardYear = new Date(card.release_date).getFullYear().toString();
-
-    if (cardOriginality) {
-      identityEntry.originalities.add(cardOriginality);
-      group.originalities.add(cardOriginality);
-    }
-    if (cardRarity) {
-      identityEntry.rarities.add(cardRarity);
-      group.rarities.add(cardRarity);
-    }
-    if (cardYear) {
-      identityEntry.years.add(cardYear);
-      group.years.add(cardYear);
-    }
-  });
+  // (core/aggregates.js — tested against the previous inline version)
+  const groupedData = icicleAggregate(data);
 
   // Compute colors and propagate identity sets up to groups.
   groupedData.forEach((group) => {
@@ -1115,45 +499,7 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
   const iconY = containerHeight * 0.07;
   const iconRadius = containerWidth * 0.015;
   const infoTextSize = Math.min(containerWidth * 0.0187, 15);
-  const infoGroup = svg
-    .append("g")
-    .attr("class", "info-icon")
-    .attr("transform", `translate(${iconX}, ${iconY})`);
-
-  infoGroup
-    .append("circle")
-    .attr("r", iconRadius)
-    .attr("fill", "#8A9CE4")
-    .attr("stroke", "#fff");
-
-  infoGroup
-    .append("text")
-    .attr("text-anchor", "middle")
-    .attr("dy", "0.35em")
-    .attr("font-size", `${infoTextSize}px`)
-    .attr("font-weight", "bold")
-    .attr("fill", "#fff")
-    .text("?")
-    .attr("pointer-events", "none");
-
-  infoGroup
-    .on("mouseover", () => {
-      d3.select("#tooltip").style("display", "block").html(infoTooltipText);
-    })
-    .on("mousemove", (event) => {
-      const tooltip = d3.select("#tooltip");
-      const node = tooltip.node();
-      const w = node.offsetWidth;
-      const h = node.offsetHeight;
-      let x = event.pageX + 10;
-      let y = event.pageY + 10;
-      if (x + w > window.innerWidth) x = window.innerWidth - w - 10;
-      if (y + h > window.innerHeight) y = window.innerHeight - h - 10;
-      tooltip.style("left", `${x}px`).style("top", `${y}px`);
-    })
-    .on("mouseout", () => {
-      d3.select("#tooltip").style("display", "none");
-    });
+  addInfoIcon(svg, { x: iconX, y: iconY, radius: iconRadius, fontSize: infoTextSize, html: infoTooltipText });
 
   const chartGroup = svg
     .append("g")
@@ -1211,89 +557,15 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
             }
             if (clickTimer) return;
 
+            // Delay so a double-click (zoom) doesn't also toggle a selection.
             clickTimer = setTimeout(() => {
-              // Depth 1: color group
-              if (d.depth === 1) {
-                const identitySet = activeSelections.fromIcicleIdentity;
-                const groupSet = activeSelections.fromIcicleColors;
-                const children = d.children || [];
-                const isColorless = d.data.name === "Colorless";
-                const isFiveColors = d.data.numColors === 5;
-
-                // Special case: Colorless/5-color group with single child → toggle that identity directly
-                if ((isColorless || isFiveColors) && children.length === 1) {
-                  const identity = children[0].data.name;
-                  identitySet.has(identity)
-                    ? identitySet.delete(identity)
-                    : identitySet.add(identity);
-
-                  updateIcicleSelections();
-
-                  emitIcicleClick({
-                    colorIdentity: identity,
-                    originalities: children[0].data.originalities,
-                    rarities: children[0].data.rarities,
-                    numColors: children[0].data.numColors,
-                  });
-                } else {
-                  // Normal group toggle
-                  const num = d.data.numColors;
-                  const already = groupSet.has(num);
-
-                  if (already) {
-                    groupSet.delete(num);
-                    children.forEach((c) => identitySet.delete(c.data.name));
-                  } else {
-                    groupSet.add(num);
-                    children.forEach((c) => identitySet.add(c.data.name));
-                  }
-
-                  updateIcicleSelections();
-
-                  emitIcicleNumClick({
-                    numColors: d.data.numColors,
-                    originalities: d.data.originalities,
-                    rarities: d.data.rarities,
-                    colorIdentities: d.data.colorIdentities,
-                    children: children.map((c) => ({
-                      name: c.data.name,
-                      originalities: c.data.originalities,
-                      rarities: c.data.rarities,
-                      years: c.data.years,
-                    })),
-                  });
-                }
-              }
-
-              // Depth 2: specific color identity
-              else if (d.depth === 2) {
-                const identity = d.data.name;
-                const numColors = d.data.numColors;
-                const isColorlessOrFive = numColors === 0 || numColors === 5;
-
-                if (activeSelections.fromIcicleIdentity.has(identity)) {
-                  activeSelections.fromIcicleIdentity.delete(identity);
-                  if (activeSelections.fromIcicleIdentity.size === 0) {
-                    activeSelections.fromIcicleColors.clear();
-                  }
-                } else {
-                  activeSelections.fromIcicleIdentity.add(identity);
-                  if (!isColorlessOrFive) {
-                    activeSelections.fromIcicleColors.add(numColors);
-                  }
-                }
-
-                updateIcicleSelections();
-
-                emitIcicleClick({
-                  colorIdentity: identity,
-                  originalities: d.data.originalities,
-                  rarities: d.data.rarities,
-                  numColors,
-                });
-              }
-
               clickTimer = null;
+              // Identity rect → that identity; group rect → all its identities.
+              const identities =
+                d.depth === 2
+                  ? [d.data.name]
+                  : (d.children || []).map((c) => c.data.name);
+              toggleSelected("icicle", "identities", identities);
             }, 170);
           })
           .on("dblclick", function (event, d) {
@@ -1326,33 +598,17 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
               Functional Reprint: ${d.data.functionalReprintCount || 0} cards
 `);
 
-            const rect = d3.select(this);
-            rect.attr("fill", d.data.highlightColor);
-            rect.classed("hover-temp", true);
-
-            highlightAllViewsForRect(d.data.name);
+            setHover(
+              "icicle",
+              d.depth === 2
+                ? { identities: new Set([d.data.name]) }
+                : { numColors: new Set([d.data.numColors]) }
+            );
           })
-          .on("mousemove", function (event) {
-            const tooltip = d3.select("#tooltip");
-            const node = tooltip.node();
-            const w = node.offsetWidth;
-            const h = node.offsetHeight;
-            let x = event.pageX + 10;
-            let y = event.pageY + 10;
-            if (x + w > window.innerWidth) x = window.innerWidth - w - 10;
-            if (y + h > window.innerHeight) y = window.innerHeight - h - 10;
-            tooltip.style("left", `${x}px`).style("top", `${Math.max(y, 0)}px`);
-          })
+          .on("mousemove", moveTooltip)
           .on("mouseout", function () {
-            const rect = d3.select(this);
-            rect.classed("hover-temp", false).attr("fill", (d) => {
-              if (rect.classed("selectedHovered") || rect.classed("selected"))
-                return d.data.selectedColor;
-              return d.data.color;
-            });
-
             d3.select("#tooltip").style("display", "none");
-            clearAllViewsHoverOnly();
+            clearHover();
           }),
       (update) =>
         update
@@ -1456,13 +712,7 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
   function clickedFilter(event, d) {
     event.preventDefault();
 
-    const currentState = getState();
-    const currentFilters = currentState.selectedFilters;
-
-    const newFilters = {};
-    for (const key in currentFilters) {
-      newFilters[key] = new Set(currentFilters[key]);
-    }
+    const newFilters = cloneSelectedFilters();
 
     const isGroup = d.depth === 1;
     const isIdentity = d.depth === 2;
@@ -1493,7 +743,6 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
 
     updateState({
       selectedFilters: newFilters,
-      updateContext: "IcicleFilter",
     });
   }
 
@@ -1503,10 +752,7 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
     const isRect = target.classed("icicle-rect");
     const isText = target.node().tagName === "text";
     const isInfoIcon = target.classed("info-icon");
-    if (!isRect && !isText && !isInfoIcon) {
-      emitClearSelection();
-      updateIcicleSelections();
-    }
+    if (!isRect && !isText && !isInfoIcon) clearSelection();
   });
 
   // Wheel zoom (horizontal zoom around mouse)
@@ -1625,5 +871,5 @@ export function createIcicleChart(data, containerId, isUpdate = false) {
     legendFontSize
   );
 
-  updateIcicleSelections();
+  paintIcicle();
 }
