@@ -2,3 +2,7 @@
 .claude/
 CLAUDE.md
 CLAUDE.local.md
+
+# OS / tooling
+.DS_Store
+node_modules/
