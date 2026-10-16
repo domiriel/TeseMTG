@@ -25,7 +25,7 @@ The dashboard integrates several coordinated visualizations built with **D3.js**
 | **Drawers** | Provide contextual details: the **blue drawer** lists selected cards, while the **red drawer** displays cards **excluded for lacking price data**. |
 
 
-All modules communicate through a **shared event bus and global state**, ensuring that actions such as hovering, filtering, or selecting in one view propagate consistently across the entire interface.
+All modules communicate through **global state** (for filters) and one **shared selection model** (for clicks, brushes and hovers; see [Linking](docs/linking.md)). Hovering, filtering or selecting in one view therefore propagates consistently across the whole interface.
 
 ---
 
@@ -90,15 +90,30 @@ Key attributes include:
 
 ## ⚙️ Architecture
 
-The app follows a modular structure:
+The app is plain ES modules plus D3 from a CDN, with no build step:
 
-- **`/src/idioms/`** — Each visualization (Alluvial, Icicle, etc.) is implemented as an independent module.
-- **`state.js`** — Centralized state management with subscription and event hooks.
-- **`script.js`** — Main orchestrator that loads data, builds indices, initializes all views, and maintains synchronization.
-- **`data-process.py`** — Python preprocessing script that builds the normalized dataset.
-- **`/docs/`** — Module-specific documentation.
+- **`core/`**: pure data layer (no DOM), tested in Node:
+  - derived card fields;
+  - an index-based filter engine that computes the filtered set and all Filter Panel counts in one pass;
+  - per-view data preparation;
+  - the card-level selection model.
+- **`idioms/`**: one module per visualization, plus the drawers, the Filter Panel and:
+  - `Linking.js`, the only channel between views for selections and hovers;
+  - `ui.js`, shared UI helpers.
+- **`state.js`**: global state (filters, price settings, logic mode) with subscriptions, plus save/load/share of filters.
+- **`script.js`**: entry point; loads the data, builds the engine, renders all views and re-renders them when the filter result changes.
+- **`data-processing/data-process.py`**: Python script that builds the normalized dataset.
+- **`tests/`, `bench/`**: unit, differential and end-to-end tests, plus benchmarks ([Development](docs/development.md)).
+- **`/docs/`**: module-specific documentation.
 
-All modules share a unified schema and coordinate through the **global `state`** and **event-driven updates** (e.g., selection, hover, filtering).
+### Running locally
+
+```sh
+python3 -m http.server 8000      # serve the repo root, then open http://localhost:8000
+
+npm install                      # once: dev tooling only (Playwright, ESLint)
+npm test && npm run test:e2e && npm run lint
+```
 
 ---
 
@@ -111,7 +126,10 @@ All modules share a unified schema and coordinate through the **global `state`**
 - [Line Chart](docs/line.md)
 - [Timeline](docs/timeline.md)
 - [Drawers](docs/hiddenDrawer.md)
-- [Main Script/Global State](docs/stateManager.md)
+- [Application core (script.js, state.js, core/)](docs/stateManager.md)
+- [Linking: selections and hovers across views](docs/linking.md)
+- [Filter Panel](docs/filterPanel.md)
+- [Development: tests and benchmarks](docs/development.md)
 - [Limitations/Future Work](docs/limitations.md)
 
 ---

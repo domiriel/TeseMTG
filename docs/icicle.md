@@ -1,263 +1,83 @@
 [← Back to main page](../)
 ## Icicle Chart
-- Click a **group** (e.g., “2 Colors”) to toggle select/deselect all identities in that group.
-- Click a **color identity** (e.g., “UR”) to toggle only that identity.
-- Right-click a **group** or **identity** to toggle the corresponding **global filter**.
-- Double-click a rect to **zoom in/out** within the icicle (focus).
-- Hover shows a tooltip and sends **hover highlights** to other charts.
-- Mouse wheel to **zoom horizontally** around the cursor.
-- **Ctrl + left-drag** to **pan** horizontally.
-- Double-click background to **clear Icicle selections**.
+- **Click** a **group** (e.g., "2 Colors") to select or deselect all identities in that group.
+- **Click** a **color identity** (e.g., "UR") to select or deselect only that identity.
+- **Right-click** a group or identity to toggle the matching **global filter** (`Nº of Colors` or `Color Identity`).
+- **Double-click** a rect to **zoom** into it, or back out.
+- **Hover** to see a tooltip and highlight the matching cards in every view.
+- **Mouse wheel** zooms horizontally around the cursor; **Ctrl + left-drag** pans.
+- **Double-click** the background to clear all selections.
 
-This module renders and coordinates an **Icicle chart** that groups MTG cards by **Nº of Colors** (depth 1) and **Color Identity** (depth 2). It integrates with other coordinated views via a shared `Events.js` bus and the global app state.
+This module (`idioms/IcicleChart.js`) draws an **Icicle chart** grouping printings by **Nº of Colors** (depth 1) and **Color Identity** (depth 2). Rect width is the number of printings; color is the share of *original* printings.
 
 ## Contents
-- [Imports](#imports)  
-- [Module State](#module-state)  
-- [Functions](#functions)  
-  - [createIcicleChart](#createiciclechart)  
-  - [updateIcicleSelections](#updateicicleselections)  
-  - [renderLegend](#renderlegend)  
-  - [clicked (zoom/focus)](#clicked-zoomfocus)  
-  - [clickedFilter (right-click → global filters)](#clickedfilter-rightclick--global-filters)  
-  - [Color helpers](#color-helpers)  
-  - [Hover/Highlight APIs (exported)](#hoverhighlight-apis-exported)  
-  - [Internal utilities](#internal-utilities)  
-- [Selection Logic](#selection-logic)  
-- [Events](#events)  
-- [Data & DOM Assumptions](#data--dom-assumptions)  
-- [Example](#example)
+- [API](#api)
+- [Data](#data)
+- [Rendering](#rendering)
+- [Selection and hover](#selection-and-hover)
+- [Global filters](#global-filters)
+- [Module state](#module-state)
+- [DOM assumptions](#dom-assumptions)
 
 ---
 
-## Imports
-```
-updateState, getState from ../state.js
-Events bus (emit*/on*) from ./Events.js
-```
-
----
-
-## Module State
-
-| Name | Type | Purpose |
-|---|---|---|
-| `globalRects` | `d3.Selection \| null` | Cached selection of rects for quick highlight updates. |
-| `clickTimer` | `number \| null` | Debounce single vs. double click. |
-| `activeSelections` | object of Sets/Maps | Aggregates selections from all views (see below). |
-| `activeSelections.fromAlluvialOriginality` | `Set<string>` | Selected originalities coming from Alluvial node clicks. |
-| `activeSelections.fromAlluvialRarity` | `Set<string>` | Selected rarities from Alluvial. |
-| `activeSelections.fromAlluvialLinkPairs` | `Set<string>` | Selected Alluvial link pairs `"orig|rar"`. |
-| `activeSelections.fromIcicleIdentity` | `Set<string>` | Selected identities from Icicle clicks. |
-| `activeSelections.fromIcicleColors` | `Set<number>` | Selected groups by number of colors (0–5). |
-| `activeSelections.fromYears` | `Set<string>` | Years from Line chart click/brush. |
-| `activeSelections.colorIdentitiesFromTimelineSets` | `Map<string, Set<string>>` | Timeline set→identities toggles. |
-| `activeSelections.colorIdentitiesFromTimelineSetsTypes` | `Map<string, Set<string>>` | Timeline set-type→identities toggles. |
-| `activeSelections.colorIdentitiesFromScatterplot` | `Set<string>` | Identities brushed/hovered from Scatterplot. |
-
-**Info tooltip copy** is defined inline (`infoTooltipText`) and displayed on the “?” icon.
-
----
-
-## Functions
-
-### `createIcicleChart`
+## API
 ```ts
-createIcicleChart(
-  data: Array<Card>,
-  containerId: string,
-  isUpdate: boolean = false
-): void
+createIcicleChart(data: Card[], containerId: string, isUpdate: boolean = false): void
 ```
-
-**Purpose**  
-Build/refresh the Icicle chart, compute hierarchy by **Nº of Colors → Color Identity**, wire interactions, and render a diagonal-split legend (base/selected color).
-
-**Data shaping**
-- Groups cards into: `Colorless`, `1 Color`, `2 Colors`, `3 Colors`, `4 Colors`, `5 Colors`.
-- Within each group, identities are canonicalized to **W,U,B,R,G** sort (e.g., “UR”, “WUB”); `Colorless` is a single identity.
-- Accumulates per-node: `value`, `originalCount`, `reprintCount`, `functionalReprintCount`, plus sets for `originalities`, `rarities`, and `years`.
-
-**Color encoding**
-- Depth-2 identities receive a **base**, **hover**, and **selected** color based on the percentage of original cards in the total amount for each group.
-- Depth-1 groups average their children’s RGB to derive base/hover/selected fills.
-
-**Layout**
-- Builds a d3 partition on `[chartWidth, chartHeight]`.
-- Uses **depth bands** (levelHeight) and horizontal spans per node (`x0–x1`).
-- Labels rotate `-90°` for depth-2 identities when visible.
-
-**Interactions**
-- **Click**:
-  - Depth 1 (group): toggles the group in `fromIcicleColors` and all its identities in `fromIcicleIdentity`. Special case: groups with a single identity (`Colorless` and `5 Colors`) toggle the identity directly.
-  - Depth 2 (identity): toggles only that identity; also toggles its `numColors` group except for colorless/5-color edge cases.
-  - Emits `emitIcicleNumClick` (group) or `emitIcicleClick` (identity) with payloads for cross-view highlighting.
-- **Right-click**: toggles **global filters** in app state (`"Nº of Colors"` or `"Color Identity"`) with validity check (`validateFilterCombination`). On invalid combos, shows `showPopup(...)`.
-- **Double-click**: zoom/focus into a node (or reset if already focused).
-- **Hover**: shows tooltip (counts + %Original), sets `.hover-temp` color, and calls `highlightAllViewsForRect(...)` → emits hover events.
-- **Wheel**: horizontal zoom around cursor.
-- **Ctrl + left-drag**: horizontal panning (suppresses the following click).
-- **Double-click background**: clears Icicle selections (`emitClearSelection` + `updateIcicleSelections`).
-
-**Side Effects**
-- Appends `<svg>` with groups, clipPath, legend, and an info icon.
-- Mutates rect fills (`fill`) and classes (`.selectedHovered`, `.hover-temp`).
-- Registers all event listeners with `Events.js`.
+Builds (or rebuilds) the chart. The chart's zoom resets on every rebuild, because the layout depends on the data.
 
 ---
 
-### `updateIcicleSelections`
-```ts
-updateIcicleSelections(): void
-```
+## Data
+`icicleAggregate(cards)` (`core/aggregates.js`) groups printings into `Colorless`, `1 Color` … `5 Colors`, then by identity in WUBRG order (`"WU"`, `"WUBRG"`, `"Colorless"`). Each identity has:
+- `value`: number of printings;
+- `originalCount`, `reprintCount`, `functionalReprintCount`.
 
-**Purpose**  
-Compute which rects are selected/hovered based on **activeSelections** (from Alluvial, Icicle, Timeline, Line, Scatterplot). Applies styles to depth-2 identities and promotes selection to depth-1 groups if any child is selected.
-
-**Returns**  
-`void`
-
-**Side Effects**
-- Iterates `.icicle-rect` nodes, distinguishes depth-1 vs depth-2.
-- Applies `selectedColor` to selected rects; base `color` otherwise.
-- Special path when **only Scatterplot is active** (treats it as a standalone highlight).
+The chart then adds colors:
+- Each identity gets a base, hover and selected color from its percentage of original printings, in five bins.
+- Each group's colors are the average of its identities' colors.
 
 ---
 
-### `renderLegend`
-```ts
-renderLegend(
-  svg: d3.Selection,
-  chartWidth: number,
-  margin: { top:number; right:number; bottom:number; left:number },
-  containerHeight: number,
-  rectDimensions: number,
-  legendFontSize: number
-): void
-```
-
-**Purpose**  
-Draw a vertical legend showing %Original bins (100 → 0). Each swatch uses a **diagonal split** pattern (selected/base) to reflect the two encodings used in the chart.
-
-**Side Effects**  
-Appends `g.legend` and a set of `<pattern>` definitions used as fills.
+## Rendering
+- `d3.partition` laid out as horizontal bands, with identity labels rotated and hidden when they don't fit.
+- **Tooltips** show the identity name with its guild/shard nickname (e.g., "White + Blue (Azorius)"), the total, and the original/reprint split.
+- **Legend**: % original cards in five bins, each drawn as a diagonal split swatch (base / selected). The split appears only while something is selected.
+- **Zoom:**
+  - Double-click focuses on a node, and double-clicking it again resets.
+  - The wheel zooms horizontally around the cursor, and Ctrl+drag pans.
+  - A short click delay tells single clicks apart from double-clicks.
 
 ---
 
-### `clicked` (zoom/focus)
-```ts
-clicked(event: PointerEvent, p: d3.HierarchyRectangularNode, doubleClickFlag = false): void
-```
-
-**Purpose**  
-Focus/defocus the partition around a node (or reset to root). Updates `xScale` domain and recomputes rect and label positions/opacities with transitions.
-
----
-
-### `clickedFilter` (right-click → global filters)
-```ts
-clickedFilter(event: PointerEvent, d: d3.HierarchyRectangularNode): void
-```
-
-**Purpose**  
-Right-click to toggle the corresponding **global filter** in `selectedFilters`:
-- Depth 1 → `"Nº of Colors"`
-- Depth 2 → `"Color Identity"`
-
-Validates combinations with `validateFilterCombination` so identities align with chosen groups.
+## Selection and hover
+The chart uses the shared [Linking](linking.md) model:
+- **Click** an identity rect: `toggleSelected("icicle", "identities", [name])`.
+- **Click** a group rect: toggles all identities of that group together.
+- **Hover:** `{identities: [name]}` for identity rects, `{numColors: [n]}` for group rects.
+- **Painting** (`paintIcicle`):
+  - An identity rect is selected or hovered if any selected or hovered printing has that identity.
+  - A group rect is selected or hovered if any of its identities is.
+  - Hover takes precedence (`.hover-temp`, `.selectedHovered`).
 
 ---
 
-### Color helpers
-```ts
-getColorFromPercentage(percentage: number, scale = colorScale): string
-hexToRgb(hex: string): { r:number; g:number; b:number }
-rgbToHex(r:number, g:number, b:number): string
-```
-
-**Purpose**  
-Discrete binning (five bins) of %Original to hex fills, plus conversions and RGB averaging for group colors.
+## Global filters
+**Right-click** toggles `Nº of Colors` (group) or `Color Identity` (identity) in `selectedFilters`. Before applying, `validateFilterCombination` checks that the selected identities are compatible with the selected numbers of colors. If they aren't, it shows a popup and changes nothing.
 
 ---
 
-### Highlight functions 
-```ts
-function highlightIcicleRect(hoveredCards: Card[]): void
-function highlightIcicleRectHoverOnly(card: Card): void
-function highlightIcicleRectHoverOnlyFromSet(colorIdentities: Set<string>, numColors: Set<number>): void
-function highlightIcicleRectHoverOnlyFromYear(colorIdentities: Set<string>, numColors: Set<number>): void
-function highlightIcicleRectHoverOnlyFromAlluvial(category:string, value: string): void
-function hhighlightIcicleRectHoverOnlyFromAlluvialLink(originality:string, rarity: string): void
-function clearAllViewsHoverOnly(): void
-```
-
-**Purpose**  
-Allow other views (cards, sets, year brushes) to trigger **hover-only** highlights in the Icicle:
-- `highlightIcicleRect` maps a list of cards → identity keys, toggling depth-2 rects.
-- The `HoverOnly*` variants set `.hover-temp` and `highlightColor` without altering selection state.
-- `clearIcicleHoverOnly()` removes hover-only styling while preserving selected state.
+## Module state
+| Name | Purpose |
+|---|---|
+| `globalRects` | Current rect selection, used by `paintIcicle` |
+| `clickTimer` | Separates single clicks from double-clicks |
+| `isPanning`, `panStartX`, `panStartDomain`, `wasPanning` | Ctrl+drag panning (a pan suppresses the following click) |
 
 ---
 
-### Internal utilities
-```ts
-function hasActiveIcicleSelections(): boolean
-function highlightAllViewsForRect(rectName: string): void
-function validateFilterCombination(filters: Record<string, Set<string>>): boolean
-function formatColorIdentityDisplay(name: string): string
-```
-
-**Notes**
-- **Cross-view hover bridges**: `highlightAllViewsForRect` emits either `emitIcicleRectHover` (depth-2) or `emitNumColorsHover` (depth-1).
-- **Filter validation** ensures `"Color Identity"` entries are compatible with the selected `"Nº of Colors"` buckets.
-
----
-
-## Selection Logic
-The Icicle applies a **composed selection** over multiple sources:
-
-- **Alluvial**: a rect matches if it has *any* of the selected originalities, rarities, or link pairs. If Alluvial selections are empty, this term passes.
-- **Icicle (local)**: rect identity must be included if any local identity selections exist; otherwise this term passes.
-- **Timeline (sets & set types)**: if any are toggled, identity must be in at least one of their identity sets (handles `""` for Colorless).
-- **Years (Line chart)**: if any years are selected, rect must contain at least one of them.
-- **Scatterplot**: acts as an **additive union**—matching identities are selected regardless of other terms. There’s also a special **only-scatterplot-active** mode that highlights by the scatterplot set alone.
-
-Depth-1 groups adopt **selected** styling if **any child** identity is selected.
-
----
-
-## Events
-
-**Emitted**
-- `emitIcicleClick({ colorIdentity, originalities, rarities, numColors })` — identity-level click.
-- `emitIcicleNumClick({ numColors, originalities, rarities, colorIdentities, children })` — group-level click.
-- `emitIcicleRectHover({ name, isGroup, colorIdentities, numColors, originalities, rarities, years })` — identity hover bridge.
-- `emitNumColorsHover({ numColors, originalities, rarities, years })` — group hover bridge.
-- `emitClearRectHover()`, `emitClearNumColorsHover()` — clear hover bridges.
-- `emitClearSelection()` — double-click background.
-
-**Consumed (listeners registered in this module)**
-- **Cards/Set/Year hovers**: `onHoverCard`, `onSetHover`, `onSetTypeHover`, `onLineYearHover`, and their `onClear*` counterparts.
-- **Alluvial**: `onAlluvialHover`, `onAlluvialClick`, `onAlluvialLinkClick`, `onAlluvialLink`, `onAlluvialLinkHover`, `onClearAlluvialHover`, `onClearAlluvialLinkHover`, `onClearAlluvialSelections`.
-- **Line chart**: `onLineChartClick`, `onLineChartBrush`, `onClearLineChartBrush`, `onClearLineYearHover`.
-- **Timeline**: `onTimelineBrush`, `onTimelineSetClick`, `onTimelineSetTypeClick`, `onClearTimelineBrush`, `onClearTimelineSelections`.
-- **Scatterplot**: `onScatterplotCards`, `onClearScatterplotBrush`.
-- **Global**: `onClearSelection`.
-
----
-
-## Data & DOM Assumptions
-- `containerId` exists and has measurable size.
-- A `#tooltip` element is present for hover content.
-- D3 (with `d3.partition`) is available.
+## DOM assumptions
+- The container exists and has a measurable size.
+- A shared `#tooltip` element exists.
 - CSS classes used: `.icicle-rect`, `.selectedHovered`, `.hover-temp`.
-- The root container allows mouse events for wheel/pan/drag.
-
----
-
-## Example
-```js
-import { createIcicleChart } from "./IcicleChart.js";
-
-createIcicleChart(cards, "#icicle-container", false);
-```

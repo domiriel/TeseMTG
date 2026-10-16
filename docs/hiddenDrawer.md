@@ -49,8 +49,7 @@ Initializes the Selected Cards drawer:
     - Hover: shows same tooltip when closed.
     - Click: toggles `.visible` on `#hiddenDrawer` and updates the label.
   - `Clear All` button inside the drawer:
-    - Clears hover state via `updateState({ hoveredCards: [], isHoverUpdate: true })`.
-    - Emits `emitClearSelection()` to reset cross-view selections.
+    - Calls `clearSelection()` ([Linking](linking.md)), which clears every cross-view selection and, with it, the drawer.
 
 Call once on startup after the main layout exists.
 
@@ -60,14 +59,14 @@ Renders/updates the Selected Cards drawer content.
 
 Inputs:
 
-- `cards`: array of card objects, usually the current “selected / matched” set.
+- `cards`: array of Scatterplot entries, normally `state.hoveredCards`: the cards in the current selection, published by the Scatterplot.
 
 Behavior:
 
 1. Stores the list in `cardsInDrawer` and updates the toggle button label.
 2. Applies **pagination**:
    - Page size: `pageSize = 25`.
-   - Uses `currentPage` to determine `visibleCards`.
+   - A **new** list starts on the first page. Re-rendering the same list (Prev/Next) keeps the page, clamped to the available pages.
 3. For each visible card:
    - Ensures `card.selectedPrintIndex` is defined.
    - Uses `card.all_print_images` and `card.print_image_metadata` to:
@@ -76,23 +75,21 @@ Behavior:
    - Hooks `◀` / `▶` buttons to:
      - Cycle `selectedPrintIndex` modulo available images.
      - Update the image and metadata box.
-     - (If present) sync tooltip image for the matching scatterplot dot.
    - Hooks the image to:
      - `showCompactTooltip(card, event)` on hover.
-     - `positionTooltip` on move.
+     - `moveTooltip` (`idioms/ui.js`) on move.
 4. Adds **“Filter by Set Appearance”** button:
    - Collects all `card.all_sets[].name` values.
-   - Uses `getClonedFilters()` to clone global filters.
-   - Adds those set names to `"Set Names"` filter.
-   - Calls `updateState({ selectedFilters: newSelectedFilters, updateContext: "TimelineFilter" })`
-     to propagate changes to other views.
+   - Clones the global filters with `cloneSelectedFilters()` (`state.js`).
+   - Adds those set names to the `"Set Names"` filter.
+   - Calls `updateState({ selectedFilters })`, which re-filters every view.
 5. Injects `#pagination-nav` above `#cardImages` with Prev/Next handlers that
    recursively call `updateDrawer(cardsInDrawer)`.
 
 **Key interactions with global state & events**
 
-- `getState().selectedFilters` / `updateState(...)` for filter changes.
-- `emitClearSelection()` to clear cross-view selections.
+- `cloneSelectedFilters()` / `updateState(...)` for filter changes.
+- `clearSelection()` ([Linking](linking.md)) to clear cross-view selections.
 - Tooltip uses the shared `#tooltip` element.
 
 **Label logic**
@@ -179,34 +176,13 @@ Behavior:
 
 ## Shared Helpers
 
-### `getClonedFilters()`
-
-- Reads `getState().selectedFilters`.
-- Returns a **deep-cloned** object with new `Set` instances per key.
-- Used to avoid mutating the original filter state when building new selections
-  from drawer interactions.
-
 ### `showCompactTooltip(card, event?)`
 
 - Renders a compact card summary inside the shared `#tooltip` element:
-  - Name, release date, complexity, EDH rank, supertype/type/subtype,
+  - name, release date, complexity, EDH rank, supertype/type/subtype,
   - color identity, list of sets, and number of prints.
-- Background is derived from `getColorIdentityBackground`.
-- Uses `positionTooltip(event, tooltip)` when an event is provided.
-
-### `positionTooltip(event, tooltip?)`
-
-- Positions `#tooltip` near the cursor with padding.
-- Flips to the opposite side if it would overflow viewport bounds.
-
-### `getColorIdentityBackground(colorIdentity)`
-
-- Given a `color_identity` array, returns:
-  - A solid color for single-color identities.
-  - A left-to-right gradient for multi-color identities.
-  - A neutral gray for colorless / invalid input.
-- Uses canonical MTG color order (`W, U, B, R, G`) and soft background tones
-  to keep tooltips readable.
+- The background comes from `colorIdentityBackground` (`idioms/ui.js`): a solid tint for one color, a gradient for several, grey for none.
+- Positioned with `moveTooltip` (`idioms/ui.js`), which flips the tooltip to the other side of the cursor near window edges.
 
 ---
 
@@ -227,8 +203,8 @@ Behavior:
     - `all_print_images`
     - `print_image_metadata` (with `image`, `set_name`, `set_type`)
 - Cross-view behavior is coordinated via:
-  - `updateState(...)` (from `state.js`)
-  - `emitClearSelection()` and `emitCardSearch(...)` (from `Events.js`)
+  - `updateState(...)` / `cloneSelectedFilters()` (from `state.js`)
+  - `clearSelection()` (from `Linking.js`)
 - Both drawers are purely **view helpers**:
   - They do not compute which cards are selected or illegal.
   - They render whatever arrays are passed into `updateDrawer(...)` and

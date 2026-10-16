@@ -1,9 +1,13 @@
+[← Back to main page](../)
+
 # Filter Panel Module
 
-This module renders and manages the Filter Panel UI for the MTG collections dashboard. Unlike the chart modules, it focuses on **UI controls, state orchestration, and event wiring** rather than data shaping. It exposes two entry points:
+This module (`idioms/FilterPanel.js`) renders and manages the Filter Panel UI. Unlike the chart modules, it is about **UI controls and global filter state**, not data shaping: all counting happens in the filter engine ([Application core](stateManager.md#4-filtering-corefilteringjs)). It exposes two entry points:
 
-- `createFilterPanel(data, filteredCards, containerId, selectedFiltersFromState, isUpdate = false)`
-- `updateFilterPanel(originalData, filteredCards, selectedFilters, containerId = ".FilterPanel")`
+- `createFilterPanel(result, containerId, selectedFiltersFromState, isUpdate = false)`
+- `updateFilterPanel(result, selectedFilters, containerId = ".FilterPanel")`
+
+where `result` is the output of `filterEngine.run(...)`: `{ cards, counts, mask }`.
 
 ---
 
@@ -17,29 +21,22 @@ This module renders and manages the Filter Panel UI for the MTG collections dash
 - Manage **price controls** (currency + suffix) and **filter logic** (`AND-OR` vs `AND-AND` within category).
 - Offer **quality-of-life** actions: clear filters, clear selections, save/load/share filter presets.
 - Reflect selection state via **pills**, option highlighting, and disabling of zero-count options.
-- Coordinate with global state and other views via the shared event bus.
+- Coordinate with global state, and with the other views through [Linking](linking.md) (card search, clear selections).
 
 ---
 
 ## Dependencies
 
 ```js
-import {
-  updateState, getState, saveFilterSettings, loadFilterSettings,
-  generateFilterShareURL, resetState
-} from "../state.js";
-
-import {
-  filterData, filterPriceOnly, getEffectivePriceAttribute, isFilterEmpty
-} from "../script.js";
-
-import { emitCardSearch, emitClearSelection } from "./Events.js";
-import { showLoader, hideLoader } from "./LoadingAnimation.js";
+import { updateState, getState, cloneSelectedFilters, saveFilterSettings,
+         loadFilterSettings, generateFilterShareURL, emptyFilters } from "../state.js";
+import { inferTypeCategory, VISIBLE_FILTER_CATEGORIES } from "../core/index.js";
+import { toggleSelected, clearSelection } from "./Linking.js";
+import { findScatterCard } from "./Scatterplot.js";
 ```
 
-- Reads **groupedData** and **selectedFilters** from the global state.
-- Uses `filterData`/`filterPriceOnly` only for **re-counting** options and honoring the **Filter Logic Mode**.
-- Emits lightweight coordination events (e.g., `emitCardSearch`) to other views.
+- Option values come from the filter engine's index (`getState().filterEngine`); counts come from `result.counts`.
+- The panel never filters anything itself.
 
 ---
 
@@ -53,7 +50,9 @@ import { showLoader, hideLoader } from "./LoadingAnimation.js";
 - `Originality`, `Rarity`, `Year`
 - `Nº of Colors`, `Color Identity`
 
-**Custom ordering**:
+**Section order** in the panel: Originality, Keywords, Rarity, Supertypes, Types, Subtypes, Set Types, Set Names, Year, Nº of Colors, Color Identity.
+
+**Custom value ordering**:
 - `Nº of Colors`: `["Colorless","1 Color","2 Colors","3 Colors","4 Colors","5 Colors"]`
 - `Color Identity`: canonical WUBRG lexicographic (e.g., `wu`, `ub`, `wubrg`, etc.)
 
@@ -79,10 +78,10 @@ import { showLoader, hideLoader } from "./LoadingAnimation.js";
 
 ### C. Search Boxes
 1. **Card picker** (datalist, capped to 50 suggestions, lazy-populated on input):
-   - Press **Enter** or pick an option → `emitCardSearch(card)` and toggle that card in coordinated views.
+   - Press **Enter** or pick an option → toggles that card in the Scatterplot selection (`toggleSelected("scatter", "names", [name])`), so it is highlighted in every view.
 2. **Free-text / Scryfall-style**:
    - Examples: `t:Goblin`, `kw:Flying`, `r:Rare`, `s:"Dominaria"`, `st:Commander`.
-   - `t:` is **inferred** to one of `Supertypes/Types/Subtypes` by scanning dataset occurrences.
+   - `t:` is **inferred** as `Supertypes`, `Types` or `Subtypes`, whichever has the most cards with that word (`inferTypeCategory`, an index lookup).
    - Unrecognized tokens fall back into `FreeTextSearch` (kept as a Set in state).
 3. **Search set name**:
    - On Enter, scrolls the Timeline to the matching set and flashes the square.
@@ -98,7 +97,7 @@ import { showLoader, hideLoader } from "./LoadingAnimation.js";
 
 ### F. Utility Buttons
 - **Clear Filters**: empties all Sets in `selectedFilters`.
-- **Clear Selections**: emits `emitClearSelection()` to reset coordinated cross-view selections.
+- **Clear Selections**: `clearSelection()`, which resets all cross-view selections ([Linking](linking.md)).
 - **Save Filters**: downloads a JSON preset via `saveFilterSettings()`.
 - **Load Filters**: opens file picker and loads JSON via `loadFilterSettings()`.
 - **Share Filters**: copies a URL (from `generateFilterShareURL()`) to clipboard.
@@ -110,67 +109,52 @@ import { showLoader, hideLoader } from "./LoadingAnimation.js";
 
 ## Public API
 
-### `createFilterPanel(data, filteredCards, containerId, selectedFiltersFromState, isUpdate = false)`
+### `createFilterPanel(result, containerId, selectedFiltersFromState, isUpdate = false)`
 
-Initializes (or re-initializes) the panel:
+Builds the panel once at start-up:
 
-- **DOM**: Clears `containerId`, builds the wrapper, controls, accordions, and pill containers.
-- **State**: Uses `groupedData` from `getState()` to populate categories and counts.
+- **DOM**: clears `containerId`, then builds the controls, one collapsible section per category and the pill containers. Each option node is registered in `optionMap` and each pill container in `pillMap`.
+- **Option values and initial counts** come from the filter engine (`engine.values(category)`) and from `result.counts`.
 - **Events**:
-  - Price Currency / Suffix → `updateState({...})`
-  - Filter option click → toggles the value in `selectedFilters` (Set per category) via `updateState`.
-  - Card picker → `emitCardSearch(card)`.
-  - Text query → parses to category Sets or `FreeTextSearch` and updates state.
-  - Buttons: clear filters, clear selections, save/load/share presets.
-- **Performance**: does **not** pre-render thousands of `<option>` nodes for the datalist—suggestions are generated as the user types.
+  - Currency / suffix / logic mode → `updateState({...})`.
+  - Option click or pill × → a new `selectedFilters` (via `cloneSelectedFilters()`) → `updateState`.
+  - Card picker → `toggleSelected("scatter", "names", [name])`.
+  - Text query → parsed into category values or `FreeTextSearch` terms → `updateState`.
+  - Buttons: clear filters (`emptyFilters()`), clear selections (`clearSelection()`), save/load/share presets.
+- **Performance**: the card-name datalist is filled lazily, at most 50 suggestions, as the user types.
 
-**Parameters**:
-- `data`: full dataset (only used for inference and price field detection; the shaping happens elsewhere).
-- `filteredCards`: current filtered subset, used to seed the card-name autocomplete.
-- `containerId`: element selector (e.g. `.FilterPanel`).
-- `selectedFiltersFromState`: the current `selectedFilters` object (category → Set).
-- `isUpdate`: if true, removes stale wrappers before re-creating.
+The panel is **not** rebuilt on resize; its layout is purely CSS.
 
 ---
 
-### `updateFilterPanel(originalData, filteredCards, selectedFilters, containerId = ".FilterPanel")`
+### `updateFilterPanel(result, selectedFilters, containerId = ".FilterPanel")`
 
-Refreshes counts, pills, and interactivity based on the **current** dataset and filters.
+Called after every filter change. It:
 
-- **Recounts** per-category option availability using `filterData` and `filterPriceOnly`, honoring the **Filter Logic Mode**:
-  - `AND-OR`: exclude the category under inspection when computing its counts.
-  - `AND-AND`: compute once for all categories (within-category AND), then reuse.
-- **Patches** the existing DOM in place via `optionMap` and `pillMap`:
-  - Updates label counts `(value) (count)` and disables/dims options at zero count (unless already selected).
-  - Rebuilds pill lists and close buttons.
-  - Clears category inline search inputs so the option list is fully visible after updates.
-- **Autocomplete**: refreshes the in-memory list of `currentCardNames` from `filteredCards` (UI suggestions still lazy).
-- **Timing logs** (console) for perf diagnostics.
+- **Patches option labels** from `result.counts`, touching only nodes whose count or selected state changed. Options with zero results are dimmed and disabled unless selected.
+- **Rebuilds the pills** for each category.
+- Clears any per-category search box that holds a query, so all options show again.
+- Refreshes the in-memory list of card names for the autocomplete from `result.cards`.
 
-**Parameters**:
-- `originalData`: full dataset (not reshaped here; used for inference or future needs).
-- `filteredCards`: current filtered subset (drives counts/availability and card-name suggestions).
-- `selectedFilters`: current selection map (category → Set). If omitted, will read from state.
-- `containerId`: defaults to `.FilterPanel`.
+Counting rules (AND-OR excludes the counted category; AND-AND uses the full filtered set) are implemented and tested in `core/filtering.js`.
 
 ---
 
-## State & Events
+## State & Linking
 
-### Reads from State
-- `groupedData` (category → Map<value → cards[]>)
+### Reads from state
+- `filterEngine` (values of each category)
 - `selectedFilters` (category → Set)
 - `selectedPriceCurrency`, `selectedPriceSuffix`
 - `filterLogicMode`
 
-### Writes to State via `updateState`
-- `selectedFilters` when options/pills change
-- Price configuration and logic mode changes
-- `updateContext` flags (`"TextSearch"`, `"TimelineFilter"`, etc.)
+### Writes to state via `updateState`
+- `selectedFilters` when options, pills, the text search, presets or "Clear Filters" change it
+- Price configuration and logic mode
 
-### Emits
-- `emitCardSearch(card)` when a card is selected via the card picker
-- `emitClearSelection()` for global selection resets
+### Linking
+- Card picker → `toggleSelected("scatter", "names", [name])`
+- "Clear Selections" → `clearSelection()`
 
 ---
 
@@ -194,8 +178,7 @@ Refreshes counts, pills, and interactivity based on the **current** dataset and 
 - Datalist suggestions are capped to **50** and only populated on input to keep the DOM light.
 - Zero-count options are **dimmed** and **non-interactive** unless already selected.
 - Category search boxes are local to each accordion and filter only the visible list.
-- Year parsing uses `release_date` → `YYYY` (string) in `updateFilterPanel` counts; ensure input data contains valid dates.
-- Price fields (`price_*`) are discovered dynamically to future-proof against pricing schema changes.
+- Year values are `YYYY` strings taken directly from `release_date` (timezone-independent).
 - The Free-text parser keeps unrecognized tokens under `FreeTextSearch` (so they can be toggled/removed like pills).
 
 ---
@@ -203,7 +186,6 @@ Refreshes counts, pills, and interactivity based on the **current** dataset and 
 ## Gotchas
 
 - When switching currency, make sure the **suffix** remains valid for that currency. The module auto-corrects invalid suffixes back to `""`.
-- If **Filter Logic Mode** is `AND-AND`, counts rely on an all-categories filter pass—avoid recomputing per-category in tight loops.
 - The Timeline scroll-to-set feature only works if the set’s square is **rendered** and **visible** (i.e., part of the currently displayed set types).
 
 ---
@@ -211,12 +193,11 @@ Refreshes counts, pills, and interactivity based on the **current** dataset and 
 ## Minimal Usage
 
 ```js
+const result = getState().filterEngine.run(selectedFilters, priceAttr, mode);
+
 // First mount after app boot:
-createFilterPanel(data, filteredCards, ".FilterPanel", getState().selectedFilters);
+createFilterPanel(result, ".FilterPanel", selectedFilters);
 
-// Any time filteredCards or selectedFilters change:
-updateFilterPanel(data, filteredCards, getState().selectedFilters);
+// Every time the filter result changes:
+updateFilterPanel(result, selectedFilters);
 ```
-
----
-

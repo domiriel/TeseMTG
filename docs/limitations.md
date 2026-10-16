@@ -18,9 +18,24 @@ This document summarizes all **current limitations** of the MTG‑Vis project an
 
 ### 2. Performance Constraints
 
-* Scatterplot becomes slow at large scales; requires aggregation both for unique card designs and at low zoom levels.
-* Icicle Chart suffers from lag during panning/zooming.
-* Some interactions feel unresponsive under heavy filtering.
+The October 2026 refactor addressed most of the original problems:
+- An index-based filter engine computes the filtered set and all Filter Panel counts in one pass.
+- The Scatterplot is drawn on a canvas.
+- Resizing is debounced.
+- Per-card fields are computed once at load.
+- All views share one selection model.
+
+Filter changes now take ~115–130 ms in Chrome (previously 450–565 ms), and a window-resize drag blocks the page for ~80 ms (previously ~3.6 s). Remaining constraints:
+
+* The Icicle, Alluvial, Timeline and Line charts are still fully rebuilt on each filter change, and the Icicle resets its zoom when that happens.
+* The 82 MB JSON dataset dominates start-up time; a smaller binary or columnar format would help.
+* Filtering runs on the main thread; a Web Worker would keep the UI responsive with larger datasets.
+
+### 2b. Inconsistent units between views
+
+* The Icicle, Alluvial, Timeline, Line chart and Filter Panel count **printings**; the Scatterplot and drawers count **unique card names**.
+* Only the Scatterplot excludes digital cards and memorabilia/alchemy/token sets.
+* Cards without a price in the selected currency disappear from the charts but are not listed in the Unpriced drawer, which only holds cards with no price in any currency.
 
 ### 3. Confusion With Global and Local Filters 
 * Hard distinction between **global filters** and **local filters**.
