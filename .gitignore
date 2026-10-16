@@ -1,0 +1,4 @@
+# LLM / AI-assistant files (Claude Code instructions, settings, plans, notes) — local only, never pushed
+.claude/
+CLAUDE.md
+CLAUDE.local.md
